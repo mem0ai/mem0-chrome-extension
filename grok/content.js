@@ -3,11 +3,17 @@ let inputObserver = null;
 let isEnterKeyPressed = false;
 
 function getTextarea() {
-  return (
-    document.querySelector(
-      'textarea.w-full.px-2.\\@\\[480px\\]\\/input\\:px-3.bg-transparent.focus\\:outline-none.text-primary.align-bottom.min-h-14.pt-5.my-0.mb-5'
-    ) || document.querySelector('textarea[placeholder="Ask follow-up"]')
-  );
+  const selectors = [
+    'textarea.w-full.px-2.\\@\\[480px\\]\\/input\\:px-3.bg-transparent.focus\\:outline-none.text-primary.align-bottom.min-h-14.pt-5.my-0.mb-5',
+    'textarea.w-full.px-2.\\@\\[480px\\]\\/input\\:px-3.pt-5.mb-5.bg-transparent.focus\\:outline-none.text-primary.align-bottom',
+    'textarea[placeholder="Ask follow-up"]'
+  ];
+
+  for (const selector of selectors) {
+    const textarea = document.querySelector(selector);
+    if (textarea) return textarea;
+  }
+  return null;
 }
 
 function setupInputObserver() {
@@ -210,7 +216,17 @@ function setInputValue(inputElement, value) {
 
 function clickSendButtonWithDelay() {
   setTimeout(() => {
-    const sendButton = document.querySelector('button.group.flex.flex-col.justify-center.rounded-full[type="submit"]');
+    const selectors = [
+      'button.group.flex.flex-col.justify-center.rounded-full[type="submit"]',
+      'button.group.flex.flex-col.justify-center.rounded-full.focus\\:outline-none.focus-visible\\:outline-none[type="submit"]'
+    ];
+
+    let sendButton = null;
+    for (const selector of selectors) {
+      sendButton = document.querySelector(selector);
+      if (sendButton) break;
+    }
+
     if (sendButton) {
       sendButton.click();
     } else {

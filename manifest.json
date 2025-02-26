@@ -39,7 +39,7 @@
       "js": ["mem0/content.js"]
     },
     {
-      "matches": ["https://grok.com/*"],
+      "matches": ["https://grok.com/*", "https://x.com/i/grok/*"],
       "js": ["grok/content.js"]
     },
     {

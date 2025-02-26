@@ -6,7 +6,9 @@ function getTextarea() {
   const selectors = [
     'textarea.w-full.px-2.\\@\\[480px\\]\\/input\\:px-3.bg-transparent.focus\\:outline-none.text-primary.align-bottom.min-h-14.pt-5.my-0.mb-5',
     'textarea.w-full.px-2.\\@\\[480px\\]\\/input\\:px-3.pt-5.mb-5.bg-transparent.focus\\:outline-none.text-primary.align-bottom',
-    'textarea[placeholder="Ask follow-up"]'
+    'textarea[dir="auto"][spellcheck="false"][placeholder="Ask anything"]',
+    'textarea[dir="auto"][spellcheck="false"][placeholder="Ask follow-up"]',
+    'textarea[dir="auto"][spellcheck="false"]'
   ];
 
   for (const selector of selectors) {
@@ -60,7 +62,6 @@ function setupInputObserver() {
 function handleEnterKey(event) {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
     const textarea = getTextarea();
-    console.log(textarea);
     if (textarea && document.activeElement === textarea) {
       const capturedText = textarea.value.trim();
 
@@ -218,7 +219,9 @@ function clickSendButtonWithDelay() {
   setTimeout(() => {
     const selectors = [
       'button.group.flex.flex-col.justify-center.rounded-full[type="submit"]',
-      'button.group.flex.flex-col.justify-center.rounded-full.focus\\:outline-none.focus-visible\\:outline-none[type="submit"]'
+      'button.group.flex.flex-col.justify-center.rounded-full.focus\\:outline-none.focus-visible\\:outline-none[type="submit"]',
+      'button[type="submit"]:not([aria-label="Submit attachment"])',
+      'button[aria-label="Grok something"][role="button"]'
     ];
 
     let sendButton = null;

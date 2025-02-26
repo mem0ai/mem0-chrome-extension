@@ -39,6 +39,10 @@
       "js": ["mem0/content.js"]
     },
     {
+      "matches": ["https://grok.com/*"],
+      "js": ["grok/content.js"]
+    },
+    {
       "matches": ["<all_urls>"],
       "js": ["sidebar.js"],
       "run_at": "document_end"

@@ -346,6 +346,7 @@
           claude: "claude.png",
           perplexity: "perplexity.png",
           mem0: "mem0-claude-icon-purple.png",
+          grok: "grok.svg",
         };
 
         // Get the appropriate icon or use the default

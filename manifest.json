@@ -43,6 +43,10 @@
       "js": ["grok/content.js"]
     },
     {
+      "matches": ["https://chat.deepseek.com/*"],
+      "js": ["deepseek/content.js"]
+    },
+    {
       "matches": ["<all_urls>"],
       "js": ["sidebar.js"],
       "run_at": "document_end"

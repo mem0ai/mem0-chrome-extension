@@ -9,10 +9,20 @@ function getInputElement() {
 }
 
 function getSendButtonElement() {
-  const svgElement = document.querySelector(SEND_BUTTON_SVG_SELECTOR);
-  if (svgElement) {
-    return svgElement.closest('div[role="button"]');
+  const potentialButtons = document.querySelectorAll('div[role="button"]');
+  console.log(`[Mem0] Found ${potentialButtons.length} potential button elements.`);
+
+  for (const button of potentialButtons) {
+    const hasSvg = button.querySelector('svg');
+    const hasDeepThinkingText = button.textContent.includes('深度思考');
+
+    if (hasSvg && !hasDeepThinkingText) {
+      console.log("[Mem0] Identified potential Send Button:", button);
+      return button;
+    }
   }
+
+  console.error("[Mem0] Send button not found. No element matched criteria (has SVG, does not contain '深度思考').");
   return null;
 }
 

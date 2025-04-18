@@ -4,9 +4,7 @@ let isEnterKeyPressed = false;
 
 function getTextarea() {
   return (
-    document.querySelector(
-      "textarea.overflow-auto.max-h-\\[45vh\\].lg\\:max-h-\\[40vh\\].sm\\:max-h-\\[25vh\\].outline-none.w-full.font-sans.caret-superDuper.resize-none.selection\\:bg-superDuper.selection\\:text-textMain.dark\\:bg-offsetDark.dark\\:text-textMainDark.dark\\:placeholder-textOffDark.bg-background.text-textMain.placeholder-textOff.scrollbar-thumb-idle.dark\\:scrollbar-thumb-idleDark.scrollbar-thin.scrollbar-track-transparent"
-    ) || document.querySelector('textarea[placeholder="Ask follow-up"]')
+    document.querySelector('textarea[placeholder="Ask anything…"]')
   );
 }
 
@@ -72,6 +70,9 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
   const textarea = getTextarea();
   console.log(textarea);
   let message = capturedText || textarea.value.trim();
+  
+  // Store the original message to preserve it
+  const originalMessage = message;
 
   if (!message) {
     console.error("No input message found");
@@ -141,18 +142,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     const responseData = await searchResponse.json();
     const inputElement = getTextarea();
     if (inputElement) {
-      const memoryPrefix =
-        "Here is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):";
-      const prefixIndex = lastInputValue.indexOf(memoryPrefix);
-      if (prefixIndex !== -1) {
-        lastInputValue = lastInputValue.substring(0, prefixIndex).trim();
-      }
       const memories = responseData.map((item) => item.memory);
       if (memories.length > 0) {
-        let currentContent = lastInputValue.trim();
-        const memInfoRegex =
-          /\s*Here is some of my preferences\/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):[\s\S]*$/;
-        currentContent = currentContent.replace(memInfoRegex, "").trim();
         let memoriesContent =
           "\n\nHere is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):\n";
         memories.forEach((mem, index) => {
@@ -161,7 +152,11 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
             memoriesContent += "\n";
           }
         });
-        setInputValue(inputElement, currentContent + memoriesContent);
+        // Use the original message instead of lastInputValue
+        setInputValue(inputElement, originalMessage + memoriesContent);
+      } else {
+        // Ensure the original text is still there even if no memories are found
+        setInputValue(inputElement, originalMessage);
       }
 
       if (clickSendButton) {
@@ -197,6 +192,11 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
       });
   } catch (error) {
     console.error("Error:", error);
+    // Ensure the original message is preserved even if there's an error
+    const inputElement = getTextarea();
+    if (inputElement && originalMessage) {
+      setInputValue(inputElement, originalMessage);
+    }
   }
 }
 

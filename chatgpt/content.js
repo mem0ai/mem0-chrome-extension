@@ -488,7 +488,6 @@ function handleSyncClick() {
           const memory = {
             role: "user",
             content: `Remember this about me: ${content}`,
-            timestamp: new Date().toISOString(),
           };
 
           memories.push(memory);

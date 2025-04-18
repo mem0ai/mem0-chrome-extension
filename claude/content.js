@@ -8,6 +8,7 @@ function addMem0Button() {
   const screenshotButton = document.querySelector(
     'button[aria-label="Capture screenshot"]'
   );
+  const inputToolsMenuButton = document.querySelector('#input-tools-menu-trigger');
 
   function createPopup(container, position = "top") {
     const popup = document.createElement("div");
@@ -47,7 +48,67 @@ function addMem0Button() {
     return popup;
   }
 
-  if (
+  if (inputToolsMenuButton && !document.querySelector("#mem0-button")) {
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.position = "relative";
+    buttonContainer.style.display = "inline-block";
+
+    const mem0Button = document.createElement("button");
+    mem0Button.id = "mem0-button";
+    mem0Button.className = inputToolsMenuButton.className;
+    mem0Button.style.marginLeft = "8px";
+    mem0Button.setAttribute("aria-label", "Add related memories");
+
+    const mem0Icon = document.createElement("img");
+    mem0Icon.src = chrome.runtime.getURL("icons/mem0-icon.png");
+    mem0Icon.style.width = "16px";
+    mem0Icon.style.height = "16px";
+
+    const popup = createPopup(buttonContainer, "top");
+    mem0Button.appendChild(mem0Icon);
+    mem0Button.addEventListener("click", () => {
+      if (memoryEnabled) {
+        handleMem0Click(popup);
+      }
+    });
+
+    buttonContainer.appendChild(mem0Button);
+
+    const tooltip = document.createElement("div");
+    tooltip.id = "mem0-tooltip";
+    tooltip.textContent = "Add related memories";
+    tooltip.style.cssText = `
+            display: none;
+            position: fixed;
+            background-color: black;
+            color: white;
+            padding: 3px 7px;
+            border-radius: 6px;
+            font-size: 12px;
+            z-index: 10000;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translateX(-50%);
+        `;
+    document.body.appendChild(tooltip);
+
+    mem0Button.addEventListener("mouseenter", (event) => {
+      const rect = mem0Button.getBoundingClientRect();
+      const buttonCenterX = rect.left + rect.width / 2;
+      tooltip.style.left = `${buttonCenterX}px`;
+      tooltip.style.top = `${rect.bottom + 5}px`;
+      tooltip.style.display = "block";
+    });
+
+    mem0Button.addEventListener("mouseleave", () => {
+      tooltip.style.display = "none";
+    });
+
+    inputToolsMenuButton.parentNode.insertBefore(
+      buttonContainer,
+      inputToolsMenuButton.nextSibling
+    );
+  } else if (
     window.location.href.includes("claude.ai/new") &&
     screenshotButton &&
     !document.querySelector("#mem0-button")
@@ -187,7 +248,9 @@ function addMem0Button() {
 async function handleMem0Click(popup, clickSendButton = false) {
   const inputElement =
     document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea");
+    document.querySelector("textarea") ||
+    document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+    document.querySelector('p[data-placeholder="Reply to Claude..."]');
   let message = getInputValue();
   setButtonLoadingState(true);
   if (!message) {
@@ -282,10 +345,19 @@ async function handleMem0Click(popup, clickSendButton = false) {
         item.metadata && item.metadata.provider ? item.metadata.provider : ""
       );
       if (memories.length > 0) {
-        let currentContent =
-          inputElement.tagName.toLowerCase() === "div"
-            ? inputElement.innerHTML
-            : inputElement.value;
+        let currentContent = "";
+        
+        if (inputElement.tagName.toLowerCase() === "div") {
+          currentContent = inputElement.innerHTML;
+        } else if (inputElement.tagName.toLowerCase() === "p" && 
+                  (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+                  inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')) {
+          // For p element placeholders
+          currentContent = inputElement.textContent || '';
+        } else {
+          // For textarea
+          currentContent = inputElement.value;
+        }
 
         const memInfoRegex =
           /<p><strong>Here is some of my preferences\/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):<\/strong><\/p>([\s\S]*?)(?=<p><strong>|$)/;
@@ -310,20 +382,51 @@ async function handleMem0Click(popup, clickSendButton = false) {
 
         if (inputElement.tagName.toLowerCase() === "div") {
           inputElement.innerHTML = currentContent;
+        } else if (inputElement.tagName.toLowerCase() === "p" && 
+                  (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+                  inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')) {
+          // For p element placeholders
+          inputElement.textContent = currentContent;
         } else {
+          // For textarea
           inputElement.value = currentContent;
         }
 
         inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+        
+        // For the p element, we might need to also dispatch these events
+        if (inputElement.tagName.toLowerCase() === "p") {
+          // Simulate user typing
+          inputElement.dispatchEvent(new Event("focus", { bubbles: true }));
+          inputElement.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
+          inputElement.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+          inputElement.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        
         setButtonLoadingState(false);
       } else {
         if (inputElement.tagName.toLowerCase() === "div") {
           inputElement.innerHTML = message;
+        } else if (inputElement.tagName.toLowerCase() === "p" && 
+                  (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+                  inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')) {
+          // For p element placeholders
+          inputElement.textContent = message;
         } else {
           // For textarea
           inputElement.value = message;
         }
         inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+        
+        // For the p element, we might need to also dispatch these events
+        if (inputElement.tagName.toLowerCase() === "p") {
+          // Simulate user typing
+          inputElement.dispatchEvent(new Event("focus", { bubbles: true }));
+          inputElement.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
+          inputElement.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+          inputElement.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        
         showPopup(popup, "No memories found");
         setButtonLoadingState(false);
       }
@@ -428,8 +531,20 @@ function showPopup(popup, message) {
 function getInputValue() {
   const inputElement =
     document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea");
-  return inputElement ? inputElement.textContent || inputElement.value : null;
+    document.querySelector("textarea") ||
+    document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+    document.querySelector('p[data-placeholder="Reply to Claude..."]');
+  
+  if (!inputElement) return null;
+  
+  // For the p element placeholders specifically
+  if (inputElement.tagName.toLowerCase() === 'p' && 
+      (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+      inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')) {
+    return inputElement.textContent || '';
+  }
+  
+  return inputElement.textContent || inputElement.value;
 }
 
 async function updateMemoryEnabled() {

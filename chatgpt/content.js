@@ -36,7 +36,7 @@ function createMemoryModal(memoryItems, isLoading = false) {
   
   // Calculate modal dimensions (estimated)
   const modalWidth = 447;
-  const modalHeight = 450;
+  const modalHeight = 470;
   
   // Determine if there's enough space below the input field
   const viewportHeight = window.innerHeight;
@@ -112,6 +112,7 @@ function createMemoryModal(memoryItems, isLoading = false) {
     padding: 12px 16px;
     justify-content: space-between;
     background-color: #1C1C1E;
+    flex-shrink: 0;
   `;
 
   // Create header left section with just the logo
@@ -199,9 +200,11 @@ function createMemoryModal(memoryItems, isLoading = false) {
     display: flex;
     flex-direction: column;
     padding: 0 16px;
+    padding-bottom: 16px;
     gap: 16px;
-    flex-grow: 1;
     overflow: hidden;
+    flex: 1;
+    height: 330px; /* Explicit height */
   `;
 
   // Create memories counter
@@ -210,6 +213,8 @@ function createMemoryModal(memoryItems, isLoading = false) {
     font-size: 16px;
     font-weight: 600;
     color: #FFFFFF;
+    margin-top: 16px;
+    flex-shrink: 0;
   `;
   
   // Update counter text based on loading state and number of memories
@@ -226,15 +231,14 @@ function createMemoryModal(memoryItems, isLoading = false) {
     flex-direction: column;
     gap: 8px;
     overflow-y: auto;
+    flex: 1;
+    max-height: 270px; /* Explicit max height */
     padding-right: 8px;
     margin-right: -8px;
-    flex-grow: 1;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
   `;
+  memoriesContent.style.cssText += '::-webkit-scrollbar { display: none; }';
 
   // Track currently expanded memory
   let currentlyExpandedMemory = null;
@@ -254,6 +258,7 @@ function createMemoryModal(memoryItems, isLoading = false) {
         background-color: #27272A;
         border-radius: 8px;
         height: 84px;
+        flex-shrink: 0;
         animation: pulse 1.5s infinite ease-in-out;
       `;
       
@@ -341,7 +346,8 @@ function createMemoryModal(memoryItems, isLoading = false) {
       justify-content: center;
       padding: 32px 16px;
       text-align: center;
-      height: 252px; /* Fixed height to match 3 memory cards */
+      flex: 1;
+      min-height: 252px;
     `;
     
     const emptyIcon = document.createElement('div');
@@ -411,6 +417,7 @@ function createMemoryModal(memoryItems, isLoading = false) {
         min-height: 84px;
         max-height: 84px;
         overflow: hidden;
+        flex-shrink: 0;
       `;
 
       const memoryText = document.createElement('div');
@@ -539,9 +546,10 @@ function createMemoryModal(memoryItems, isLoading = false) {
         memoryText.style.webkitLineClamp = 'unset';
         memoryText.style.height = 'auto';
         contentWrapper.style.overflowY = 'auto';
+        contentWrapper.style.maxHeight = '240px'; // Limit height to prevent overflow
         contentWrapper.style.scrollbarWidth = 'none';
         contentWrapper.style.msOverflowStyle = 'none';
-        contentWrapper.style.cssText += '&::-webkit-scrollbar { display: none; }';
+        contentWrapper.style.cssText += '::-webkit-scrollbar { display: none; }';
         memoryContainer.style.backgroundColor = '#1C1C1E';
         memoryContainer.style.maxHeight = '300px'; // Allow expansion but within container
         memoryContainer.style.overflow = 'hidden';

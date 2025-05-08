@@ -10,9 +10,13 @@ let allMemories = [];
 // Track added memories by ID
 let allMemoriesById = new Set();
 
-function createMemoryModal(memoryItems) {
-  if (memoryModalShown) {
-    return;
+// Reference to the modal overlay for updates
+let currentModalOverlay = null;
+
+function createMemoryModal(memoryItems, isLoading = false) {
+  // Close existing modal if it exists
+  if (memoryModalShown && currentModalOverlay) {
+    document.body.removeChild(currentModalOverlay);
   }
 
   memoryModalShown = true;
@@ -69,6 +73,9 @@ function createMemoryModal(memoryItems) {
     pointer-events: auto;
   `;
   
+  // Save reference to current modal overlay
+  currentModalOverlay = modalOverlay;
+  
   // Add event listener to close modal when clicking outside
   modalOverlay.addEventListener('click', (event) => {
     // Only close if clicking directly on the overlay, not its children
@@ -83,8 +90,7 @@ function createMemoryModal(memoryItems) {
     background-color: #1C1C1E;
     border-radius: 12px;
     width: ${modalWidth}px;
-    max-height: ${modalHeight}px;
-    overflow: hidden;
+    height: ${modalHeight}px;
     display: flex;
     flex-direction: column;
     color: white;
@@ -95,6 +101,7 @@ function createMemoryModal(memoryItems) {
     pointer-events: auto;
     border: 1px solid #27272A;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
   `;
 
   // Create modal header
@@ -173,13 +180,28 @@ function createMemoryModal(memoryItems) {
     <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
 
+  // Add click event to open app.mem0.ai in a new tab
+  settingsBtn.addEventListener('click', () => {
+    window.open('https://app.mem0.ai', '_blank');
+  });
+  
+  // Add hover effect for the settings button
+  settingsBtn.addEventListener('mouseenter', () => {
+    settingsBtn.style.opacity = '1';
+  });
+  settingsBtn.addEventListener('mouseleave', () => {
+    settingsBtn.style.opacity = '0.6';
+  });
+
   // Content section
   const contentSection = document.createElement('div');
   contentSection.style.cssText = `
     display: flex;
     flex-direction: column;
-    padding: 0 16px 16px;
+    padding: 0 16px;
     gap: 16px;
+    flex-grow: 1;
+    overflow: hidden;
   `;
 
   // Create memories counter
@@ -189,8 +211,13 @@ function createMemoryModal(memoryItems) {
     font-weight: 600;
     color: #FFFFFF;
   `;
-  memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
-
+  
+  // Update counter text based on loading state and number of memories
+  if (isLoading) {
+    memoriesCounter.textContent = `Loading Relevant Memories...`;
+  } else {
+    memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
+  }
 
   // Create memories content container
   const memoriesContent = document.createElement('div');
@@ -198,8 +225,10 @@ function createMemoryModal(memoryItems) {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 320px;
     overflow-y: auto;
+    padding-right: 8px;
+    margin-right: -8px;
+    flex-grow: 1;
     scrollbar-width: none;
     -ms-overflow-style: none;
     &::-webkit-scrollbar {
@@ -210,16 +239,157 @@ function createMemoryModal(memoryItems) {
   // Track currently expanded memory
   let currentlyExpandedMemory = null;
 
+  // Function to create skeleton loading items
+  function createSkeletonItems() {
+    memoriesContent.innerHTML = '';
+    
+    for (let i = 0; i < 3; i++) {
+      const skeletonItem = document.createElement('div');
+      skeletonItem.style.cssText = `
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 16px;
+        background-color: #27272A;
+        border-radius: 8px;
+        height: 84px;
+        animation: pulse 1.5s infinite ease-in-out;
+      `;
+      
+      const skeletonText = document.createElement('div');
+      skeletonText.style.cssText = `
+        background-color: #383838;
+        border-radius: 4px;
+        height: 14px;
+        width: 85%;
+        margin-bottom: 8px;
+      `;
+      
+      const skeletonText2 = document.createElement('div');
+      skeletonText2.style.cssText = `
+        background-color: #383838;
+        border-radius: 4px;
+        height: 14px;
+        width: 65%;
+      `;
+      
+      const skeletonActions = document.createElement('div');
+      skeletonActions.style.cssText = `
+        display: flex;
+        gap: 4px;
+        margin-left: 10px;
+      `;
+      
+      const skeletonButton1 = document.createElement('div');
+      skeletonButton1.style.cssText = `
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #383838;
+      `;
+      
+      const skeletonButton2 = document.createElement('div');
+      skeletonButton2.style.cssText = `
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #383838;
+      `;
+      
+      skeletonActions.appendChild(skeletonButton1);
+      skeletonActions.appendChild(skeletonButton2);
+      
+      const textContainer = document.createElement('div');
+      textContainer.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+      `;
+      textContainer.appendChild(skeletonText);
+      textContainer.appendChild(skeletonText2);
+      
+      skeletonItem.appendChild(textContainer);
+      skeletonItem.appendChild(skeletonActions);
+      memoriesContent.appendChild(skeletonItem);
+    }
+    
+    // Add keyframe animation to document if not exists
+    if (!document.getElementById('skeleton-animation')) {
+      const style = document.createElement('style');
+      style.id = 'skeleton-animation';
+      style.innerHTML = `
+        @keyframes pulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 0.8; }
+          100% { opacity: 0.6; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }
+  
+  // Function to show empty state
+  function showEmptyState() {
+    memoriesContent.innerHTML = '';
+    
+    const emptyContainer = document.createElement('div');
+    emptyContainer.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      text-align: center;
+      height: 252px; /* Fixed height to match 3 memory cards */
+    `;
+    
+    const emptyIcon = document.createElement('div');
+    emptyIcon.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717A" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v10a2 2 0 01-2 2h-4M3 21h4a2 2 0 002-2v-4m-6 6V9m18 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    emptyIcon.style.marginBottom = '16px';
+    
+    const emptyText = document.createElement('div');
+    emptyText.textContent = 'No relevant memories found';
+    emptyText.style.cssText = `
+      color: #71717A;
+      font-size: 14px;
+      font-weight: 500;
+    `;
+    
+    emptyContainer.appendChild(emptyIcon);
+    emptyContainer.appendChild(emptyText);
+    memoriesContent.appendChild(emptyContainer);
+  }
+
   // Function to show memories
   function showMemories() {
     memoriesContent.innerHTML = '';
     
-    if (memoryItems.length === 0) return;
+    if (isLoading) {
+      createSkeletonItems();
+      return;
+    }
+    
+    if (memoryItems.length === 0) {
+      showEmptyState();
+      return;
+    }
     
     const memoriesToShow = Math.min(3, memoryItems.length);
     
+    // Calculate total pages and current page
+    const totalPages = Math.ceil(memoryItems.length / memoriesToShow);
+    const currentPage = Math.floor(currentMemoryIndex / memoriesToShow) + 1;
+    
+    // Update navigation buttons state
+    updateNavigationState(currentPage, totalPages);
+    
     for (let i = 0; i < memoriesToShow; i++) {
-      const memoryIndex = (currentMemoryIndex + i) % memoryItems.length;
+      const memoryIndex = currentMemoryIndex + i;
+      if (memoryIndex >= memoryItems.length) break; // Stop if we've reached the end
+      
       const memory = memoryItems[memoryIndex];
       
       // Ensure memory has an ID
@@ -238,6 +408,9 @@ function createMemoryModal(memoryItems) {
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s ease;
+        min-height: 84px;
+        max-height: 84px;
+        overflow: hidden;
       `;
 
       const memoryText = document.createElement('div');
@@ -251,6 +424,7 @@ function createMemoryModal(memoryItems) {
         -webkit-box-orient: vertical;
         overflow: hidden;
         transition: all 0.2s ease;
+        height: 42px; /* Height for 2 lines of text */
       `;
       memoryText.textContent = memory.text;
 
@@ -298,7 +472,8 @@ function createMemoryModal(memoryItems) {
         if (!isAdded) {
           // Add just this memory
           allMemoriesById.add(memory.id);
-          applyMemoryToInput(memory.text);
+          allMemories.push(memory.text);
+          updateInputWithMemories();
           updateAddButtonState();
         }
       });
@@ -354,15 +529,6 @@ function createMemoryModal(memoryItems) {
       contentWrapper.appendChild(memoryText);
       contentWrapper.appendChild(removeButton);
 
-      // Function to collapse memory
-      function collapseMemory() {
-        isExpanded = false;
-        memoryText.style.webkitLineClamp = '2';
-        memoryContainer.style.backgroundColor = '#27272A';
-        removeButton.style.display = 'none';
-        currentlyExpandedMemory = null;
-      }
-
       // Function to expand memory
       function expandMemory() {
         if (currentlyExpandedMemory && currentlyExpandedMemory !== memoryContainer) {
@@ -371,9 +537,27 @@ function createMemoryModal(memoryItems) {
         
         isExpanded = true;
         memoryText.style.webkitLineClamp = 'unset';
+        memoryText.style.height = 'auto';
         memoryContainer.style.backgroundColor = '#1C1C1E';
+        memoryContainer.style.maxHeight = '300px'; // Allow expansion but within container
+        memoryContainer.style.overflow = 'auto';
         removeButton.style.display = 'flex';
         currentlyExpandedMemory = memoryContainer;
+        
+        // Scroll to make expanded memory visible if needed
+        memoriesContent.scrollTop = memoryContainer.offsetTop - memoriesContent.offsetTop;
+      }
+
+      // Function to collapse memory
+      function collapseMemory() {
+        isExpanded = false;
+        memoryText.style.webkitLineClamp = '2';
+        memoryText.style.height = '42px';
+        memoryContainer.style.backgroundColor = '#27272A';
+        memoryContainer.style.maxHeight = '84px';
+        memoryContainer.style.overflow = 'hidden';
+        removeButton.style.display = 'none';
+        currentlyExpandedMemory = null;
       }
 
       memoryContainer.addEventListener('collapse', collapseMemory);
@@ -404,6 +588,15 @@ function createMemoryModal(memoryItems) {
         const index = memoryItems.findIndex(m => m.id === memory.id);
         if (index !== -1) {
           memoryItems.splice(index, 1);
+          
+          // Recalculate pagination after removing an item
+          const newTotalPages = Math.ceil(memoryItems.length / memoriesToShow);
+          
+          // If we're on the last page and it's now empty, go to previous page
+          if (currentMemoryIndex > 0 && currentMemoryIndex >= memoryItems.length) {
+            currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesToShow);
+          }
+          
           memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
           showMemories();
         }
@@ -426,6 +619,29 @@ function createMemoryModal(memoryItems) {
     }
   }
 
+  // Function to update navigation button states
+  function updateNavigationState(currentPage, totalPages) {
+    if (currentPage <= 1) {
+      prevButton.disabled = true;
+      prevButton.style.opacity = '0.5';
+      prevButton.style.cursor = 'not-allowed';
+    } else {
+      prevButton.disabled = false;
+      prevButton.style.opacity = '1';
+      prevButton.style.cursor = 'pointer';
+    }
+    
+    if (currentPage >= totalPages) {
+      nextButton.disabled = true;
+      nextButton.style.opacity = '0.5';
+      nextButton.style.cursor = 'not-allowed';
+    } else {
+      nextButton.disabled = false;
+      nextButton.style.opacity = '1';
+      nextButton.style.cursor = 'pointer';
+    }
+  }
+
   // Navigation section at bottom
   const navigationSection = document.createElement('div');
   navigationSection.style.cssText = `
@@ -434,6 +650,7 @@ function createMemoryModal(memoryItems) {
     gap: 12px;
     padding: 16px;
     border-top: 1px solid #27272A;
+    flex-shrink: 0;
   `;
 
   // Navigation buttons
@@ -462,22 +679,30 @@ function createMemoryModal(memoryItems) {
 
   // Add navigation button handlers
   prevButton.addEventListener('click', () => {
-    currentMemoryIndex = Math.max(0, (currentMemoryIndex - 3 + memoryItems.length)) % memoryItems.length;
-    showMemories();
+    if (currentMemoryIndex >= 3) {
+      currentMemoryIndex = Math.max(0, currentMemoryIndex - 3);
+      showMemories();
+    }
   });
 
   nextButton.addEventListener('click', () => {
-    currentMemoryIndex = (currentMemoryIndex + 3) % memoryItems.length;
-    showMemories();
+    if (currentMemoryIndex + 3 < memoryItems.length) {
+      currentMemoryIndex = currentMemoryIndex + 3;
+      showMemories();
+    }
   });
 
   // Add hover effects
   [prevButton, nextButton].forEach(button => {
     button.addEventListener('mouseenter', () => {
-      button.style.backgroundColor = '#323232';
+      if (!button.disabled) {
+        button.style.backgroundColor = '#323232';
+      }
     });
     button.addEventListener('mouseleave', () => {
-      button.style.backgroundColor = '#27272A';
+      if (!button.disabled) {
+        button.style.backgroundColor = '#27272A';
+      }
     });
   });
 
@@ -509,13 +734,16 @@ function createMemoryModal(memoryItems) {
 
   // Function to close the modal
   function closeModal() {
-    document.body.removeChild(modalOverlay);
+    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
+      document.body.removeChild(currentModalOverlay);
+    }
+    currentModalOverlay = null;
     memoryModalShown = false;
   }
 
   // Update Add to Prompt button click handler
   addToPromptBtn.addEventListener('click', () => {
-    // Only add memories that are in memoryItems (not removed) and not already added
+    // Only add memories that are not already added
     const newMemories = memoryItems
       .filter(memory => !allMemoriesById.has(memory.id))
       .map(memory => {
@@ -523,12 +751,18 @@ function createMemoryModal(memoryItems) {
         return memory.text;
       });
     
-    if (newMemories.length > 0) {
-      applyMemoriesToInput(newMemories);
+    // Add all new memories to allMemories
+    allMemories.push(...newMemories);
+    
+    // Update the input with all memories
+    if (allMemories.length > 0) {
+      updateInputWithMemories();
       closeModal();
-    } else if (allMemories.length > 0) {
-      // If we have some memories already added, just close the modal
-      closeModal();
+    } else {
+      // If no new memories were added but we have existing ones, just close
+      if (allMemoriesById.size > 0) {
+        closeModal();
+      }
     }
   });
 }
@@ -707,9 +941,15 @@ async function handleMem0Modal() {
   const inputElement =
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
+  
+  const mem0Button = document.querySelector('#mem0-icon-button');
+
   let message = getInputValue();
-  if (!message) {
-    console.error("No input message found");
+  // If no message, show a popup and return
+  if (!message || message.trim() === '') {
+    if (mem0Button) {
+      showButtonPopup(mem0Button, 'Please enter some text first');
+    }
     return;
   }
 
@@ -726,6 +966,9 @@ async function handleMem0Modal() {
   }
 
   isProcessingMem0 = true;
+  
+  // Show the loading modal immediately
+  createMemoryModal([], true);
 
   try {
     const data = await new Promise((resolve) => {
@@ -789,13 +1032,8 @@ async function handleMem0Modal() {
       };
     });
 
-    if (memoryItems.length > 0) {
-      // Show the memory modal instead of directly injecting
-      createMemoryModal(memoryItems);
-        } else {
-      // No memories found, display a message
-      alert("No relevant memories found");
-    }
+    // Update the modal with real data
+    createMemoryModal(memoryItems);
 
     // Proceed with adding memory asynchronously without awaiting
     fetch("https://api.mem0.ai/v1/memories/", {
@@ -817,47 +1055,69 @@ async function handleMem0Modal() {
     });
   } catch (error) {
     console.error("Error:", error);
+    // Still show the modal but with empty state if there was an error
+    createMemoryModal([]);
     throw error;
   } finally {
     isProcessingMem0 = false;
   }
 }
 
-// Update the initialization function to add the Mem0 icon button but not intercept Enter key
-function initializeMem0Integration() {
-  document.addEventListener("DOMContentLoaded", () => {
-    addSyncButton();
-    addMem0IconButton();
-    addSendButtonListener();
-  });
-
-  document.addEventListener("keydown", function (event) {
-    if (event.ctrlKey && event.key === "m") {
-      event.preventDefault();
-      (async () => {
-        await handleMem0Modal();
-      })();
+// Function to show a small popup message near the button
+function showButtonPopup(button, message) {
+  // Remove any existing popups
+  const existingPopup = document.querySelector('.mem0-button-popup');
+  if (existingPopup) {
+    existingPopup.remove();
+  }
+  
+  const popup = document.createElement('div');
+  popup.className = 'mem0-button-popup';
+  
+  popup.style.cssText = `
+    position: absolute;
+    top: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #1C1C1E;
+    border: 1px solid #27272A;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10001;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  `;
+  
+  popup.textContent = message;
+  
+  // Create arrow
+  const arrow = document.createElement('div');
+  arrow.style.cssText = `
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 10px;
+    height: 10px;
+    background-color: #1C1C1E;
+    border-right: 1px solid #27272A;
+    border-bottom: 1px solid #27272A;
+  `;
+  
+  popup.appendChild(arrow);
+  
+  // Position relative to button
+  button.style.position = 'relative';
+  button.appendChild(popup);
+  
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    if (document.body.contains(popup)) {
+      popup.remove();
     }
-  });
-
-  observer = new MutationObserver(() => {
-    addSyncButton();
-    addMem0IconButton();
-    addSendButtonListener();
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  // Add a MutationObserver to watch for changes in the DOM but don't intercept Enter key
-  const observerForUI = new MutationObserver(() => {
-    addMem0IconButton();
-    addSendButtonListener();
-  });
-
-  observerForUI.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+  }, 3000);
 }
 
 function getLastMessages(count) {
@@ -1218,6 +1478,43 @@ function getMemoryEnabledState() {
     chrome.storage.sync.get(["memory_enabled"], function (result) {
       resolve(result.memory_enabled !== false); // Default to true if not set
     });
+  });
+}
+
+// Update the initialization function to add the Mem0 icon button but not intercept Enter key
+function initializeMem0Integration() {
+  document.addEventListener("DOMContentLoaded", () => {
+    addSyncButton();
+    addMem0IconButton();
+    addSendButtonListener();
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.ctrlKey && event.key === "m") {
+      event.preventDefault();
+      (async () => {
+        await handleMem0Modal();
+      })();
+    }
+  });
+
+  observer = new MutationObserver(() => {
+    addSyncButton();
+    addMem0IconButton();
+    addSendButtonListener();
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Add a MutationObserver to watch for changes in the DOM but don't intercept Enter key
+  const observerForUI = new MutationObserver(() => {
+    addMem0IconButton();
+    addSendButtonListener();
+  });
+
+  observerForUI.observe(document.body, {
+    childList: true,
+    subtree: true,
   });
 }
 

@@ -13,7 +13,7 @@ let allMemoriesById = new Set();
 // Reference to the modal overlay for updates
 let currentModalOverlay = null;
 
-function createMemoryModal(memoryItems, isLoading = false) {
+function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
   // Close existing modal if it exists
   if (memoryModalShown && currentModalOverlay) {
     document.body.removeChild(currentModalOverlay);
@@ -22,41 +22,92 @@ function createMemoryModal(memoryItems, isLoading = false) {
   memoryModalShown = true;
   let currentMemoryIndex = 0;
 
-  // Get the text input element position
-  const inputElement = document.querySelector('div[contenteditable="true"]') || 
-                       document.querySelector("textarea");
-  
-  if (!inputElement) {
-    console.error("Input element not found");
-    return;
-  }
-  
-  // Get the position and dimensions of the input field
-  const inputRect = inputElement.getBoundingClientRect();
-  
   // Calculate modal dimensions (estimated)
   const modalWidth = 447;
   const modalHeight = 470;
   
-  // Determine if there's enough space below the input field
-  const viewportHeight = window.innerHeight;
-  const spaceBelow = viewportHeight - inputRect.bottom;
-  const spaceAbove = inputRect.top;
-  
-  // Decide whether to place modal above or below based on available space
-  // Prefer below if there's enough space
-  const placeBelow = spaceBelow >= modalHeight; 
-  
-  // Position the modal aligned to the right of the input
-  const rightEdge = inputRect.right - 20; // 20px offset from right edge
   let topPosition;
+  let leftPosition;
   
-  if (placeBelow) {
-    // Place below the input
-    topPosition = inputRect.bottom + 10;
+  // Different positioning based on which button triggered the modal
+  if (sourceButtonId === 'mem0-icon-button') {
+    // Position relative to the mem0-icon-button (in the input area)
+    const iconButton = document.querySelector('#mem0-icon-button');
+    if (iconButton) {
+      const buttonRect = iconButton.getBoundingClientRect();
+      
+      // Determine if there's enough space above the button
+      const spaceAbove = buttonRect.top;
+      const viewportHeight = window.innerHeight;
+      
+      // Calculate position - for icon button, prefer to show ABOVE
+      leftPosition = buttonRect.left - modalWidth + buttonRect.width;
+      
+      // Make sure modal doesn't go off-screen to the left
+      leftPosition = Math.max(leftPosition, 10);
+      
+      // For icon button, show above if enough space, otherwise below
+      if (spaceAbove >= modalHeight + 10) {
+        // Place above
+        topPosition = buttonRect.top - modalHeight - 10;
       } else {
-    // Place above the input if not enough space below
-    topPosition = inputRect.top - modalHeight - 10;
+        // Not enough space above, place below
+        topPosition = buttonRect.bottom + 10;
+      }
+    } else {
+      // Fallback to input-based positioning
+      positionRelativeToInput();
+    }
+  } else if (sourceButtonId === 'sync-button') {
+    // Position relative to the sync button
+    const syncButton = document.querySelector('#sync-button');
+    if (syncButton) {
+      const buttonRect = syncButton.getBoundingClientRect();
+      
+      // Position below the sync button by default
+      leftPosition = buttonRect.left;
+      topPosition = buttonRect.bottom + 10;
+      
+      // Make sure modal doesn't go off-screen to the right
+      leftPosition = Math.min(leftPosition, window.innerWidth - modalWidth - 10);
+    } else {
+      // Fallback to input-based positioning
+      positionRelativeToInput();
+    }
+  } else {
+    // Default positioning relative to the input field
+    positionRelativeToInput();
+  }
+  
+  // Helper function to position modal relative to input field
+  function positionRelativeToInput() {
+    const inputElement = document.querySelector('div[contenteditable="true"]') || 
+                         document.querySelector("textarea");
+    
+    if (!inputElement) {
+      console.error("Input element not found");
+      return;
+    }
+    
+    // Get the position and dimensions of the input field
+    const inputRect = inputElement.getBoundingClientRect();
+    
+    // Determine if there's enough space below the input field
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - inputRect.bottom;
+    const spaceAbove = inputRect.top;
+    
+    // Position the modal aligned to the right of the input
+    leftPosition = Math.max(inputRect.right - 20 - modalWidth, 10); // 20px offset from right edge
+    
+    // Decide whether to place modal above or below based on available space
+    if (spaceBelow >= modalHeight) {
+      // Place below the input
+      topPosition = inputRect.bottom + 10;
+    } else {
+      // Place above the input if not enough space below
+      topPosition = inputRect.top - modalHeight - 10;
+    }
   }
   
   // Create modal overlay
@@ -97,7 +148,7 @@ function createMemoryModal(memoryItems, isLoading = false) {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     position: absolute;
     top: ${topPosition}px;
-    left: ${Math.max(rightEdge - modalWidth, 10)}px;
+    left: ${leftPosition}px;
     pointer-events: auto;
     border: 1px solid #27272A;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -934,8 +985,8 @@ function addMem0IconButton() {
         try {
           const memoryEnabled = await getMemoryEnabledState();
           if (memoryEnabled) {
-            // Call handleMem0Modal
-            await handleMem0Modal();
+            // Call handleMem0Modal with button ID
+            await handleMem0Modal('mem0-icon-button');
           }
         } catch (error) {
           console.error('Error handling Mem0 button click:', error);
@@ -949,7 +1000,7 @@ function addMem0IconButton() {
 }
 
 // Modified function to handle Mem0 modal instead of direct injection
-async function handleMem0Modal() {
+async function handleMem0Modal(sourceButtonId = null) {
   const memoryEnabled = await getMemoryEnabledState();
   if (!memoryEnabled) {
     return;
@@ -1000,8 +1051,8 @@ async function handleMem0Modal() {
 
   isProcessingMem0 = true;
   
-  // Show the loading modal immediately
-  createMemoryModal([], true);
+  // Show the loading modal immediately with the source button ID
+  createMemoryModal([], true, sourceButtonId);
 
   try {
     const data = await new Promise((resolve) => {
@@ -1065,8 +1116,8 @@ async function handleMem0Modal() {
       };
     });
 
-    // Update the modal with real data
-    createMemoryModal(memoryItems);
+    // Update the modal with real data and the source button ID
+    createMemoryModal(memoryItems, false, sourceButtonId);
 
     // Proceed with adding memory asynchronously without awaiting
     fetch("https://api.mem0.ai/v1/memories/", {
@@ -1089,7 +1140,7 @@ async function handleMem0Modal() {
   } catch (error) {
     console.error("Error:", error);
     // Still show the modal but with empty state if there was an error
-    createMemoryModal([]);
+    createMemoryModal([], false, sourceButtonId);
     throw error;
   } finally {
     isProcessingMem0 = false;
@@ -1339,6 +1390,8 @@ function handleSyncClick() {
               if (syncedCount === totalCount) {
                 showSyncPopup(syncButton, `${syncedCount} memories synced`);
                 setSyncButtonLoadingState(false);
+                // Open the modal with memories after syncing
+                handleMem0Modal('sync-button');
               }
             })
             .catch((error) => {
@@ -1348,6 +1401,8 @@ function handleSyncClick() {
                   `${syncedCount}/${totalCount} memories synced`
                 );
                 setSyncButtonLoadingState(false);
+                // Open the modal with memories after syncing
+                handleMem0Modal('sync-button');
               }
             });
         }
@@ -1357,11 +1412,15 @@ function handleSyncClick() {
         .then(() => {
           showSyncPopup(syncButton, `${memories.length} memories synced`);
           setSyncButtonLoadingState(false);
+          // Open the modal with memories after syncing
+          handleMem0Modal('sync-button');
         })
         .catch((error) => {
           console.error("Error syncing memories:", error);
           showSyncPopup(syncButton, "Error syncing memories");
           setSyncButtonLoadingState(false);
+          // Open the modal even if there was an error
+          handleMem0Modal('sync-button');
         });
     } else {
       console.error("Table or Sync button not found");

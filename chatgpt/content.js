@@ -538,9 +538,13 @@ function createMemoryModal(memoryItems, isLoading = false) {
         isExpanded = true;
         memoryText.style.webkitLineClamp = 'unset';
         memoryText.style.height = 'auto';
+        contentWrapper.style.overflowY = 'auto';
+        contentWrapper.style.scrollbarWidth = 'none';
+        contentWrapper.style.msOverflowStyle = 'none';
+        contentWrapper.style.cssText += '&::-webkit-scrollbar { display: none; }';
         memoryContainer.style.backgroundColor = '#1C1C1E';
         memoryContainer.style.maxHeight = '300px'; // Allow expansion but within container
-        memoryContainer.style.overflow = 'auto';
+        memoryContainer.style.overflow = 'hidden';
         removeButton.style.display = 'flex';
         currentlyExpandedMemory = memoryContainer;
         
@@ -553,6 +557,7 @@ function createMemoryModal(memoryItems, isLoading = false) {
         isExpanded = false;
         memoryText.style.webkitLineClamp = '2';
         memoryText.style.height = '42px';
+        contentWrapper.style.overflowY = 'visible';
         memoryContainer.style.backgroundColor = '#27272A';
         memoryContainer.style.maxHeight = '84px';
         memoryContainer.style.overflow = 'hidden';
@@ -584,6 +589,10 @@ function createMemoryModal(memoryItems, isLoading = false) {
             updateInputWithMemories();
           }
         }
+        
+        // Mark this memory as removed so it won't be added when clicking "Add to Prompt"
+        memory.removed = true;
+        
         // Remove from memoryItems
         const index = memoryItems.findIndex(m => m.id === memory.id);
         if (index !== -1) {
@@ -743,9 +752,9 @@ function createMemoryModal(memoryItems, isLoading = false) {
 
   // Update Add to Prompt button click handler
   addToPromptBtn.addEventListener('click', () => {
-    // Only add memories that are not already added
+    // Only add memories that are not already added and not marked as removed
     const newMemories = memoryItems
-      .filter(memory => !allMemoriesById.has(memory.id))
+      .filter(memory => !allMemoriesById.has(memory.id) && !memory.removed)
       .map(memory => {
         allMemoriesById.add(memory.id);
         return memory.text;
@@ -935,6 +944,22 @@ function addMem0IconButton() {
 async function handleMem0Modal() {
   const memoryEnabled = await getMemoryEnabledState();
   if (!memoryEnabled) {
+    return;
+  }
+
+  // Check if user is logged in
+  const loginData = await new Promise((resolve) => {
+    chrome.storage.sync.get(
+      ["apiKey", "userId", "access_token"],
+      function (items) {
+        resolve(items);
+      }
+    );
+  });
+
+  // If no API key and no access token, show login popup
+  if (!loginData.apiKey && !loginData.access_token) {
+    showLoginPopup();
     return;
   }
 
@@ -1516,6 +1541,160 @@ function initializeMem0Integration() {
     childList: true,
     subtree: true,
   });
+}
+
+// Function to show login popup
+function showLoginPopup() {
+  // First remove any existing popups
+  const existingPopup = document.querySelector('#mem0-login-popup');
+  if (existingPopup) {
+    existingPopup.remove();
+  }
+  
+  // Create popup container
+  const popupOverlay = document.createElement('div');
+  popupOverlay.id = 'mem0-login-popup';
+  popupOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10001;
+  `;
+  
+  const popupContainer = document.createElement('div');
+  popupContainer.style.cssText = `
+    background-color: #1C1C1E;
+    border-radius: 12px;
+    width: 320px;
+    padding: 24px;
+    color: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  `;
+  
+  // Close button
+  const closeButton = document.createElement('button');
+  closeButton.style.cssText = `
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: #A1A1AA;
+    font-size: 16px;
+    cursor: pointer;
+  `;
+  closeButton.innerHTML = '&times;';
+  closeButton.addEventListener('click', () => {
+    document.body.removeChild(popupOverlay);
+  });
+  
+  // Logo and heading
+  const logoContainer = document.createElement('div');
+  logoContainer.style.cssText = `
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+  `;
+  
+  const logo = document.createElement('img');
+  logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  logo.style.cssText = `
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    margin-right: 12px;
+  `;
+  
+  const heading = document.createElement('h2');
+  heading.textContent = 'Sign in to Mem0';
+  heading.style.cssText = `
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+  `;
+  
+  logoContainer.appendChild(logo);
+  logoContainer.appendChild(heading);
+  
+  // Message
+  const message = document.createElement('p');
+  message.textContent = 'Please sign in to access your memories and enhance your conversations.';
+  message.style.cssText = `
+    margin-bottom: 24px;
+    color: #D4D4D8;
+    font-size: 14px;
+    line-height: 1.5;
+  `;
+  
+  // Sign in button
+  const signInButton = document.createElement('button');
+  signInButton.style.cssText = `
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px;
+    background-color: white;
+    color: black;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  `;
+  
+  // Google icon
+  const googleIcon = document.createElement('span');
+  googleIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+  </svg>`;
+  googleIcon.style.marginRight = '10px';
+  
+  signInButton.appendChild(googleIcon);
+  signInButton.appendChild(document.createTextNode('Sign in with Google'));
+  
+  signInButton.addEventListener('mouseenter', () => {
+    signInButton.style.backgroundColor = '#f5f5f5';
+  });
+  
+  signInButton.addEventListener('mouseleave', () => {
+    signInButton.style.backgroundColor = 'white';
+  });
+  
+  // Open sign-in page when clicked
+  signInButton.addEventListener('click', () => {
+    window.open('https://app.mem0.ai/login', '_blank');
+    document.body.removeChild(popupOverlay);
+  });
+  
+  // Assemble popup
+  popupContainer.appendChild(logoContainer);
+  popupContainer.appendChild(message);
+  popupContainer.appendChild(signInButton);
+  
+  popupOverlay.appendChild(popupContainer);
+  popupOverlay.appendChild(closeButton);
+  
+  // Add click event to close when clicking outside
+  popupOverlay.addEventListener('click', (e) => {
+    if (e.target === popupOverlay) {
+      document.body.removeChild(popupOverlay);
+    }
+  });
+  
+  // Add to body
+  document.body.appendChild(popupOverlay);
 }
 
 initializeMem0Integration();

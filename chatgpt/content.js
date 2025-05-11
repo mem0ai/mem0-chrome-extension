@@ -24,7 +24,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Calculate modal dimensions (estimated)
   const modalWidth = 447;
-  const modalHeight = 420; // Reduced from 470
+  const modalHeight = 400; // Reduced from 470
   
   let topPosition;
   let leftPosition;
@@ -252,11 +252,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     display: flex;
     flex-direction: column;
     padding: 0 16px;
-    padding-bottom: 12px;
     gap: 12px;
     overflow: hidden;
     flex: 1;
-    height: 340px; /* Increased from 330px */
+    height: 320px; /* Increased from 330px */
   `;
 
   // Create memories counter

@@ -24,7 +24,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Calculate modal dimensions (estimated)
   const modalWidth = 447;
-  const modalHeight = 400; // Reduced from 470
+  let modalHeight = 400; // Default height
+  let memoriesPerPage = 3; // Default number of memories per page
   
   let topPosition;
   let leftPosition;
@@ -53,6 +54,12 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       } else {
         // Not enough space above, place below
         topPosition = buttonRect.bottom + 10;
+        
+        // Check if it's in the lower half of the screen
+        if (buttonRect.bottom > viewportHeight / 2) {
+          modalHeight = 300; // Reduced height
+          memoriesPerPage = 2; // Show only 2 memories
+        }
       }
     } else {
       // Fallback to input-based positioning
@@ -63,10 +70,17 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     const syncButton = document.querySelector('#sync-button');
     if (syncButton) {
       const buttonRect = syncButton.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
       
       // Position below the sync button by default
       leftPosition = buttonRect.left;
       topPosition = buttonRect.bottom + 10;
+      
+      // Check if it's in the lower half of the screen
+      if (buttonRect.bottom > viewportHeight / 2) {
+        modalHeight = 300; // Reduced height
+        memoriesPerPage = 2; // Show only 2 memories
+      }
       
       // Make sure modal doesn't go off-screen to the right
       leftPosition = Math.min(leftPosition, window.innerWidth - modalWidth - 10);
@@ -104,6 +118,12 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     if (spaceBelow >= modalHeight) {
       // Place below the input
       topPosition = inputRect.bottom + 10;
+      
+      // Check if it's in the lower half of the screen
+      if (inputRect.bottom > viewportHeight / 2) {
+        modalHeight = 300; // Reduced height
+        memoriesPerPage = 2; // Show only 2 memories
+      }
     } else {
       // Place above the input if not enough space below
       topPosition = inputRect.top - modalHeight - 10;
@@ -248,6 +268,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Content section
   const contentSection = document.createElement('div');
+  const contentSectionHeight = modalHeight - 130; // Account for header and navigation
   contentSection.style.cssText = `
     display: flex;
     flex-direction: column;
@@ -255,7 +276,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     gap: 12px;
     overflow: hidden;
     flex: 1;
-    height: 320px; /* Increased from 330px */
+    height: ${contentSectionHeight}px;
   `;
 
   // Create memories counter
@@ -275,7 +296,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
   }
 
-  // Create memories content container
+  // Calculate max height for memories content based on modal height
+  const memoriesContentMaxHeight = contentSectionHeight - 40; // Account for memories counter
+
+  // Create memories content container with adjusted height
   const memoriesContent = document.createElement('div');
   memoriesContent.style.cssText = `
     display: flex;
@@ -283,7 +307,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     gap: 8px;
     overflow-y: auto;
     flex: 1;
-    max-height: 290px; /* Increased from 270px */
+    max-height: ${memoriesContentMaxHeight}px;
     padding-right: 8px;
     margin-right: -8px;
     scrollbar-width: none;
@@ -294,11 +318,11 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Track currently expanded memory
   let currentlyExpandedMemory = null;
 
-  // Function to create skeleton loading items
+  // Function to create skeleton loading items (adjusted for different heights)
   function createSkeletonItems() {
     memoriesContent.innerHTML = '';
     
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < memoriesPerPage; i++) {
       const skeletonItem = document.createElement('div');
       skeletonItem.style.cssText = `
         display: flex;
@@ -385,42 +409,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     }
   }
   
-  // Function to show empty state
-  function showEmptyState() {
-    memoriesContent.innerHTML = '';
-    
-    const emptyContainer = document.createElement('div');
-    emptyContainer.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px 16px;
-      text-align: center;
-      flex: 1;
-      min-height: 252px;
-    `;
-    
-    const emptyIcon = document.createElement('div');
-    emptyIcon.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717A" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v10a2 2 0 01-2 2h-4M3 21h4a2 2 0 002-2v-4m-6 6V9m18 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
-    emptyIcon.style.marginBottom = '16px';
-    
-    const emptyText = document.createElement('div');
-    emptyText.textContent = 'No relevant memories found';
-    emptyText.style.cssText = `
-      color: #71717A;
-      font-size: 14px;
-      font-weight: 500;
-    `;
-    
-    emptyContainer.appendChild(emptyIcon);
-    emptyContainer.appendChild(emptyText);
-    memoriesContent.appendChild(emptyContainer);
-  }
-
-  // Function to show memories
+  // Function to show memories with adjusted count based on modal position
   function showMemories() {
     memoriesContent.innerHTML = '';
     
@@ -434,7 +423,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       return;
     }
     
-    const memoriesToShow = Math.min(3, memoryItems.length);
+    // Use the dynamically set memoriesPerPage value
+    const memoriesToShow = Math.min(memoriesPerPage, memoryItems.length);
     
     // Calculate total pages and current page
     const totalPages = Math.ceil(memoryItems.length / memoriesToShow);
@@ -448,6 +438,11 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       if (memoryIndex >= memoryItems.length) break; // Stop if we've reached the end
       
       const memory = memoryItems[memoryIndex];
+      
+      // Skip memories that have been added already
+      if (allMemoriesById.has(memory.id)) {
+        continue;
+      }
       
       // Ensure memory has an ID
       if (!memory.id) {
@@ -505,34 +500,33 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         border-radius: 100%;
         transition: all 0.2s ease;
       `;
-
-      // Function to update add button state
-      function updateAddButtonState() {
-        const isAdded = allMemoriesById.has(memory.id);
-        addButton.innerHTML = isAdded ? 
-          `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M20 6L9 17l-5-5" stroke="#22C55E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>` :
-          `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>`;
-        addButton.style.color = isAdded ? '#22C55E' : '#A1A1AA';
-      }
-
-      // Initial state
-      updateAddButtonState();
-
+      
+      addButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      
       // Add click handler for add button
       addButton.addEventListener('click', (e) => {
         e.stopPropagation();
-        const isAdded = allMemoriesById.has(memory.id);
         
-        if (!isAdded) {
-          // Add just this memory
-          allMemoriesById.add(memory.id);
-          allMemories.push(memory.text);
-          updateInputWithMemories();
-          updateAddButtonState();
+        // Add this memory
+        allMemoriesById.add(memory.id);
+        allMemories.push(memory.text);
+        updateInputWithMemories();
+        
+        // Remove this memory from the list
+        const index = memoryItems.findIndex(m => m.id === memory.id);
+        if (index !== -1) {
+          memoryItems.splice(index, 1);
+          
+          // Recalculate pagination after removing an item
+          // If we're on a page that's now empty, go to previous page
+          if (currentMemoryIndex > 0 && currentMemoryIndex >= memoryItems.length) {
+            currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
+          }
+          
+          memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
+          showMemories();
         }
       });
 
@@ -618,7 +612,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         memoryText.style.height = '42px';
         contentWrapper.style.overflowY = 'visible';
         memoryContainer.style.backgroundColor = '#27272A';
-        memoryContainer.style.maxHeight = '72px'; // Updated from 84px
+        memoryContainer.style.maxHeight = '72px';
         memoryContainer.style.overflow = 'hidden';
         removeButton.style.display = 'none';
         currentlyExpandedMemory = null;
@@ -638,31 +632,17 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       // Add click handler for remove button
       removeButton.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Remove from allMemoriesById if it was added
-        if (allMemoriesById.has(memory.id)) {
-          allMemoriesById.delete(memory.id);
-          // Find and remove the memory text from allMemories
-          const memoryTextIndex = allMemories.indexOf(memory.text);
-          if (memoryTextIndex !== -1) {
-            allMemories.splice(memoryTextIndex, 1);
-            updateInputWithMemories();
-          }
-        }
-        
-        // Mark this memory as removed so it won't be added when clicking "Add to Prompt"
-        memory.removed = true;
-        
         // Remove from memoryItems
         const index = memoryItems.findIndex(m => m.id === memory.id);
         if (index !== -1) {
           memoryItems.splice(index, 1);
           
           // Recalculate pagination after removing an item
-          const newTotalPages = Math.ceil(memoryItems.length / memoriesToShow);
+          const newTotalPages = Math.ceil(memoryItems.length / memoriesPerPage);
           
           // If we're on the last page and it's now empty, go to previous page
           if (currentMemoryIndex > 0 && currentMemoryIndex >= memoryItems.length) {
-            currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesToShow);
+            currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
           }
           
           memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
@@ -685,9 +665,55 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         memoryContainer.style.backgroundColor = isExpanded ? '#1C1C1E' : '#27272A';
       });
     }
+    
+    // If after filtering for already added memories, there are no items to show,
+    // check if we need to go to previous page
+    if (memoriesContent.children.length === 0 && memoryItems.length > 0) {
+      if (currentMemoryIndex > 0) {
+        currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
+        showMemories();
+      } else {
+        showEmptyState();
+      }
+    }
   }
 
-  // Function to update navigation button states
+  // Function to show empty state
+  function showEmptyState() {
+    memoriesContent.innerHTML = '';
+    
+    const emptyContainer = document.createElement('div');
+    emptyContainer.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      text-align: center;
+      flex: 1;
+      min-height: 200px;
+    `;
+    
+    const emptyIcon = document.createElement('div');
+    emptyIcon.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717A" xmlns="http://www.w3.org/2000/svg">
+      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v10a2 2 0 01-2 2h-4M3 21h4a2 2 0 002-2v-4m-6 6V9m18 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    emptyIcon.style.marginBottom = '16px';
+    
+    const emptyText = document.createElement('div');
+    emptyText.textContent = 'No relevant memories found';
+    emptyText.style.cssText = `
+      color: #71717A;
+      font-size: 14px;
+      font-weight: 500;
+    `;
+    
+    emptyContainer.appendChild(emptyIcon);
+    emptyContainer.appendChild(emptyText);
+    memoriesContent.appendChild(emptyContainer);
+  }
+
+  // Update navigation button states
   function updateNavigationState(currentPage, totalPages) {
     if (currentPage <= 1) {
       prevButton.disabled = true;
@@ -747,15 +773,15 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add navigation button handlers
   prevButton.addEventListener('click', () => {
-    if (currentMemoryIndex >= 3) {
-      currentMemoryIndex = Math.max(0, currentMemoryIndex - 3);
+    if (currentMemoryIndex >= memoriesPerPage) {
+      currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
       showMemories();
     }
   });
 
   nextButton.addEventListener('click', () => {
-    if (currentMemoryIndex + 3 < memoryItems.length) {
-      currentMemoryIndex = currentMemoryIndex + 3;
+    if (currentMemoryIndex + memoriesPerPage < memoryItems.length) {
+      currentMemoryIndex = currentMemoryIndex + memoriesPerPage;
       showMemories();
     }
   });
@@ -811,7 +837,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Update Add to Prompt button click handler
   addToPromptBtn.addEventListener('click', () => {
-    // Only add memories that are not already added and not marked as removed
+    // Only add memories that are not already added
     const newMemories = memoryItems
       .filter(memory => !allMemoriesById.has(memory.id) && !memory.removed)
       .map(memory => {
@@ -830,6 +856,13 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       // If no new memories were added but we have existing ones, just close
       if (allMemoriesById.size > 0) {
         closeModal();
+      }
+    }
+
+    // Remove all added memories from the memoryItems list
+    for (let i = memoryItems.length - 1; i >= 0; i--) {
+      if (allMemoriesById.has(memoryItems[i].id)) {
+        memoryItems.splice(i, 1);
       }
     }
   });

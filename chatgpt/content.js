@@ -24,7 +24,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Calculate modal dimensions (estimated)
   const modalWidth = 447;
-  const modalHeight = 470;
+  const modalHeight = 420; // Reduced from 470
   
   let topPosition;
   let leftPosition;
@@ -160,9 +160,9 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   modalHeader.style.cssText = `
     display: flex;
     align-items: center;
-    padding: 12px 16px;
+    padding: 10px 16px;
     justify-content: space-between;
-    background-color: #1C1C1E;
+    background-color: #232325;
     flex-shrink: 0;
   `;
 
@@ -174,7 +174,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     align-items: center;
   `;
 
-  // Add Mem0 logo
+  // Add Mem0 logo (updated to SVG)
   const logoImg = document.createElement('img');
   logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
   logoImg.style.cssText = `
@@ -214,7 +214,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   const arrowIcon = document.createElement('span');
   arrowIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
     <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
+  </svg>
+`;
   addToPromptBtn.appendChild(arrowIcon);
 
   // Create settings button
@@ -251,11 +252,11 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     display: flex;
     flex-direction: column;
     padding: 0 16px;
-    padding-bottom: 16px;
-    gap: 16px;
+    padding-bottom: 12px;
+    gap: 12px;
     overflow: hidden;
     flex: 1;
-    height: 330px; /* Explicit height */
+    height: 340px; /* Increased from 330px */
   `;
 
   // Create memories counter
@@ -283,7 +284,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     gap: 8px;
     overflow-y: auto;
     flex: 1;
-    max-height: 270px; /* Explicit max height */
+    max-height: 290px; /* Increased from 270px */
     padding-right: 8px;
     margin-right: -8px;
     scrollbar-width: none;
@@ -305,10 +306,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         flex-direction: row;
         align-items: flex-start;
         justify-content: space-between;
-        padding: 16px;
+        padding: 12px;
         background-color: #27272A;
         border-radius: 8px;
-        height: 84px;
+        height: 72px;
         flex-shrink: 0;
         animation: pulse 1.5s infinite ease-in-out;
       `;
@@ -460,13 +461,13 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         flex-direction: row;
         align-items: flex-start;
         justify-content: space-between;
-        padding: 16px;
+        padding: 12px; 
         background-color: #27272A;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s ease;
-        min-height: 84px;
-        max-height: 84px;
+        min-height: 72px; 
+        max-height: 72px; 
         overflow: hidden;
         flex-shrink: 0;
       `;
@@ -618,7 +619,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         memoryText.style.height = '42px';
         contentWrapper.style.overflowY = 'visible';
         memoryContainer.style.backgroundColor = '#27272A';
-        memoryContainer.style.maxHeight = '84px';
+        memoryContainer.style.maxHeight = '72px'; // Updated from 84px
         memoryContainer.style.overflow = 'hidden';
         removeButton.style.display = 'none';
         currentlyExpandedMemory = null;
@@ -716,8 +717,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     display: flex;
     justify-content: center;
     gap: 12px;
-    padding: 16px;
-    border-top: 1px solid #27272A;
+    padding: 10px;
+    border-top: none;
     flex-shrink: 0;
   `;
 
@@ -958,12 +959,87 @@ function addMem0IconButton() {
       const mem0ButtonContainer = document.createElement('span');
       mem0ButtonContainer.className = '';
       mem0ButtonContainer.dataset.state = 'closed';
+      mem0ButtonContainer.style.position = 'relative'; // Add position relative for popover positioning
       
       const mem0Button = document.createElement('button');
       mem0Button.id = 'mem0-icon-button';
-      mem0Button.className = 'btn relative btn-primary btn-small flex items-center justify-center rounded-full border border-token-border-default p-1 text-token-text-secondary focus-visible:outline-black dark:text-token-text-secondary dark:focus-visible:outline-white bg-transparent dark:bg-transparent can-hover:hover:bg-token-main-surface-secondary dark:hover:bg-transparent dark:hover:opacity-100 h-9 min-h-9 w-9 min-w-9';
+      mem0Button.className = 'btn relative btn-primary btn-small flex items-center justify-center rounded-full border border-token-border-default p-1 text-token-text-secondary focus-visible:outline-black dark:text-token-text-secondary dark:focus-visible:outline-white bg-transparent dark:bg-transparent can-hover:hover:bg-token-main-surface-secondary dark:hover:bg-transparent dark:hover:opacity-100 h-9 min-h-9 w-9';
       mem0Button.setAttribute('aria-label', 'Mem0 button');
       mem0Button.type = 'button';
+      
+      // Create notification dot
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
+      notificationDot.style.cssText = `
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        width: 10px;
+        height: 10px;
+        background-color:rgb(128, 221, 162);
+        border-radius: 50%;
+        border: 2px solid #1C1C1E;
+        display: none;
+        z-index: 1001;
+        pointer-events: none;
+      `;
+      
+      // Add keyframe animation for the dot
+      if (!document.getElementById('notification-dot-animation')) {
+        const style = document.createElement('style');
+        style.id = 'notification-dot-animation';
+        style.innerHTML = `
+          @keyframes popIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+          }
+          
+          #mem0-notification-dot.active {
+            display: block !important;
+            animation: popIn 0.3s ease-out forwards;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      // Create popover element (hidden by default)
+      const popover = document.createElement('div');
+      popover.className = 'mem0-button-popover';
+      popover.style.cssText = `
+        position: absolute;
+        bottom: 48px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #1C1C1E;
+        border: 1px solid #27272A;
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 10001;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        display: none;
+        transition: opacity 0.2s;
+      `;
+      popover.textContent = 'Add memories to your prompt';
+      
+      // Add arrow
+      const arrow = document.createElement('div');
+      arrow.style.cssText = `
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%) rotate(45deg);
+        width: 10px;
+        height: 10px;
+        background-color: #1C1C1E;
+        border-right: 1px solid #27272A;
+        border-bottom: 1px solid #27272A;
+      `;
+      popover.appendChild(arrow);
+      mem0ButtonContainer.appendChild(popover);
       
       const iconContainer = document.createElement('div');
       iconContainer.className = 'flex items-center justify-center';
@@ -975,10 +1051,22 @@ function addMem0IconButton() {
       
       iconContainer.appendChild(icon);
       mem0Button.appendChild(iconContainer);
+      mem0Button.appendChild(notificationDot);
       mem0ButtonContainer.appendChild(mem0Button);
       
       // Insert before the mic button
       micContainer.insertBefore(mem0ButtonContainer, micContainer.firstChild);
+      
+      // Add hover event for popover
+      mem0ButtonContainer.addEventListener('mouseenter', () => {
+        popover.style.display = 'block';
+        setTimeout(() => popover.style.opacity = '1', 10);
+      });
+      
+      mem0ButtonContainer.addEventListener('mouseleave', () => {
+        popover.style.opacity = '0';
+        setTimeout(() => popover.style.display = 'none', 200);
+      });
       
       // Add click event listener
       mem0Button.addEventListener('click', async () => {
@@ -992,11 +1080,69 @@ function addMem0IconButton() {
           console.error('Error handling Mem0 button click:', error);
         }
       });
+      
+      // Update notification dot based on input content
+      updateNotificationDot();
+      
+      // Ensure notification dot is updated after DOM is fully loaded
+      setTimeout(updateNotificationDot, 500);
     }
   }
   
   // Add send button listener
   addSendButtonListener();
+}
+
+function updateNotificationDot() {
+  const inputElement =
+    document.querySelector('div[contenteditable="true"]') ||
+    document.querySelector("textarea");
+  
+  const notificationDot = document.querySelector('#mem0-notification-dot');
+  
+  if (inputElement && notificationDot) {
+    
+    // Function to check if input has text
+    const checkForText = () => {
+      const inputText = inputElement.textContent || inputElement.value || '';
+      const hasText = inputText.trim() !== '';
+      
+      
+      if (hasText) {
+        notificationDot.classList.add('active');
+        // Force display style
+        notificationDot.style.display = 'block';
+
+      } else {
+        notificationDot.classList.remove('active');
+        notificationDot.style.display = 'none';
+      }
+    };
+    
+    // Set up an observer to watch for changes to the input field
+    const inputObserver = new MutationObserver(checkForText);
+    
+    // Start observing the input element
+    inputObserver.observe(inputElement, { 
+      childList: true, 
+      characterData: true, 
+      subtree: true 
+    });
+    
+    // Also check on input and keyup events
+    inputElement.addEventListener('input', checkForText);
+    inputElement.addEventListener('keyup', checkForText);
+    inputElement.addEventListener('focus', checkForText);
+    
+    // Initial check
+    checkForText();
+    
+    // Force check after a small delay to ensure DOM is fully loaded
+    setTimeout(checkForText, 500);
+  } else {
+    // If elements aren't found immediately, try again after a short delay
+    setTimeout(updateNotificationDot, 1000);
+  }
 }
 
 // Modified function to handle Mem0 modal instead of direct injection
@@ -1579,6 +1725,7 @@ function initializeMem0Integration() {
     addSyncButton();
     addMem0IconButton();
     addSendButtonListener();
+    updateNotificationDot();
   });
 
   document.addEventListener("keydown", function (event) {
@@ -1594,6 +1741,7 @@ function initializeMem0Integration() {
     addSyncButton();
     addMem0IconButton();
     addSendButtonListener();
+    updateNotificationDot();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
@@ -1602,6 +1750,7 @@ function initializeMem0Integration() {
   const observerForUI = new MutationObserver(() => {
     addMem0IconButton();
     addSendButtonListener();
+    updateNotificationDot();
   });
 
   observerForUI.observe(document.body, {
@@ -1667,14 +1816,15 @@ function showLoginPopup() {
   logoContainer.style.cssText = `
     display: flex;
     align-items: center;
+    justify-content: center;
     margin-bottom: 16px;
   `;
   
   const logo = document.createElement('img');
   logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
   logo.style.cssText = `
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     margin-right: 12px;
   `;
@@ -1698,6 +1848,7 @@ function showLoginPopup() {
     color: #D4D4D8;
     font-size: 14px;
     line-height: 1.5;
+    text-align: center;
   `;
   
   // Sign in button
@@ -1728,8 +1879,12 @@ function showLoginPopup() {
   </svg>`;
   googleIcon.style.marginRight = '10px';
   
+  // Add text in span for better centering
+  const signInText = document.createElement('span');
+  signInText.textContent = 'Sign in with Google';
+  
   signInButton.appendChild(googleIcon);
-  signInButton.appendChild(document.createTextNode('Sign in with Google'));
+  signInButton.appendChild(signInText);
   
   signInButton.addEventListener('mouseenter', () => {
     signInButton.style.backgroundColor = '#f5f5f5';

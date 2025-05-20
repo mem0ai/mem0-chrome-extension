@@ -8,6 +8,7 @@ let memoryModalShown = false;
 let allMemories = [];
 let allMemoriesById = new Set();
 let currentModalOverlay = null;
+let mem0ButtonCheckInterval = null; // Add interval variable for button checks
 
 function getInputElement() {
   // Try finding with the more specific selector first
@@ -250,9 +251,30 @@ function initializeMem0Integration() {
   // Global flag to track initialization state
   window.mem0Initialized = window.mem0Initialized || false;
   
+  // Reset initialization flag on navigation or visibility change
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      // Page likely navigated or became visible, reset initialization
+      if (window.mem0Initialized) {
+        console.log("[Mem0] Page visibility changed, checking button");
+        setTimeout(() => {
+          if (!document.querySelector('#mem0-icon-button')) {
+            console.log("[Mem0] Button missing after visibility change, reinitializing");
+            window.mem0Initialized = false;
+            stageCriticalInit();
+          }
+        }, 1000);
+      }
+    }
+  });
+  
   // Avoid duplicating initialization
   if (window.mem0Initialized) {
-    console.log("[Mem0] Already initialized, skipping");
+    console.log("[Mem0] Already initialized, checking button presence");
+    if (!document.querySelector('#mem0-icon-button')) {
+      console.log("[Mem0] Button missing despite initialization, adding again");
+      addMem0IconButton();
+    }
     return;
   }
   
@@ -260,12 +282,12 @@ function initializeMem0Integration() {
   if (document.readyState !== 'complete') {
     console.log("[Mem0] Page not fully loaded, waiting for load event");
     window.addEventListener('load', function() {
-      setTimeout(stageCriticalInit, 1000); // Wait another second after load
+      setTimeout(stageCriticalInit, 500); // Reduced wait time after load
     });
   } else {
     // Page is already loaded, wait a moment and then initialize
     console.log("[Mem0] Page already loaded, waiting briefly before initialization");
-    setTimeout(stageCriticalInit, 1000);
+    setTimeout(stageCriticalInit, 500); // Reduced wait time
   }
   
   // Stage 1: Initialize critical features (keyboard shortcuts, basic listeners)
@@ -289,10 +311,10 @@ function initializeMem0Integration() {
         } catch (e) {
           console.error("[Mem0] Non-critical error adding send button listener:", e);
         }
-      }, 3000);
+      }, 2000);
       
       // Wait additional time for UI to stabilize
-      setTimeout(stageUIInit, 2000);
+      setTimeout(stageUIInit, 1000); // Reduced time
     } catch (e) {
       console.error("[Mem0] Error during critical initialization:", e);
       // Don't mark as initialized on error
@@ -321,13 +343,26 @@ function initializeMem0Integration() {
       window.mem0Initialized = true;
       console.log("[Mem0] Initialization complete");
       
-      // Schedule a final check after more time
+      // Clear any existing interval
+      if (mem0ButtonCheckInterval) {
+        clearInterval(mem0ButtonCheckInterval);
+      }
+      
+      // Set up periodic checks for button presence
+      mem0ButtonCheckInterval = setInterval(() => {
+        if (!document.querySelector('#mem0-icon-button')) {
+          console.log("[Mem0] Periodic check: button missing, attempting to add again");
+          addMem0IconButton();
+        }
+      }, 5000); // Check every 5 seconds
+      
+      // Final check after more time
       setTimeout(() => {
         if (!document.querySelector('#mem0-icon-button')) {
           console.log("[Mem0] Final check: button missing, attempting to add again");
           addMem0IconButton();
         }
-      }, 10000);
+      }, 5000);
       
     } catch (e) {
       console.error("[Mem0] Error during UI initialization:", e);
@@ -343,7 +378,7 @@ function initializeMem0Integration() {
       }
       
       // Listen for Enter key to handle memory processing
-  document.addEventListener("keydown", handleEnterKey, true);
+      document.addEventListener("keydown", handleEnterKey, true);
       
       // Listen for Ctrl+M to open the modal directly
       document.addEventListener("keydown", function(event) {
@@ -366,7 +401,7 @@ function initializeMem0Integration() {
     }
   }
   
-  // Set up mutation observer with strict throttling and filtering
+  // Set up mutation observer with throttling and filtering
   function setupObserver() {
     try {
       // Disconnect existing observer if any
@@ -376,7 +411,7 @@ function initializeMem0Integration() {
       
       // Track when we last processed mutations
       let lastObserverRun = 0;
-      const MIN_THROTTLE_MS = 10000; // 10-second minimum between runs
+      const MIN_THROTTLE_MS = 3000; // Reduced from 10s to 3s
       
       const ignoredSelectors = [
         '#mem0-icon-button',
@@ -412,7 +447,7 @@ function initializeMem0Integration() {
           return;
         }
         
-        // Apply strict throttling
+        // Apply throttling
         const now = Date.now();
         if (now - lastObserverRun < MIN_THROTTLE_MS) {
           return; // Too soon, skip
@@ -455,7 +490,7 @@ function initializeMem0Integration() {
         attributeFilter: ['class', 'style'] // Only observe class/style changes
       });
       
-      console.log("[Mem0] Observer set up with strict filtering and throttling");
+      console.log("[Mem0] Observer set up with improved throttling");
       
     } catch (e) {
       console.error("[Mem0] Error setting up observer:", e);
@@ -732,49 +767,23 @@ async function handleMem0Processing() {
     console.log("[Mem0] Processing memories");
     
     // Get the current input value
-  const originalPrompt = getInputElementValue();
-    if (!originalPrompt || originalPrompt.trim() === '') {
-      console.log("[Mem0] Empty prompt, sending without processing");
-      isProcessingMem0 = false;
-    triggerSendAction();
-    return;
-  }
-
-    // Search for relevant memories
-  let memories = [];
-  try {
-      console.log("[Mem0] Searching for memories");
-    memories = await searchMemories(originalPrompt);
-      console.log(`[Mem0] Found ${memories?.length || 0} memories`);
-  } catch (error) {
-      console.error("[Mem0] Error searching memories:", error);
-      // Continue without memories
-  }
-
-    // Build the final prompt with memories if they exist
-  let finalPrompt = originalPrompt;
-  if (memories && memories.length > 0) {
-      let memoryContext = "\n\nHere is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):\n";
-    memoryContext += memories.map(m => `- ${m.memory}`).join('\n');
-      finalPrompt = `${originalPrompt}${memoryContext}`;
-
-      // Update the input field with the final prompt including memories
-  setInputElementValue(finalPrompt);
-      console.log("[Mem0] Added memories to prompt");
-      
-      // Short delay to ensure the input field updates before sending
-      await new Promise(resolve => setTimeout(resolve, 100));
+    const originalPrompt = getInputElementValue();
+      if (!originalPrompt || originalPrompt.trim() === '') {
+        console.log("[Mem0] Empty prompt, sending without processing");
+        isProcessingMem0 = false;
+      triggerSendAction();
+      return;
     }
 
     // Trigger the send action
     console.log("[Mem0] Triggering send action");
-  await triggerSendAction();
+    await triggerSendAction();
 
     // Add the user's input as a new memory
   try {
       if (originalPrompt.trim().length > 5) { // Only add non-trivial prompts
         console.log("[Mem0] Adding new memory");
-    await addMemory(originalPrompt);
+        await addMemory(originalPrompt);
       }
   } catch (error) {
       console.error("[Mem0] Error adding memory:", error);
@@ -2003,6 +2012,21 @@ function addMem0IconButton() {
   try {
     console.log("[Mem0] Starting to add Mem0 icon button");
     
+    // Check if the button already exists
+    if (document.querySelector('#mem0-icon-button')) {
+      console.log("[Mem0] Button already exists, skipping");
+      return { success: true, status: "already_exists" };
+    }
+
+    // Wait for input element to be available before trying to add the button
+    const inputElement = getInputElement();
+    if (!inputElement) {
+      console.log("[Mem0] Input element not found, will retry later");
+      // Retry in 1 second
+      setTimeout(addMem0IconButton, 1000);
+      return { success: false, status: "no_input_element" };
+    }
+    
     // Try multiple approaches to find placement locations
     let searchButton = null;
     let buttonContainer = null;
@@ -2042,11 +2066,52 @@ function addMem0IconButton() {
     // Approach 3: Try to find the input field and place it near there
     if (!buttonContainer) {
       console.log("[Mem0] Toolbar not found, trying input-based approach");
-      const inputElement = getInputElement();
       if (inputElement && inputElement.parentElement) {
-        buttonContainer = inputElement.parentElement;
-        status = "found_input_parent";
+        // Try going up a few levels to find a good container
+        let parent = inputElement.parentElement;
+        let level = 0;
+        while (parent && level < 3) {
+          const buttons = parent.querySelectorAll('div[role="button"]');
+          if (buttons.length > 0) {
+            buttonContainer = parent;
+            status = "found_input_parent_with_buttons";
+            break;
+          }
+          parent = parent.parentElement;
+          level++;
+        }
+        
+        // If still not found, use direct parent
+        if (!buttonContainer) {
+          buttonContainer = inputElement.parentElement;
+          status = "found_input_parent";
+        }
       }
+    }
+    
+    // Approach 4: Look for a div with role="toolbar" 
+    if (!buttonContainer) {
+      const toolbars = document.querySelectorAll('div[role="toolbar"]');
+      if (toolbars.length > 0) {
+        buttonContainer = toolbars[0];
+        status = "found_role_toolbar";
+      }
+    }
+    
+    // If we couldn't find a suitable container, create one near the input
+    if (!buttonContainer && inputElement) {
+      console.log("[Mem0] Creating custom button container near input");
+      buttonContainer = document.createElement('div');
+      buttonContainer.id = 'mem0-custom-container';
+      buttonContainer.style.cssText = `
+        display: flex;
+        position: absolute;
+        top: ${inputElement.getBoundingClientRect().top - 40}px;
+        left: ${inputElement.getBoundingClientRect().right - 100}px;
+        z-index: 1000;
+      `;
+      document.body.appendChild(buttonContainer);
+      status = "created_custom_container";
     }
     
     // If we couldn't find a suitable container, bail out
@@ -2134,6 +2199,7 @@ function addMem0IconButton() {
       transition: background-color 0.2s;
     `;
     
+    // Rest of the existing button creation code...
     // Create the icon container
     const iconContainer = document.createElement('div');
     iconContainer.className = 'ds-button__icon';
@@ -2260,7 +2326,7 @@ function addMem0IconButton() {
         } else {
           buttonContainer.appendChild(mem0ButtonContainer);
         }
-      } else if (status === "found_toolbar") {
+      } else if (status === "found_toolbar" || status === "found_role_toolbar") {
         // Find an appropriate position in the toolbar - prefer the right side
         const lastChild = buttonContainer.lastChild;
         if (lastChild) {
@@ -2268,6 +2334,9 @@ function addMem0IconButton() {
         } else {
           buttonContainer.appendChild(mem0ButtonContainer);
         }
+      } else if (status === "created_custom_container") {
+        // Custom container - just append
+        buttonContainer.appendChild(mem0ButtonContainer);
       } else {
         // Other cases - try to position after any buttons in the container
         const buttons = buttonContainer.querySelectorAll('div[role="button"]');

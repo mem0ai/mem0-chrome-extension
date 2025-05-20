@@ -1540,14 +1540,18 @@ function addSyncButton() {
       syncButton = document.createElement("button");
       syncButton.id = "sync-button";
       syncButton.className = "btn relative btn-neutral mr-2";
-      syncButton.style.color = "#b4844a";
+      syncButton.style.color = "rgb(213, 213, 213)";
       syncButton.style.backgroundColor = "transparent";
       syncButton.innerHTML =
-        '<div id="sync-button-content" class="flex items-center justify-center font-normal">Sync</div>';
-      syncButton.style.border = "1px solid #b4844a";
+        '<div id="sync-button-content" class="flex items-center justify-center font-semibold">Sync Memory</div>';
+      syncButton.style.border = "1px solid rgb(213, 213, 213)";
+      syncButton.style.fontSize = "12px";
+      syncButton.style.fontWeight = "500";
+      // add margin right to syncButton
+      syncButton.style.marginRight = "8px";
 
       const syncIcon = document.createElement("img");
-      syncIcon.src = chrome.runtime.getURL("icons/mem0-icon.png");
+      syncIcon.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
       syncIcon.style.width = "16px";
       syncIcon.style.height = "16px";
       syncIcon.style.marginRight = "8px";
@@ -1635,7 +1639,7 @@ function handleSyncClick() {
 
           memories.push(memory);
 
-          sendMemoryToMem0(memory)
+          sendMemoryToMem0(memory, false)
             .then(() => {
               syncedCount++;
               if (syncedCount === totalCount) {
@@ -1737,7 +1741,7 @@ function setSyncButtonLoadingState(isLoading) {
       syncButton.style.cursor = "pointer";
       syncButton.style.opacity = "1";
       document.body.style.cursor = "default";
-      syncButtonContent.textContent = "Sync";
+      syncButtonContent.textContent = "Sync Memory";
     }
   }
 }
@@ -1775,7 +1779,7 @@ function showSyncPopup(button, message) {
   }, 3000);
 }
 
-function sendMemoryToMem0(memory) {
+function sendMemoryToMem0(memory, infer = true) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(
       ["apiKey", "userId", "access_token"],
@@ -1793,7 +1797,7 @@ function sendMemoryToMem0(memory) {
             body: JSON.stringify({
               messages: [{ content: memory.content, role: "user" }],
               user_id: items.userId,
-              infer: true,
+              infer: infer,
               metadata: {
                 provider: "ChatGPT",
               },

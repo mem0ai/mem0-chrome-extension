@@ -1188,7 +1188,6 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Add content to modal
   contentSection.appendChild(memoriesCounter);
   contentSection.appendChild(memoriesContent);
-  modalContainer.appendChild(contentSection);
 
   // Navigation section at bottom
   const navigationSection = document.createElement('div');
@@ -1256,7 +1255,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   navigationSection.appendChild(prevButton);
   navigationSection.appendChild(nextButton);
-  modalContainer.appendChild(navigationSection);
+  
 
   // Assemble modal
   headerLeft.appendChild(logoImg);
@@ -1266,8 +1265,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   
   modalHeader.appendChild(headerLeft);
   modalHeader.appendChild(headerRight);
-  
+
   modalContainer.appendChild(modalHeader);
+  modalContainer.appendChild(contentSection);
+  modalContainer.appendChild(navigationSection);
   
   modalOverlay.appendChild(modalContainer);
 

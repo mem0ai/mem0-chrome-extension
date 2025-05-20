@@ -425,7 +425,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   
   // Create title element
   const title = document.createElement('div');
-  title.textContent = 'Mem0';
+  title.textContent = 'OpenMemory';
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;

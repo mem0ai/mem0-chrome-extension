@@ -665,6 +665,16 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     border-radius: 50%;
   `;
 
+  // Add "OpenMemory" title
+  const title = document.createElement('div');
+  title.textContent = "OpenMemory";
+  title.style.cssText = `
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    margin-left: 8px;
+  `;
+
   // Create header right section
   const headerRight = document.createElement('div');
   headerRight.style.cssText = `
@@ -1250,6 +1260,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Assemble modal
   headerLeft.appendChild(logoImg);
+  headerLeft.appendChild(title);
   headerRight.appendChild(addToPromptBtn);
   headerRight.appendChild(settingsBtn);
   

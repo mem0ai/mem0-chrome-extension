@@ -112,7 +112,7 @@ function addMem0Button() {
       const mem0Button = document.createElement("button");
       mem0Button.id = "mem0-button";
       mem0Button.className = inputToolsMenuButton.className;
-      mem0Button.style.marginLeft = "8px";
+      mem0Button.style.marginLeft = "0px";
       mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
       const mem0Icon = document.createElement("img");
@@ -216,10 +216,34 @@ function addMem0Button() {
         tooltip.style.display = "none";
       });
 
-      inputToolsMenuButton.parentNode.insertBefore(
-        buttonContainer,
-        inputToolsMenuButton.nextSibling
-      );
+      // Find the parent container to place the button at the same level as input-tools-menu
+      const parentContainer = inputToolsMenuButton.closest('.relative.flex-1.flex.items-center.gap-2') || 
+                              inputToolsMenuButton.closest('.relative.flex-1') ||
+                              inputToolsMenuButton.parentNode.parentNode.parentNode.parentNode.parentNode;
+                              
+      if (parentContainer) {
+        // Find the third position in the container - after the first two divs
+        // Looking for the flex-row div to insert before it
+        const flexRowDiv = parentContainer.querySelector('.flex.flex-row.items-center.gap-2.min-w-0');
+        
+        // Find the tools div that we want to position after
+        const toolsDiv = inputToolsMenuButton.closest('div > div > div > div').parentNode.parentNode;
+        
+        // Make sure our button is the third div in the container
+        if (flexRowDiv && toolsDiv) {
+          // Insert right after the tools div and before the flex-row div
+          parentContainer.insertBefore(buttonContainer, flexRowDiv);
+        } else {
+          // Fallback to just append to the parent
+          parentContainer.appendChild(buttonContainer);
+        }
+      } else {
+        // Fallback to original behavior if parent not found
+        inputToolsMenuButton.parentNode.insertBefore(
+          buttonContainer,
+          inputToolsMenuButton.nextSibling
+        );
+      }
       
       // Update notification dot
       updateNotificationDot();

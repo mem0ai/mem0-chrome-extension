@@ -1531,26 +1531,19 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
       };
     });
 
-    if (memoryItems.length > 0) {
       // Update the memory modal with real data (not loading anymore)
-      closeModal();
-      createMemoryModal(memoryItems, false, sourceButtonId);
-      
-      // Only send the message if explicitly requested and modal isn't shown
-      if (clickSendButton && !memoryModalShown) {
-        clickSendButtonWithDelay();
-      }
-    } else {
-      // No memories found, just preserve original text
-      setInputValue(textarea, originalMessage);
-      
-      // Close the loading modal since we didn't find any memories
-      closeModal();
-      
-      if (clickSendButton) {
-        clickSendButtonWithDelay();
-      }
-    }
+  closeModal();
+  createMemoryModal(memoryItems, false, sourceButtonId);
+  
+  // If no memories found, the createMemoryModal function will show empty state
+  
+  // Only send the message if explicitly requested and modal isn't shown
+  if (clickSendButton && !memoryModalShown) {
+    clickSendButtonWithDelay();
+  }
+  
+  // Preserve original text regardless
+  setInputValue(textarea, originalMessage);
 
     // New add memory API call (non-blocking)
     fetch("https://api.mem0.ai/v1/memories/", {

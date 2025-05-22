@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Mem0",
+  "name": "OpenMemory",
   "version": "1.3.8",
-  "description": "🧠 Share context across ChatGPT, Claude & Perplexity. 🔄 No more repeating yourself to different AI assistants! ✨",
+  "description": "🧠 OpenMemory keeps your conversations in sync. 🔄 No more repeating yourself—just seamless AI collaboration! ✨",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

@@ -75,7 +75,7 @@ function addMem0Button() {
     mem0Button.id = "mem0-button";
     mem0Button.className = inputToolsMenuButton.className;
     mem0Button.style.marginLeft = "8px";
-    mem0Button.setAttribute("aria-label", "Add related memories");
+    mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
     const mem0Icon = document.createElement("img");
     mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
@@ -132,7 +132,7 @@ function addMem0Button() {
 
     const tooltip = document.createElement("div");
     tooltip.id = "mem0-tooltip";
-    tooltip.textContent = "Add related memories";
+    tooltip.textContent = "Add memories to your prompt";
     tooltip.style.cssText = `
             display: none;
             position: fixed;
@@ -186,7 +186,7 @@ function addMem0Button() {
     mem0Button.id = "mem0-button";
     mem0Button.className = screenshotButton.className;
     mem0Button.style.marginLeft = "0px";
-    mem0Button.setAttribute("aria-label", "Add related memories");
+    mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
     const mem0Icon = document.createElement("img");
     mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
@@ -224,7 +224,7 @@ function addMem0Button() {
 
     const tooltip = document.createElement("div");
     tooltip.id = "mem0-tooltip";
-    tooltip.textContent = "Add related memories";
+    tooltip.textContent = "Add memories to your prompt";
     tooltip.style.cssText = `
             display: none;
             position: fixed;
@@ -294,7 +294,7 @@ function addMem0Button() {
       position: relative;
       transition: background-color 0.3s ease;
     `;
-    mem0Button.setAttribute("aria-label", "Add related memories");
+    mem0Button.setAttribute("aria-label", "Add memories to your prompt");
 
     const mem0Icon = document.createElement("img");
     mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
@@ -339,7 +339,7 @@ function addMem0Button() {
     });
 
     // Set popover text
-    popup.textContent = "Add related memories";
+    popup.textContent = "Add memories to your prompt";
 
     buttonContainer.appendChild(mem0Button);
 

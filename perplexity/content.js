@@ -73,7 +73,7 @@ function addMem0Button() {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
     border: 1px solid #3B3B3F;
   `;
-  tooltip.textContent = 'Mem0 Memories';
+  tooltip.textContent = 'Add memories to your prompt';
   
   // Add tooltip arrow
   const tooltipArrow = document.createElement('div');

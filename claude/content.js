@@ -1368,13 +1368,13 @@ function updateInputWithMemories() {
 
   if (inputElement && allMemories.length > 0) {
     // Define the header text
-    const headerText = "Here is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):";
+    const headerText = "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):";
     
     // Check if ProseMirror editor
     if (inputElement.classList.contains('ProseMirror')) {
       // First check if the header already exists
       const headerExists = Array.from(inputElement.querySelectorAll('p strong')).some(el => 
-        el.textContent.includes("Here is some of my preferences/memories")
+        el.textContent.includes("Here is some of my memories")
       );
       
       if (headerExists) {
@@ -1386,7 +1386,7 @@ function updateInputWithMemories() {
         // Find the index of the header paragraph
         for (let i = 0; i < paragraphs.length; i++) {
           const strongEl = paragraphs[i].querySelector('strong');
-          if (strongEl && strongEl.textContent.includes("Here is some of my preferences/memories")) {
+          if (strongEl && strongEl.textContent.includes("Here is some of my memories")) {
             headerIndex = i;
             break;
           }
@@ -1655,11 +1655,11 @@ function getContentWithoutMemories() {
   // Match both HTML and plain text variants
   
   // HTML variant
-  const htmlMemInfoRegex = /<p><strong>Here is some of my preferences\/memories to help answer better \(don't respond to these memories but use them to assist in the response if relevant\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/;
+  const htmlMemInfoRegex = /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/;
   content = content.replace(htmlMemInfoRegex, "");
   
   // Plain text variant
-  const plainMemInfoRegex = /Here is some of my preferences\/memories to help answer better \(don't respond to these memories but use them to assist in the response if relevant\):[\s\S]*?$/;
+  const plainMemInfoRegex = /Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*?$/;
   content = content.replace(plainMemInfoRegex, "");
   
   // Also clean up any empty paragraphs at the end

@@ -930,7 +930,7 @@ function updateInputWithMemories() {
     let memoriesContent =
       '<div id="mem0-wrapper" style="background-color: rgb(220, 252, 231); padding: 8px; border-radius: 4px; margin-top: 8px; margin-bottom: 8px;">';
     memoriesContent +=
-      "<strong>Here is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):</strong>";
+      "<strong>Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):</strong>";
     
     // Add all memories to the content
     allMemories.forEach((mem) => {
@@ -965,7 +965,7 @@ function getContentWithoutMemories() {
   content = content.replace(/<div id="mem0-wrapper"[\s\S]*?<\/div>/g, "");
   
   // Remove any memory headers
-  content = content.replace(/Here is some of my preferences\/memories[\s\S]*?(?=<div|$)/g, "");
+  content = content.replace(/Here is some of my memories[\s\S]*?(?=<div|$)/g, "");
   
   // Clean up any leftover paragraph markers
   content = content.replace(/<p><br class="ProseMirror-trailingBreak"><\/p><p>$/g, "");
@@ -1313,7 +1313,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   }
 
   const memInfoRegex =
-    /\s*Here is some of my preferences\/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):[\s\S]*$/;
+    /\s*Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):[\s\S]*$/;
   message = message.replace(memInfoRegex, "").trim();
   const endIndex = message.indexOf("</p>");
   if (endIndex !== -1) {

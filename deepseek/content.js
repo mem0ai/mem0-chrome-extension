@@ -1595,7 +1595,7 @@ function updateInputWithMemories() {
     let baseContent = getContentWithoutMemories();
     
     // Create the memory wrapper with all collected memories
-    let memoriesContent = '\n\nHere is some of my preferences/memories to help answer better (don\'t respond to these memories but use them to assist in the response if relevant):\n';
+    let memoriesContent = '\n\nHere is some of my memories to help answer better (don\'t respond to these memories but use them to assist in the response):\n';
     
     // Add all memories to the content
     allMemories.forEach((mem) => {
@@ -1617,7 +1617,7 @@ function getContentWithoutMemories() {
   let content = inputElement.value;
   
   // Remove memories section
-  content = content.replace(/\n\nHere is some of my preferences\/memories[\s\S]*$/, '');
+  content = content.replace(/\n\nHere is some of my memories[\s\S]*$/, '');
   
   return content.trim();
 }

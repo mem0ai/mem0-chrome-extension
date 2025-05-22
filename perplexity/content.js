@@ -1088,7 +1088,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       nextButton.style.cursor = 'not-allowed';
       return;
     }
-    
+
     if (isLoading || currentPage <= 1) {
       prevButton.disabled = true;
       prevButton.style.opacity = '0.5';
@@ -1207,14 +1207,14 @@ function updateInputWithMemories() {
   
   // First, remove any existing memory content from the input
   let currentContent = inputElement.value;
-  const memoryMarker = "\n\nHere is some of my preferences/memories to help answer better";
+  const memoryMarker = "\n\nHere is some of my memories to help answer better";
   
   if (currentContent.includes(memoryMarker)) {
     currentContent = currentContent.substring(0, currentContent.indexOf(memoryMarker)).trim();
   }
   
   // Create the memory content string
-  let memoriesContent = "\n\nHere is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):\n";
+  let memoriesContent = "\n\nHere is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):\n";
   
   // Add all memories to the content
   allMemories.forEach((mem, index) => {
@@ -1249,9 +1249,9 @@ function captureAndStoreMemory() {
   if (!message || message.trim() === '') return;
   
   // Skip if message contains the memory wrapper
-  if (message.includes("Here is some of my preferences/memories to help")) {
+  if (message.includes("Here is some of my memories to help")) {
     // Extract only the user's original message
-    message = message.split("Here is some of my preferences/memories to help")[0].trim();
+    message = message.split("Here is some of my memories to help")[0].trim();
   }
   
   // Skip if message is empty after cleaning

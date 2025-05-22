@@ -1388,7 +1388,7 @@ function updateInputWithMemories() {
     let baseContent = getContentWithoutMemories();
     
     // Create the memory string with all collected memories
-    let memoriesContent = "\n\nHere is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):\n";
+    let memoriesContent = "\n\nHere is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):\n";
     
     // Add all memories to the content
     allMemories.forEach((mem, index) => {
@@ -1412,14 +1412,14 @@ function getContentWithoutMemories() {
   let content = inputElement.value;
   
   // Remove any memory headers and content
-  const memoryPrefix = "Here is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):";
+  const memoryPrefix = "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):";
   const prefixIndex = content.indexOf(memoryPrefix);
   if (prefixIndex !== -1) {
     content = content.substring(0, prefixIndex).trim();
   }
   
   // Also try with regex pattern
-  const memInfoRegex = /\s*Here is some of my preferences\/memories to help answer better \(don't respond to these memories but use them to assist in the response if relevant\):[\s\S]*$/;
+  const memInfoRegex = /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/;
   content = content.replace(memInfoRegex, "").trim();
   
   return content;

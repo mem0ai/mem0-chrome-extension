@@ -125,6 +125,12 @@ function addMem0Button() {
       mem0Button.appendChild(mem0Icon);
       mem0Button.addEventListener("click", () => {
         if (memoryEnabled) {
+          // Hide the tooltip if it's showing
+          const tooltip = document.querySelector("#mem0-tooltip");
+          if (tooltip) {
+            tooltip.style.display = "none";
+          }
+          
           handleMem0Modal(popup);
         }
       });
@@ -187,6 +193,12 @@ function addMem0Button() {
       document.body.appendChild(tooltip);
 
       mem0Button.addEventListener("mouseenter", (event) => {
+        // Hide any existing popup first
+        const existingMem0Popup = document.querySelector('.mem0-popup[style*="display: block"]');
+        if (existingMem0Popup && existingMem0Popup !== popup) {
+          existingMem0Popup.style.display = "none";
+        }
+        
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
         
@@ -236,6 +248,12 @@ function addMem0Button() {
       mem0Button.appendChild(mem0Icon);
       mem0Button.addEventListener("click", () => {
         if (memoryEnabled) {
+          // Hide the tooltip if it's showing
+          const tooltip = document.querySelector("#mem0-tooltip");
+          if (tooltip) {
+            tooltip.style.display = "none";
+          }
+          
           handleMem0Modal(popup);
         }
       });
@@ -279,6 +297,12 @@ function addMem0Button() {
       document.body.appendChild(tooltip);
 
       mem0Button.addEventListener("mouseenter", (event) => {
+        // Hide any existing popup first
+        const existingMem0Popup = document.querySelector('.mem0-popup[style*="display: block"]');
+        if (existingMem0Popup && existingMem0Popup !== popup) {
+          existingMem0Popup.style.display = "none";
+        }
+        
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
         
@@ -362,13 +386,34 @@ function addMem0Button() {
       mem0Button.appendChild(notificationDot);
       mem0Button.addEventListener("click", () => {
         if (memoryEnabled) {
+          // Hide the tooltip if it's showing
+          const tooltip = document.querySelector("#mem0-tooltip");
+          if (tooltip) {
+            tooltip.style.display = "none";
+          }
+          
           handleMem0Modal(popup);
         }
       });
 
       mem0Button.addEventListener("mouseenter", () => {
-        mem0Button.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
-        popup.style.display = "block";
+        // Hide any existing popup first
+        const existingMem0Popup = document.querySelector('.mem0-popup[style*="display: block"]');
+        if (existingMem0Popup && existingMem0Popup !== popup) {
+          existingMem0Popup.style.display = "none";
+        }
+        
+        const rect = mem0Button.getBoundingClientRect();
+        const buttonCenterX = rect.left + rect.width / 2;
+        
+        // Set initial tooltip properties
+        tooltip.style.display = "block";
+        
+        // Once displayed, we can get its height and set proper positioning
+        const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
+        
+        tooltip.style.left = `${buttonCenterX}px`;
+        tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
       });
       
       mem0Button.addEventListener("mouseleave", () => {
@@ -1722,6 +1767,12 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
   // Set loading state for button
   setButtonLoadingState(true);
 
+  // Hide any tooltip that might be showing
+  const tooltip = document.querySelector("#mem0-tooltip");
+  if (tooltip) {
+    tooltip.style.display = "none";
+  }
+
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
@@ -1756,7 +1807,15 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     
     if (!message || message.trim() === '') {
       console.error("No input message found");
-      if (popup) showPopup(popup, "No input message found");
+      if (popup) {
+        // Hide any existing tooltip first
+        const tooltip = document.querySelector("#mem0-tooltip");
+        if (tooltip) {
+          tooltip.style.display = "none";
+        }
+        
+        showPopup(popup, "Please enter some text first");
+      }
       
       isProcessingMem0 = false;
       setButtonLoadingState(false);
@@ -1919,6 +1978,20 @@ function setButtonLoadingState(isLoading) {
 }
 
 function showPopup(popup, message) {
+  // First hide all tooltips and popups
+  const tooltip = document.querySelector("#mem0-tooltip");
+  if (tooltip) {
+    tooltip.style.display = "none";
+  }
+  
+  // Also hide any other mem0-popup that might be visible
+  const visiblePopups = document.querySelectorAll('.mem0-popup[style*="display: block"]');
+  visiblePopups.forEach(p => {
+    if (p !== popup) {
+      p.style.display = "none";
+    }
+  });
+  
   // Create and add the (i) icon
   const infoIcon = document.createElement("span");
   infoIcon.textContent = "ⓘ ";

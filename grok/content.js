@@ -1669,7 +1669,7 @@ function showButtonPopup(button, message) {
   
   // Auto-remove after 3 seconds
   setTimeout(() => {
-    if (document.body.contains(popup)) {
+    if (popup && popup.parentElement) {
       popup.remove();
     }
   }, 3000);

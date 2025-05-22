@@ -1199,6 +1199,12 @@ async function addMem0IconButton() {
       
       // Add hover event for popover
       mem0ButtonContainer.addEventListener('mouseenter', () => {
+        // Close any existing button popup first
+        const existingPopup = document.querySelector('.mem0-button-popup');
+        if (existingPopup) {
+          existingPopup.remove();
+        }
+        
         popover.style.display = 'block';
         setTimeout(() => popover.style.opacity = '1', 10);
       });
@@ -1447,6 +1453,13 @@ function showButtonPopup(button, message) {
   const existingPopup = document.querySelector('.mem0-button-popup');
   if (existingPopup) {
     existingPopup.remove();
+  }
+  
+  // Also hide any hover popover that might be showing
+  const hoverPopover = document.querySelector('.mem0-button-popover');
+  if (hoverPopover) {
+    hoverPopover.style.opacity = '0';
+    hoverPopover.style.display = 'none';
   }
   
   const popup = document.createElement('div');

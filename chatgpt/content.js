@@ -1366,7 +1366,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         },
         body: JSON.stringify({
           query: message,
-          filter: {
+          filters: {
             user_id: userId,
           },
           rerank: false,

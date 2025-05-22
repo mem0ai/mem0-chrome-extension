@@ -537,8 +537,7 @@ function getAuthDetails() {
 
 const MEM0_API_BASE_URL = "https://api.mem0.ai"; 
 
-function searchMemories(query) {
-  return new Promise(async (resolve, reject) => {
+async function searchMemories(query) {
     try {
       const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token"]);
       const userId = items.userId || "chrome-extension-user"; 
@@ -562,38 +561,38 @@ function searchMemories(query) {
         filters: {
           user_id: userId,
         },
+        rerank: false,
+        threshold: 0.3,
+        limit: 10,
+        filter_memories: true,
       });
 
-      fetch(url, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: headers,
         body: body
-      })
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(errorData => {
-            console.error("Mem0 API Search Error Response Body:", errorData);
-            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-         }).catch(parseError => {
-            console.error("Failed to parse search error response body:", parseError);
-            throw new Error(`HTTP error! status: ${response.status}`);
-         });
-        }
-        return response.json();
-      })
-      .then(data => {
-        resolve(Array.isArray(data) ? data : (data?.results || [])); 
-      })
-      .catch(error => {
-        console.error("Error searching memories directly:", error);
-        resolve([]); 
       });
 
+      if (!response.ok) {
+        return reject(new Error(`HTTP error! status: ${response.status}`));
+      }
+
+      const data = await response.json();
+
+      const memoryItems = data.map(item => ({
+        id: item.id,
+        text: item.text,
+        created_at: item.created_at,
+        user_id: item.user_id,
+        memory: item.memory,
+      }));
+
+      return memoryItems;
+      
     } catch (error) {
       console.error("Error preparing search request:", error);
-      resolve([]); 
+      return [];
     }
-  });
 }
 
 
@@ -1601,7 +1600,7 @@ function showEmptyState(container) {
 function updateNavigationState(prevButton, nextButton, currentPage, totalPages) {
   if (!prevButton || !nextButton) return;
 
-  if (memoryItems.length === 0 || totalPages === 0) {
+  if (totalPages === 0) {
     prevButton.disabled = true;
     prevButton.style.opacity = '0.5';
     prevButton.style.cursor = 'not-allowed';
@@ -1724,6 +1723,7 @@ async function handleMem0Modal(sourceButtonId = null) {
       addMemory(message).catch(error => {
       });
     } catch (error) {
+      console.error("Error in handleMem0Modal:", error);
       createMemoryModal([], false, sourceButtonId);
     } finally {
       isProcessingMem0 = false;

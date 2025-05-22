@@ -430,6 +430,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     
     if (memoryItems.length === 0) {
       showEmptyState();
+      // Disable navigation buttons when there are no memories
+      updateNavigationState(0, 0);
       return;
     }
     
@@ -725,6 +727,17 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Update navigation button states
   function updateNavigationState(currentPage, totalPages) {
+    // If there are no memories or total pages is 0, disable both buttons
+    if (memoryItems.length === 0 || totalPages === 0) {
+      prevButton.disabled = true;
+      prevButton.style.opacity = '0.5';
+      prevButton.style.cursor = 'not-allowed';
+      nextButton.disabled = true;
+      nextButton.style.opacity = '0.5';
+      nextButton.style.cursor = 'not-allowed';
+      return;
+    }
+    
     if (currentPage <= 1) {
       prevButton.disabled = true;
       prevButton.style.opacity = '0.5';

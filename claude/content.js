@@ -843,6 +843,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     
     if (memoryItems.length === 0) {
       showEmptyState();
+      updateNavigationState(0, 0);
       return;
     }
     
@@ -1109,6 +1110,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
         showMemories();
       } else {
+        updateNavigationState(0, 0);
         showEmptyState();
       }
     }
@@ -1159,6 +1161,16 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Update navigation button states
   function updateNavigationState(currentPage, totalPages) {
+    if (memoryItems.length === 0 || totalPages === 0) {
+      prevButton.disabled = true;
+      prevButton.style.opacity = '0.5';
+      prevButton.style.cursor = 'not-allowed';
+      nextButton.disabled = true;
+      nextButton.style.opacity = '0.5';
+      nextButton.style.cursor = 'not-allowed';
+      return;
+    }
+
     if (currentPage <= 1) {
       prevButton.disabled = true;
       prevButton.style.opacity = '0.5';

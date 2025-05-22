@@ -13,6 +13,8 @@ let allMemoriesById = new Set();
 // Reference to the modal overlay for updates
 let currentModalOverlay = null;
 
+let inputValueCopy = "";
+
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
   // Close existing modal if it exists
   if (memoryModalShown && currentModalOverlay) {
@@ -950,7 +952,7 @@ function updateInputWithMemories() {
 }
 
 // Function to get the content without any memory wrappers
-function getContentWithoutMemories() {
+function getContentWithoutMemories(message) {
   const inputElement =
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
@@ -960,6 +962,10 @@ function getContentWithoutMemories() {
   let content = inputElement.tagName.toLowerCase() === "div" 
     ? inputElement.innerHTML 
     : inputElement.value;
+
+  if(message && (!content || content.trim() === '<p data-placeholder="Ask anything" class="placeholder"><br class="ProseMirror-trailingBreak"></p>')) {
+    content = message;
+  }
   
   // Remove any memory wrappers
   content = content.replace(/<div id="mem0-wrapper"[\s\S]*?<\/div>/g, "");
@@ -969,6 +975,9 @@ function getContentWithoutMemories() {
   
   // Clean up any leftover paragraph markers
   content = content.replace(/<p><br class="ProseMirror-trailingBreak"><\/p><p>$/g, "");
+
+  // Replace <p> with nothing
+  content = content.replace(/<p>[\s\S]*?<\/p>/g, "");
   
   return content.trim();
 }
@@ -997,6 +1006,9 @@ function addSendButtonListener() {
       inputElement.dataset.mem0KeyListener = 'true';
       inputElement.addEventListener('keydown', function(event) {
         // Check if Enter was pressed without Shift (standard send behavior)
+
+        inputValueCopy = inputElement.value || inputElement.textContent || inputValueCopy;
+
         if (event.key === 'Enter' && !event.shiftKey) {
           // Capture and save memory asynchronously
           captureAndStoreMemory();
@@ -1017,20 +1029,24 @@ function captureAndStoreMemory() {
   // Get the message content
   // id is prompt-textarea
   const inputElement = document.querySelector('#prompt-textarea') ||
-                       document.querySelector('div[contenteditable="true"]') || 
-                       document.querySelector("textarea") ||
-                       document.querySelector('textarea[data-virtualkeyboard="true"]');
+  document.querySelector('div[contenteditable="true"]') || 
+  document.querySelector("textarea") ||
+  document.querySelector('textarea[data-virtualkeyboard="true"]');
   if (!inputElement) return;
-
+  
   // Get raw content from the input element
   let message = inputElement.tagName.toLowerCase() === "div" 
     ? inputElement.textContent 
     : inputElement.value;
 
+  if(!message || message.trim() === '') {
+    message = inputValueCopy;
+  }
+
   if (!message || message.trim() === '') return;
   
   // Clean the message of any memory wrapper content
-  message = getContentWithoutMemories();
+  message = getContentWithoutMemories(message);
   
   // Skip if message is empty after cleaning
   if (!message || message.trim() === '') return;

@@ -310,21 +310,60 @@ function initializeMem0Integration() {
   addSendButtonListener();
   
   // Set up mutation observer to reinject elements when DOM changes
-  const observer = new MutationObserver(() => {
-    injectMem0Button();
-    addSendButtonListener();
-    updateNotificationDot();
+  const observer = new MutationObserver(async () => {
+    // Check memory state first
+    const memoryEnabled = await getMemoryEnabledState();
+    
+    // Only inject the button if memory is enabled
+    if (memoryEnabled) {
+      injectMem0Button();
+      addSendButtonListener();
+      updateNotificationDot();
+    } else {
+      // Remove the button if memory is disabled
+      const existingButton = document.querySelector('button[aria-label="Mem0"]');
+      if (existingButton && existingButton.parentElement) {
+        existingButton.parentElement.remove();
+      }
+    }
   });
   
   observer.observe(document.body, {
     childList: true,
     subtree: true
   });
+  
+  // Also check memory state periodically in case it changes
+  setInterval(async () => {
+    const memoryEnabled = await getMemoryEnabledState();
+    if (!memoryEnabled) {
+      const existingButton = document.querySelector('button[aria-label="Mem0"]');
+      if (existingButton && existingButton.parentElement) {
+        existingButton.parentElement.remove();
+      }
+    } else if (!document.querySelector('button[aria-label="Mem0"]')) {
+      injectMem0Button();
+    }
+  }, 5000);
 }
 
 function injectMem0Button() {
   // Function to periodically check and add the button if the parent element exists
-  function tryAddButton() {
+  async function tryAddButton() {
+    // First check if memory is enabled
+    const memoryEnabled = await getMemoryEnabledState();
+    
+    // Remove existing button if memory is disabled
+    if (!memoryEnabled) {
+      const existingButton = document.querySelector('button[aria-label="Mem0"]');
+      if (existingButton && existingButton.parentElement) {
+        existingButton.parentElement.remove();
+      }
+      // Check again after some time in case the state changes
+      setTimeout(tryAddButton, 5000);
+      return;
+    }
+    
     const thinkButton = document.querySelector('button[aria-label="Think"]');
     if (!thinkButton) {
       setTimeout(tryAddButton, 1000);

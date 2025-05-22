@@ -1077,7 +1077,18 @@ function captureAndStoreMemory() {
 }
 
 // Function to add the Mem0 button next to the mic icon
-function addMem0IconButton() {
+async function addMem0IconButton() {
+  // Check if memory is enabled
+  const memoryEnabled = await getMemoryEnabledState();
+  if (!memoryEnabled) {
+    // If memory is disabled, remove the button if it exists
+    const existingButton = document.querySelector('#mem0-icon-button');
+    if (existingButton && existingButton.parentNode) {
+      existingButton.parentNode.remove();
+    }
+    return;
+  }
+
   // Fix the selector to find the mic container
   const micContainer = document.querySelector('div.absolute.end-3.bottom-0 div.ms-auto');
   
@@ -1222,7 +1233,13 @@ function addMem0IconButton() {
   addSendButtonListener();
 }
 
-function updateNotificationDot() {
+async function updateNotificationDot() {
+  // Check if memory is enabled
+  const memoryEnabled = await getMemoryEnabledState();
+  if (!memoryEnabled) {
+    return; // Don't update notification dot if memory is disabled
+  }
+
   const inputElement =
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
@@ -1858,9 +1875,9 @@ function getMemoryEnabledState() {
 function initializeMem0Integration() {
   document.addEventListener("DOMContentLoaded", () => {
     addSyncButton();
-    addMem0IconButton();
+    (async () => await addMem0IconButton())();
     addSendButtonListener();
-    updateNotificationDot();
+    (async () => await updateNotificationDot())();
   });
 
   document.addEventListener("keydown", function (event) {
@@ -1874,18 +1891,18 @@ function initializeMem0Integration() {
 
   observer = new MutationObserver(() => {
     addSyncButton();
-    addMem0IconButton();
+    (async () => await addMem0IconButton())();
     addSendButtonListener();
-    updateNotificationDot();
+    (async () => await updateNotificationDot())();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
 
   // Add a MutationObserver to watch for changes in the DOM but don't intercept Enter key
   const observerForUI = new MutationObserver(() => {
-    addMem0IconButton();
+    (async () => await addMem0IconButton())();
     addSendButtonListener();
-    updateNotificationDot();
+    (async () => await updateNotificationDot())();
   });
 
   observerForUI.observe(document.body, {

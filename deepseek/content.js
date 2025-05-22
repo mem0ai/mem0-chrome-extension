@@ -10,6 +10,32 @@ let allMemoriesById = new Set();
 let currentModalOverlay = null;
 let mem0ButtonCheckInterval = null; // Add interval variable for button checks
 
+// Function to remove the Mem0 icon button when memory is disabled
+function removeMem0IconButton() {
+  const iconButton = document.querySelector('#mem0-icon-button');
+  if (iconButton) {
+    const buttonContainer = iconButton.closest('div');
+    if (buttonContainer && buttonContainer.id !== 'mem0-custom-container') {
+      // Only remove the button, not the container unless it's our custom one
+      try {
+        buttonContainer.removeChild(iconButton);
+      } catch (e) {
+        // If removal fails, try removing just the button
+        iconButton.remove();
+      }
+    } else {
+      // Remove the button directly
+      iconButton.remove();
+    }
+  }
+  
+  // Also remove custom container if it exists
+  const customContainer = document.querySelector('#mem0-custom-container');
+  if (customContainer) {
+    customContainer.remove();
+  }
+}
+
 function getInputElement() {
   // Try finding with the more specific selector first
   const inputElement = document.querySelector(INPUT_SELECTOR);
@@ -311,17 +337,35 @@ function initializeMem0Integration() {
         clearInterval(mem0ButtonCheckInterval);
       }
       
-      // Set up periodic checks for button presence
-      mem0ButtonCheckInterval = setInterval(() => {
-        if (!document.querySelector('#mem0-icon-button')) {
-          addMem0IconButton();
+      // Set up periodic checks for button presence - check memory state first
+      mem0ButtonCheckInterval = setInterval(async () => {
+        try {
+          const memoryEnabled = await getMemoryEnabledState();
+          if (memoryEnabled) {
+            if (!document.querySelector('#mem0-icon-button')) {
+              addMem0IconButton();
+            }
+          } else {
+            removeMem0IconButton();
+          }
+        } catch (e) {
+          // On error, don't do anything
         }
       }, 5000); // Check every 5 seconds
       
       // Final check after more time
-      setTimeout(() => {
-        if (!document.querySelector('#mem0-icon-button')) {
-          addMem0IconButton();
+      setTimeout(async () => {
+        try {
+          const memoryEnabled = await getMemoryEnabledState();
+          if (memoryEnabled) {
+            if (!document.querySelector('#mem0-icon-button')) {
+              addMem0IconButton();
+            }
+          } else {
+            removeMem0IconButton();
+          }
+        } catch (e) {
+          // On error, don't do anything
         }
       }, 5000);
       
@@ -1949,12 +1993,31 @@ function showLoginModal() {
 // Function to add the Mem0 icon button - enhanced with error handling and return status
 function addMem0IconButton() {
   try {
+    // Check if memory is enabled before adding the button
+    getMemoryEnabledState().then(memoryEnabled => {
+      if (!memoryEnabled) {
+        removeMem0IconButton();
+        return;
+      }
+      
+      // Continue with button creation if memory is enabled
+      createAndAddButton();
+    }).catch(e => {
+      // If we can't check memory state, don't add the button
+    });
     
+    return { success: true, status: "checking_memory_state" };
+  } catch (e) {
+    return { success: false, status: "unexpected_error", error: e.message };
+  }
+  
+  // Helper function to create and add the button
+  function createAndAddButton() {
     // Check if the button already exists
     if (document.querySelector('#mem0-icon-button')) {
       return { success: true, status: "already_exists" };
     }
-
+    
     // Wait for input element to be available before trying to add the button
     const inputElement = getInputElement();
     if (!inputElement) {
@@ -2219,7 +2282,7 @@ function addMem0IconButton() {
       }, 200);
     });
     
-    // Add click event to open memories modal
+    // Add click event to open memories modal - also check memory state again
     mem0Button.addEventListener('click', async () => {
       try {
         const memoryEnabled = await getMemoryEnabledState();
@@ -2228,6 +2291,9 @@ function addMem0IconButton() {
         } else {
           // Show login modal for non-logged in users
           showLoginModal();
+          
+          // Remove the button since memory is disabled
+          removeMem0IconButton();
         }
       } catch (error) {
         showLoginModal();
@@ -2289,8 +2355,6 @@ function addMem0IconButton() {
     }
     
     return { success: true, status: status };
-  } catch (e) {
-    return { success: false, status: "unexpected_error", error: e.message };
   }
 }
 

@@ -19,7 +19,18 @@ function getTextarea() {
 }
 
 // Function to add the mem0 button to the UI
-function addMem0Button() {
+async function addMem0Button() {
+  // First check if memory is enabled
+  const memoryEnabled = await getMemoryEnabledState();
+  if (!memoryEnabled) {
+    // If memory is disabled, remove the button if it exists
+    const existingButton = document.querySelector('.mem0-button-wrapper');
+    if (existingButton) {
+      existingButton.remove();
+    }
+    return;
+  }
+
   // Check for the model selection button to find the right area
   const modelSelectionButton = document.querySelector('button[aria-label="Choose a model"]');
   
@@ -1604,42 +1615,54 @@ function clickSendButtonWithDelay() {
 }
 
 function initializeMem0Integration() {
-  setupInputObserver();
-  
-  // Add the Mem0 button to the UI
-  addMem0Button();
-  
-  // Set up the submit button listener to clear memories
-  setupSubmitButtonListener();
-  
-  // Add DOM mutation observer to monitor for UI changes
-  const bodyObserver = new MutationObserver(() => {
-    addMem0Button();
-    setupSubmitButtonListener();
-    updateNotificationDot();
-  });
-  
-  bodyObserver.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  // Re-check periodically in case of navigation or UI changes
-  setInterval(() => {
-    addMem0Button();
-    setupSubmitButtonListener();
-    updateNotificationDot();
-  }, 3000);
-  
-  // Set up keyboard shortcut to trigger Mem0 (Ctrl+M)
-  document.addEventListener("keydown", function (event) {
-    if (event.ctrlKey && event.key === "m") {
-      event.preventDefault();
-      const textarea = getTextarea();
-      if (textarea && textarea.value.trim()) {
-        handleMem0Processing(textarea.value.trim(), false, 'mem0-icon-button');
+  // First check if memory is enabled
+  getMemoryEnabledState().then(memoryEnabled => {
+    if (!memoryEnabled) {
+      // If memory is disabled, remove any existing button
+      const existingButton = document.querySelector('.mem0-button-wrapper');
+      if (existingButton) {
+        existingButton.remove();
       }
+      return;
     }
+    
+    setupInputObserver();
+    
+    // Add the Mem0 button to the UI
+    addMem0Button();
+    
+    // Set up the submit button listener to clear memories
+    setupSubmitButtonListener();
+    
+    // Add DOM mutation observer to monitor for UI changes
+    const bodyObserver = new MutationObserver(() => {
+      addMem0Button();
+      setupSubmitButtonListener();
+      updateNotificationDot();
+    });
+    
+    bodyObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    // Re-check periodically in case of navigation or UI changes
+    setInterval(() => {
+      addMem0Button();
+      setupSubmitButtonListener();
+      updateNotificationDot();
+    }, 3000);
+    
+    // Set up keyboard shortcut to trigger Mem0 (Ctrl+M)
+    document.addEventListener("keydown", function (event) {
+      if (event.ctrlKey && event.key === "m") {
+        event.preventDefault();
+        const textarea = getTextarea();
+        if (textarea && textarea.value.trim()) {
+          handleMem0Processing(textarea.value.trim(), false, 'mem0-icon-button');
+        }
+      }
+    });
   });
 }
 

@@ -16,379 +16,392 @@ let currentModalOverlay = null;
 // Added variable to track sync button status
 let isSyncing = false;
 
-function addMem0Button() {
-  const sendButton = document.querySelector(
-    'button[aria-label="Send Message"]'
-  );
-  const sendUpButton = document.querySelector(
-    'button[aria-label="Send message"]'
-  );
-  const screenshotButton = document.querySelector(
-    'button[aria-label="Capture screenshot"]'
-  );
-  const inputToolsMenuButton = document.querySelector('#input-tools-menu-trigger');
-
-  function createPopup(container, position = "top") {
-    const popup = document.createElement("div");
-    popup.className = "mem0-popup";
-    let positionStyles = "";
-
-    if (position === "top") {
-      positionStyles = `
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-40%);
-        margin-bottom: 11px;
-      `;
-    } else if (position === "right") {
-      positionStyles = `
-        top: 50%;
-        left: 100%;
-        transform: translateY(-50%);
-        margin-left: 11px;
-      `;
-    }
-
-    popup.style.cssText = `
-            display: none;
-            position: absolute;
-            background-color: #21201C;
-            color: white;
-            padding: 6px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            z-index: 10000;
-            white-space: nowrap;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            ${positionStyles}
-        `;
-    container.appendChild(popup);
-    return popup;
-  }
-
-  if (inputToolsMenuButton && !document.querySelector("#mem0-button")) {
-    const buttonContainer = document.createElement("div");
-    buttonContainer.style.position = "relative";
-    buttonContainer.style.display = "inline-block";
-
-    const mem0Button = document.createElement("button");
-    mem0Button.id = "mem0-button";
-    mem0Button.className = inputToolsMenuButton.className;
-    mem0Button.style.marginLeft = "8px";
-    mem0Button.setAttribute("aria-label", "Add memories to your prompt");
-
-    const mem0Icon = document.createElement("img");
-    mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-    mem0Icon.style.width = "16px";
-    mem0Icon.style.height = "16px";
-    mem0Icon.style.borderRadius = "50%";
-
-    const popup = createPopup(buttonContainer, "top");
-    mem0Button.appendChild(mem0Icon);
-    mem0Button.addEventListener("click", () => {
-      if (memoryEnabled) {
-        handleMem0Modal(popup);
-      }
+// Function to get memory enabled state from storage
+async function getMemoryEnabledState() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get("memory_enabled", function (data) {
+      resolve(data.memory_enabled);
     });
-
-    // Create notification dot
-    const notificationDot = document.createElement('div');
-    notificationDot.id = 'mem0-notification-dot';
-    notificationDot.style.cssText = `
-      position: absolute;
-      top: -3px;
-      right: -3px;
-      width: 10px;
-      height: 10px;
-      background-color: rgb(128, 221, 162);
-      border-radius: 50%;
-      border: 2px solid #1C1C1E;
-      display: none;
-      z-index: 1001;
-      pointer-events: none;
-    `;
-    mem0Button.appendChild(notificationDot);
-
-    // Add keyframe animation for the dot
-    if (!document.getElementById('notification-dot-animation')) {
-      const style = document.createElement('style');
-      style.id = 'notification-dot-animation';
-      style.innerHTML = `
-        @keyframes popIn {
-          0% { transform: scale(0); }
-          50% { transform: scale(1.2); }
-          100% { transform: scale(1); }
-        }
-        
-        #mem0-notification-dot.active {
-          display: block !important;
-          animation: popIn 0.3s ease-out forwards;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-
-    buttonContainer.appendChild(mem0Button);
-
-    const tooltip = document.createElement("div");
-    tooltip.id = "mem0-tooltip";
-    tooltip.textContent = "Add memories to your prompt";
-    tooltip.style.cssText = `
-            display: none;
-            position: fixed;
-            background-color: black;
-            color: white;
-            padding: 3px 7px;
-            border-radius: 6px;
-            font-size: 12px;
-            z-index: 10000;
-            pointer-events: none;
-            white-space: nowrap;
-            transform: translateX(-50%);
-        `;
-    document.body.appendChild(tooltip);
-
-    mem0Button.addEventListener("mouseenter", (event) => {
-      const rect = mem0Button.getBoundingClientRect();
-      const buttonCenterX = rect.left + rect.width / 2;
-      
-      // Set initial tooltip properties
-      tooltip.style.display = "block";
-      
-      // Once displayed, we can get its height and set proper positioning
-      const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
-      
-      tooltip.style.left = `${buttonCenterX}px`;
-      tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
-    });
-
-    mem0Button.addEventListener("mouseleave", () => {
-      tooltip.style.display = "none";
-    });
-
-    inputToolsMenuButton.parentNode.insertBefore(
-      buttonContainer,
-      inputToolsMenuButton.nextSibling
-    );
-    
-    // Update notification dot
-    updateNotificationDot();
-  } else if (
-    window.location.href.includes("claude.ai/new") &&
-    screenshotButton &&
-    !document.querySelector("#mem0-button")
-  ) {
-    const buttonContainer = document.createElement("div");
-    buttonContainer.style.position = "relative";
-    buttonContainer.style.display = "inline-block";
-
-    const mem0Button = document.createElement("button");
-    mem0Button.id = "mem0-button";
-    mem0Button.className = screenshotButton.className;
-    mem0Button.style.marginLeft = "0px";
-    mem0Button.setAttribute("aria-label", "Add memories to your prompt");
-
-    const mem0Icon = document.createElement("img");
-    mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-    mem0Icon.style.width = "16px";
-    mem0Icon.style.height = "16px";
-    mem0Icon.style.borderRadius = "50%";
-
-    const popup = createPopup(buttonContainer, "right");
-    mem0Button.appendChild(mem0Icon);
-    mem0Button.addEventListener("click", () => {
-      if (memoryEnabled) {
-        handleMem0Modal(popup);
-      }
-    });
-
-    // Create notification dot
-    const notificationDot = document.createElement('div');
-    notificationDot.id = 'mem0-notification-dot';
-    notificationDot.style.cssText = `
-      position: absolute;
-      top: -3px;
-      right: -3px;
-      width: 10px;
-      height: 10px;
-      background-color: rgb(128, 221, 162);
-      border-radius: 50%;
-      border: 2px solid #1C1C1E;
-      display: none;
-      z-index: 1001;
-      pointer-events: none;
-    `;
-    mem0Button.appendChild(notificationDot);
-
-    buttonContainer.appendChild(mem0Button);
-
-    const tooltip = document.createElement("div");
-    tooltip.id = "mem0-tooltip";
-    tooltip.textContent = "Add memories to your prompt";
-    tooltip.style.cssText = `
-            display: none;
-            position: fixed;
-            background-color: black;
-            color: white;
-            padding: 3px 7px;
-            border-radius: 6px;
-            font-size: 12px;
-            z-index: 10000;
-            pointer-events: none;
-            white-space: nowrap;
-            transform: translateX(-50%);
-        `;
-    document.body.appendChild(tooltip);
-
-    mem0Button.addEventListener("mouseenter", (event) => {
-      const rect = mem0Button.getBoundingClientRect();
-      const buttonCenterX = rect.left + rect.width / 2;
-      
-      // Set initial tooltip properties
-      tooltip.style.display = "block";
-      
-      // Once displayed, we can get its height and set proper positioning
-      const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
-      
-      tooltip.style.left = `${buttonCenterX}px`;
-      tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
-    });
-
-    mem0Button.addEventListener("mouseleave", () => {
-      tooltip.style.display = "none";
-    });
-
-    screenshotButton.parentNode.insertBefore(
-      buttonContainer,
-      screenshotButton.nextSibling
-    );
-    
-    // Update notification dot
-    updateNotificationDot();
-  } else if ((sendButton || sendUpButton) && !document.querySelector("#mem0-button")) {
-    const targetButton = sendButton || sendUpButton;
-    if (!targetButton) return;
-    
-    // Find the parent container of the send button
-    const buttonParent = targetButton.parentNode;
-    if (!buttonParent) return;
-    
-    const buttonContainer = document.createElement("div");
-    buttonContainer.style.position = "relative";
-    buttonContainer.style.display = "inline-block";
-    buttonContainer.style.marginRight = "12px";
-
-    const mem0Button = document.createElement("button");
-    mem0Button.id = "mem0-button";
-    mem0Button.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      padding: 0;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      border-radius: 8px;
-      position: relative;
-      transition: background-color 0.3s ease;
-    `;
-    mem0Button.setAttribute("aria-label", "Add memories to your prompt");
-
-    const mem0Icon = document.createElement("img");
-    mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-    mem0Icon.style.width = "20px";
-    mem0Icon.style.height = "20px";
-    mem0Icon.style.borderRadius = "50%";
-
-    // Create notification dot
-    const notificationDot = document.createElement('div');
-    notificationDot.id = 'mem0-notification-dot';
-    notificationDot.style.cssText = `
-      position: absolute;
-      top: 0px;
-      right: 0px;
-      width: 10px;
-      height: 10px;
-      background-color: rgb(128, 221, 162);
-      border-radius: 50%;
-      border: 2px solid #1C1C1E;
-      display: none;
-      z-index: 1001;
-      pointer-events: none;
-    `;
-
-    const popup = createPopup(buttonContainer, "top");
-    mem0Button.appendChild(mem0Icon);
-    mem0Button.appendChild(notificationDot);
-    mem0Button.addEventListener("click", () => {
-      if (memoryEnabled) {
-        handleMem0Modal(popup);
-      }
-    });
-
-    mem0Button.addEventListener("mouseenter", () => {
-      mem0Button.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
-      popup.style.display = "block";
-    });
-    
-    mem0Button.addEventListener("mouseleave", () => {
-      mem0Button.style.backgroundColor = "transparent";
-      popup.style.display = "none";
-    });
-
-    // Set popover text
-    popup.textContent = "Add memories to your prompt";
-
-    buttonContainer.appendChild(mem0Button);
-
-    // Insert the button before the send button
-    if (buttonParent.querySelector('button[aria-label="Send message"]')) {
-      buttonParent.insertBefore(buttonContainer, buttonParent.querySelector('button[aria-label="Send message"]'));
-    } else {
-      buttonParent.insertBefore(buttonContainer, targetButton);
-    }
-    
-    // Update notification dot
-    updateNotificationDot();
-  }
-
-  // Add send button listener to capture memory and clear memories after sending
-  const allSendButtons = [
-    document.querySelector('button[aria-label="Send Message"]'),
-    document.querySelector('button[aria-label="Send message"]')
-  ].filter(Boolean);
-  
-  allSendButtons.forEach(sendBtn => {
-    if (sendBtn && !sendBtn.dataset.mem0Listener) {
-      sendBtn.dataset.mem0Listener = 'true';
-      sendBtn.addEventListener('click', function() {
-        // Capture and save memory asynchronously
-        captureAndStoreMemory();
-        
-        // Clear all memories after sending
-        setTimeout(() => {
-          allMemories = [];
-          allMemoriesById.clear();
-        }, 100);
-      });
-    }
   });
-    
-  // Also handle Enter key press for sending messages
-  const inputElement = document.querySelector('div[contenteditable="true"]') || 
-                        document.querySelector("textarea") ||
-                        document.querySelector('p[data-placeholder="How can I help you today?"]') ||
-                        document.querySelector('p[data-placeholder="Reply to Claude..."]');
+}
+
+// Function to remove mem0 button if it exists
+function removeMemButton() {
+  const mem0Button = document.querySelector("#mem0-button");
+  if (mem0Button) {
+    const buttonContainer = mem0Button.closest('div');
+    if (buttonContainer) {
+      buttonContainer.remove();
+    } else {
+      mem0Button.remove();
+    }
+  }
   
-  if (inputElement && !inputElement.dataset.mem0KeyListener) {
-    inputElement.dataset.mem0KeyListener = 'true';
-    inputElement.addEventListener('keydown', function(event) {
-      // Check if Enter was pressed without Shift (standard send behavior)
-      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-        // Don't process for textarea which may want newlines
-        if (inputElement.tagName.toLowerCase() !== 'textarea') {
+  // Also remove tooltip if it exists
+  const tooltip = document.querySelector("#mem0-tooltip");
+  if (tooltip) {
+    tooltip.remove();
+  }
+}
+
+function addMem0Button() {
+  // Check if memory is enabled before adding the button
+  getMemoryEnabledState().then(enabled => {
+    memoryEnabled = enabled;
+    
+    // If memory is disabled, remove any existing button and return
+    if (memoryEnabled === false) {
+      removeMemButton();
+      return;
+    }
+    
+    const sendButton = document.querySelector(
+      'button[aria-label="Send Message"]'
+    );
+    const sendUpButton = document.querySelector(
+      'button[aria-label="Send message"]'
+    );
+    const screenshotButton = document.querySelector(
+      'button[aria-label="Capture screenshot"]'
+    );
+    const inputToolsMenuButton = document.querySelector('#input-tools-menu-trigger');
+
+    function createPopup(container, position = "top") {
+      const popup = document.createElement("div");
+      popup.className = "mem0-popup";
+      let positionStyles = "";
+
+      if (position === "top") {
+        positionStyles = `
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-40%);
+          margin-bottom: 11px;
+        `;
+      } else if (position === "right") {
+        positionStyles = `
+          top: 50%;
+          left: 100%;
+          transform: translateY(-50%);
+          margin-left: 11px;
+        `;
+      }
+
+      popup.style.cssText = `
+              display: none;
+              position: absolute;
+              background-color: #21201C;
+              color: white;
+              padding: 6px 8px;
+              border-radius: 6px;
+              font-size: 12px;
+              z-index: 10000;
+              white-space: nowrap;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+              ${positionStyles}
+          `;
+      container.appendChild(popup);
+      return popup;
+    }
+
+    if (inputToolsMenuButton && !document.querySelector("#mem0-button")) {
+      const buttonContainer = document.createElement("div");
+      buttonContainer.style.position = "relative";
+      buttonContainer.style.display = "inline-block";
+
+      const mem0Button = document.createElement("button");
+      mem0Button.id = "mem0-button";
+      mem0Button.className = inputToolsMenuButton.className;
+      mem0Button.style.marginLeft = "8px";
+      mem0Button.setAttribute("aria-label", "Add memories to your prompt");
+
+      const mem0Icon = document.createElement("img");
+      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
+      mem0Icon.style.width = "16px";
+      mem0Icon.style.height = "16px";
+      mem0Icon.style.borderRadius = "50%";
+
+      const popup = createPopup(buttonContainer, "top");
+      mem0Button.appendChild(mem0Icon);
+      mem0Button.addEventListener("click", () => {
+        if (memoryEnabled) {
+          handleMem0Modal(popup);
+        }
+      });
+
+      // Create notification dot
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
+      notificationDot.style.cssText = `
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        width: 10px;
+        height: 10px;
+        background-color: rgb(128, 221, 162);
+        border-radius: 50%;
+        border: 2px solid #1C1C1E;
+        display: none;
+        z-index: 1001;
+        pointer-events: none;
+      `;
+      mem0Button.appendChild(notificationDot);
+
+      // Add keyframe animation for the dot
+      if (!document.getElementById('notification-dot-animation')) {
+        const style = document.createElement('style');
+        style.id = 'notification-dot-animation';
+        style.innerHTML = `
+          @keyframes popIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+          }
+          
+          #mem0-notification-dot.active {
+            display: block !important;
+            animation: popIn 0.3s ease-out forwards;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      buttonContainer.appendChild(mem0Button);
+
+      const tooltip = document.createElement("div");
+      tooltip.id = "mem0-tooltip";
+      tooltip.textContent = "Add memories to your prompt";
+      tooltip.style.cssText = `
+              display: none;
+              position: fixed;
+              background-color: black;
+              color: white;
+              padding: 3px 7px;
+              border-radius: 6px;
+              font-size: 12px;
+              z-index: 10000;
+              pointer-events: none;
+              white-space: nowrap;
+              transform: translateX(-50%);
+          `;
+      document.body.appendChild(tooltip);
+
+      mem0Button.addEventListener("mouseenter", (event) => {
+        const rect = mem0Button.getBoundingClientRect();
+        const buttonCenterX = rect.left + rect.width / 2;
+        
+        // Set initial tooltip properties
+        tooltip.style.display = "block";
+        
+        // Once displayed, we can get its height and set proper positioning
+        const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
+        
+        tooltip.style.left = `${buttonCenterX}px`;
+        tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
+      });
+
+      mem0Button.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+      });
+
+      inputToolsMenuButton.parentNode.insertBefore(
+        buttonContainer,
+        inputToolsMenuButton.nextSibling
+      );
+      
+      // Update notification dot
+      updateNotificationDot();
+    } else if (
+      window.location.href.includes("claude.ai/new") &&
+      screenshotButton &&
+      !document.querySelector("#mem0-button")
+    ) {
+      const buttonContainer = document.createElement("div");
+      buttonContainer.style.position = "relative";
+      buttonContainer.style.display = "inline-block";
+
+      const mem0Button = document.createElement("button");
+      mem0Button.id = "mem0-button";
+      mem0Button.className = screenshotButton.className;
+      mem0Button.style.marginLeft = "0px";
+      mem0Button.setAttribute("aria-label", "Add memories to your prompt");
+
+      const mem0Icon = document.createElement("img");
+      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
+      mem0Icon.style.width = "16px";
+      mem0Icon.style.height = "16px";
+      mem0Icon.style.borderRadius = "50%";
+
+      const popup = createPopup(buttonContainer, "right");
+      mem0Button.appendChild(mem0Icon);
+      mem0Button.addEventListener("click", () => {
+        if (memoryEnabled) {
+          handleMem0Modal(popup);
+        }
+      });
+
+      // Create notification dot
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
+      notificationDot.style.cssText = `
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        width: 10px;
+        height: 10px;
+        background-color: rgb(128, 221, 162);
+        border-radius: 50%;
+        border: 2px solid #1C1C1E;
+        display: none;
+        z-index: 1001;
+        pointer-events: none;
+      `;
+      mem0Button.appendChild(notificationDot);
+
+      buttonContainer.appendChild(mem0Button);
+
+      const tooltip = document.createElement("div");
+      tooltip.id = "mem0-tooltip";
+      tooltip.textContent = "Add memories to your prompt";
+      tooltip.style.cssText = `
+              display: none;
+              position: fixed;
+              background-color: black;
+              color: white;
+              padding: 3px 7px;
+              border-radius: 6px;
+              font-size: 12px;
+              z-index: 10000;
+              pointer-events: none;
+              white-space: nowrap;
+              transform: translateX(-50%);
+          `;
+      document.body.appendChild(tooltip);
+
+      mem0Button.addEventListener("mouseenter", (event) => {
+        const rect = mem0Button.getBoundingClientRect();
+        const buttonCenterX = rect.left + rect.width / 2;
+        
+        // Set initial tooltip properties
+        tooltip.style.display = "block";
+        
+        // Once displayed, we can get its height and set proper positioning
+        const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
+        
+        tooltip.style.left = `${buttonCenterX}px`;
+        tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
+      });
+
+      mem0Button.addEventListener("mouseleave", () => {
+        tooltip.style.display = "none";
+      });
+
+      screenshotButton.parentNode.insertBefore(
+        buttonContainer,
+        screenshotButton.nextSibling
+      );
+      
+      // Update notification dot
+      updateNotificationDot();
+    } else if ((sendButton || sendUpButton) && !document.querySelector("#mem0-button")) {
+      const targetButton = sendButton || sendUpButton;
+      if (!targetButton) return;
+      
+      // Find the parent container of the send button
+      const buttonParent = targetButton.parentNode;
+      if (!buttonParent) return;
+      
+      const buttonContainer = document.createElement("div");
+      buttonContainer.style.position = "relative";
+      buttonContainer.style.display = "inline-block";
+      buttonContainer.style.marginRight = "12px";
+
+      const mem0Button = document.createElement("button");
+      mem0Button.id = "mem0-button";
+      mem0Button.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        border-radius: 8px;
+        position: relative;
+        transition: background-color 0.3s ease;
+      `;
+      mem0Button.setAttribute("aria-label", "Add memories to your prompt");
+
+      const mem0Icon = document.createElement("img");
+      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
+      mem0Icon.style.width = "20px";
+      mem0Icon.style.height = "20px";
+      mem0Icon.style.borderRadius = "50%";
+
+      // Create notification dot
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
+      notificationDot.style.cssText = `
+        position: absolute;
+        top: 0px;
+        right: 0px;
+        width: 10px;
+        height: 10px;
+        background-color: rgb(128, 221, 162);
+        border-radius: 50%;
+        border: 2px solid #1C1C1E;
+        display: none;
+        z-index: 1001;
+        pointer-events: none;
+      `;
+
+      const popup = createPopup(buttonContainer, "top");
+      mem0Button.appendChild(mem0Icon);
+      mem0Button.appendChild(notificationDot);
+      mem0Button.addEventListener("click", () => {
+        if (memoryEnabled) {
+          handleMem0Modal(popup);
+        }
+      });
+
+      mem0Button.addEventListener("mouseenter", () => {
+        mem0Button.style.backgroundColor = "rgba(0, 0, 0, 0.1)";
+        popup.style.display = "block";
+      });
+      
+      mem0Button.addEventListener("mouseleave", () => {
+        mem0Button.style.backgroundColor = "transparent";
+        popup.style.display = "none";
+      });
+
+      // Set popover text
+      popup.textContent = "Add memories to your prompt";
+
+      buttonContainer.appendChild(mem0Button);
+
+      // Insert the button before the send button
+      if (buttonParent.querySelector('button[aria-label="Send message"]')) {
+        buttonParent.insertBefore(buttonContainer, buttonParent.querySelector('button[aria-label="Send message"]'));
+      } else {
+        buttonParent.insertBefore(buttonContainer, targetButton);
+      }
+      
+      // Update notification dot
+      updateNotificationDot();
+    }
+
+    // Add send button listener to capture memory and clear memories after sending
+    const allSendButtons = [
+      document.querySelector('button[aria-label="Send Message"]'),
+      document.querySelector('button[aria-label="Send message"]')
+    ].filter(Boolean);
+    
+    allSendButtons.forEach(sendBtn => {
+      if (sendBtn && !sendBtn.dataset.mem0Listener) {
+        sendBtn.dataset.mem0Listener = 'true';
+        sendBtn.addEventListener('click', function() {
           // Capture and save memory asynchronously
           captureAndStoreMemory();
           
@@ -397,16 +410,39 @@ function addMem0Button() {
             allMemories = [];
             allMemoriesById.clear();
           }, 100);
-        }
+        });
       }
     });
-  }
+      
+    // Also handle Enter key press for sending messages
+    const inputElement = document.querySelector('div[contenteditable="true"]') || 
+                          document.querySelector("textarea") ||
+                          document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+                          document.querySelector('p[data-placeholder="Reply to Claude..."]');
+    
+    if (inputElement && !inputElement.dataset.mem0KeyListener) {
+      inputElement.dataset.mem0KeyListener = 'true';
+      inputElement.addEventListener('keydown', function(event) {
+        // Check if Enter was pressed without Shift (standard send behavior)
+        if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          // Don't process for textarea which may want newlines
+          if (inputElement.tagName.toLowerCase() !== 'textarea') {
+            // Capture and save memory asynchronously
+            captureAndStoreMemory();
+            
+            // Clear all memories after sending
+            setTimeout(() => {
+              allMemories = [];
+              allMemoriesById.clear();
+            }, 100);
+          }
+        }
+      });
+    }
 
-  // Update notification dot state
-  updateNotificationDot();
-  
-  // Update button state based on memory being enabled
-  updateMem0ButtonState();
+    // Update notification dot state
+    updateNotificationDot();
+  });
 }
 
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
@@ -1675,6 +1711,12 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     return;
   }
 
+  // First check if memory is enabled
+  const enabled = await getMemoryEnabledState();
+  if (enabled === false) {
+    return; // Don't show modal or login popup if memory is disabled
+  }
+
   isProcessingMem0 = true;
   
   // Set loading state for button
@@ -1912,20 +1954,14 @@ function getInputValue() {
 }
 
 async function updateMemoryEnabled() {
-  memoryEnabled = await new Promise((resolve) => {
-    chrome.storage.sync.get("memory_enabled", function (data) {
-      resolve(data.memory_enabled);
-    });
-  });
-  updateMem0ButtonState();
-}
-
-function updateMem0ButtonState() {
-  const mem0Button = document.querySelector("#mem0-button");
-  if (mem0Button) {
-    mem0Button.disabled = !memoryEnabled;
-    mem0Button.style.opacity = memoryEnabled ? "1" : "0.5";
-    mem0Button.style.cursor = memoryEnabled ? "pointer" : "not-allowed";
+  memoryEnabled = await getMemoryEnabledState();
+  
+  // If memory is disabled, remove the button completely
+  if (memoryEnabled === false) {
+    removeMemButton();
+  } else {
+    // If memory is enabled, ensure the button is added
+    addMem0Button();
   }
 }
 
@@ -1957,8 +1993,15 @@ function initializeMem0Integration() {
     // Use debounce to avoid excessive calls to addMem0Button
     clearTimeout(observer.debounceTimeout);
     observer.debounceTimeout = setTimeout(() => {
-      addMem0Button();
-      updateNotificationDot();
+      // Check memory enabled state before adding button
+      getMemoryEnabledState().then(enabled => {
+        if (enabled) {
+          addMem0Button();
+          updateNotificationDot();
+        } else {
+          removeMemButton();
+        }
+      });
     }, 300);
   });
 
@@ -1966,13 +2009,20 @@ function initializeMem0Integration() {
 
   // Add an additional observer specifically for the input elements
   const inputObserver = new MutationObserver(() => {
-    // Check if we need to add the icon button
-    if (!document.querySelector('#mem0-icon-button')) {
-      addMem0Button();
-    }
-    
-    // Update notification dot on input changes
-    updateNotificationDot();
+    // Check if memory is enabled before adding button
+    getMemoryEnabledState().then(enabled => {
+      if (enabled) {
+        // Check if we need to add the icon button
+        if (!document.querySelector('#mem0-icon-button')) {
+          addMem0Button();
+        }
+        
+        // Update notification dot on input changes
+        updateNotificationDot();
+      } else {
+        removeMemButton();
+      }
+    });
   });
   
   // Find the input element and observe it
@@ -2004,15 +2054,27 @@ function initializeMem0Integration() {
   
   // Recheck for elements after page loads
   window.addEventListener('load', () => {
-    addMem0Button();
-    updateNotificationDot();
+    getMemoryEnabledState().then(enabled => {
+      if (enabled) {
+        addMem0Button();
+        updateNotificationDot();
+      } else {
+        removeMemButton();
+      }
+    });
   });
   
   // Also check periodically
   setInterval(() => {
-    if (!document.querySelector('#mem0-icon-button')) {
-      addMem0Button();
-    }
+    getMemoryEnabledState().then(enabled => {
+      if (enabled) {
+        if (!document.querySelector('#mem0-icon-button')) {
+          addMem0Button();
+        }
+      } else {
+        removeMemButton();
+      }
+    });
   }, 5000);
 
   // Add the sync button
@@ -2178,7 +2240,13 @@ function showLoginPopup() {
 }
 
 // Function to capture and store memory asynchronously
-function captureAndStoreMemory() {
+async function captureAndStoreMemory() {
+  // Check if memory is enabled
+  const memoryEnabled = await getMemoryEnabledState();
+  if (memoryEnabled === false) {
+    return; // Don't process memories if disabled
+  }
+
   // Find the input element (prioritizing the ProseMirror div with contenteditable="true")
   let inputElement = document.querySelector('div[contenteditable="true"].ProseMirror');
   
@@ -2339,184 +2407,208 @@ function updateNotificationDot() {
 }
 
 function addSyncButton() {
-  // Check if the sync button already exists
-  let syncButton = document.querySelector("#sync-button");
-  if (syncButton) return; // Don't create it again if it already exists
-
-  // Create the sync button
-  syncButton = document.createElement("button");
-  syncButton.id = "sync-button";
-  syncButton.className = "sync-button";
-  syncButton.setAttribute("aria-label", "Sync memories");
-  syncButton.innerHTML = `
-    <div id="sync-button-content" class="sync-button-content">Sync</div>
-  `;
-
-  // Style the button
-  syncButton.style.cssText = `
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 12px;
-    background-color: rgba(128, 221, 162, 0.1);
-    border: 1px solid rgb(128, 221, 162);
-    border-radius: 6px;
-    color: rgb(128, 221, 162);
-    font-size: 14px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    margin-right: 12px;
-    position: relative;
-  `;
-
-  // Add hover effect
-  syncButton.addEventListener("mouseenter", () => {
-    syncButton.style.backgroundColor = "rgba(128, 221, 162, 0.2)";
-  });
-
-  syncButton.addEventListener("mouseleave", () => {
-    syncButton.style.backgroundColor = "rgba(128, 221, 162, 0.1)";
-  });
-
-  // Add click handler
-  syncButton.addEventListener("click", handleSyncClick);
-
-  // Function to update the button state based on memory count
-  function updateSyncButtonState() {
-    chrome.storage.sync.get(["userLoggedIn"], (data) => {
+  // Check if memory is enabled before adding the sync button
+  getMemoryEnabledState().then(enabled => {
+    if (enabled === false) {
+      // Remove existing sync button if it exists
       const existingSyncButton = document.querySelector("#sync-button");
       if (existingSyncButton) {
-        if (data.userLoggedIn) {
-          existingSyncButton.style.display = "flex";
+        const container = existingSyncButton.closest('div');
+        if (container) {
+          container.remove();
         } else {
-          existingSyncButton.style.display = "none";
+          existingSyncButton.remove();
         }
       }
-    });
-  }
-
-  // Add tooltip functionality
-  const tooltip = document.createElement("div");
-  tooltip.id = "sync-tooltip";
-  tooltip.textContent = "Sync memories";
-  tooltip.style.cssText = `
-    display: none;
-    position: fixed;
-    background-color: #21201C;
-    color: white;
-    padding: 6px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    z-index: 10000;
-    pointer-events: none;
-    white-space: nowrap;
-    transform: translateX(-50%);
-  `;
-  document.body.appendChild(tooltip);
-
-  syncButton.addEventListener("mouseenter", (event) => {
-    const rect = syncButton.getBoundingClientRect();
-    const buttonCenterX = rect.left + rect.width / 2;
+      return;
+    }
     
-    // Set initial tooltip properties
-    tooltip.style.display = "block";
-    
-    // Once displayed, we can get its height and set proper positioning
-    const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
-    
-    tooltip.style.left = `${buttonCenterX}px`;
-    tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
-  });
+    // Check if the sync button already exists
+    let syncButton = document.querySelector("#sync-button");
+    if (syncButton) return; // Don't create it again if it already exists
 
-  syncButton.addEventListener("mouseleave", () => {
-    tooltip.style.display = "none";
-  });
+    // Create the sync button
+    syncButton = document.createElement("button");
+    syncButton.id = "sync-button";
+    syncButton.className = "sync-button";
+    syncButton.setAttribute("aria-label", "Sync memories");
+    syncButton.innerHTML = `
+      <div id="sync-button-content" class="sync-button-content">Sync</div>
+    `;
 
-  // Find a good place to insert the button
-  const navElement = document.querySelector("nav") || document.querySelector("header");
-  if (navElement) {
-    // Create a container to hold the button
-    const container = document.createElement("div");
-    container.style.cssText = `
+    // Style the button
+    syncButton.style.cssText = `
       display: flex;
       align-items: center;
-      margin-right: 16px;
+      justify-content: center;
+      padding: 6px 12px;
+      background-color: rgba(128, 221, 162, 0.1);
+      border: 1px solid rgb(128, 221, 162);
+      border-radius: 6px;
+      color: rgb(128, 221, 162);
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      margin-right: 12px;
+      position: relative;
     `;
-    container.appendChild(syncButton);
-    
-    // Insert before the profile button if it exists
-    const profileButton = navElement.querySelector("button[aria-label='Profile']");
-    if (profileButton) {
-      profileButton.parentNode.insertBefore(container, profileButton);
-    } else {
-      // Otherwise add it to the end of the nav
-      navElement.appendChild(container);
-    }
-  }
 
-  updateSyncButtonState();
-  return syncButton;
+    // Add hover effect
+    syncButton.addEventListener("mouseenter", () => {
+      syncButton.style.backgroundColor = "rgba(128, 221, 162, 0.2)";
+    });
+
+    syncButton.addEventListener("mouseleave", () => {
+      syncButton.style.backgroundColor = "rgba(128, 221, 162, 0.1)";
+    });
+
+    // Add click handler
+    syncButton.addEventListener("click", handleSyncClick);
+
+    // Function to update the button state based on memory count
+    function updateSyncButtonState() {
+      chrome.storage.sync.get(["userLoggedIn"], (data) => {
+        const existingSyncButton = document.querySelector("#sync-button");
+        if (existingSyncButton) {
+          if (data.userLoggedIn) {
+            existingSyncButton.style.display = "flex";
+          } else {
+            existingSyncButton.style.display = "none";
+          }
+        }
+      });
+    }
+
+    // Add tooltip functionality
+    const tooltip = document.createElement("div");
+    tooltip.id = "sync-tooltip";
+    tooltip.textContent = "Sync memories";
+    tooltip.style.cssText = `
+      display: none;
+      position: fixed;
+      background-color: #21201C;
+      color: white;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 10000;
+      pointer-events: none;
+      white-space: nowrap;
+      transform: translateX(-50%);
+    `;
+    document.body.appendChild(tooltip);
+
+    syncButton.addEventListener("mouseenter", (event) => {
+      const rect = syncButton.getBoundingClientRect();
+      const buttonCenterX = rect.left + rect.width / 2;
+      
+      // Set initial tooltip properties
+      tooltip.style.display = "block";
+      
+      // Once displayed, we can get its height and set proper positioning
+      const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
+      
+      tooltip.style.left = `${buttonCenterX}px`;
+      tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
+    });
+
+    syncButton.addEventListener("mouseleave", () => {
+      tooltip.style.display = "none";
+    });
+
+    // Find a good place to insert the button
+    const navElement = document.querySelector("nav") || document.querySelector("header");
+    if (navElement) {
+      // Create a container to hold the button
+      const container = document.createElement("div");
+      container.style.cssText = `
+        display: flex;
+        align-items: center;
+        margin-right: 16px;
+      `;
+      container.appendChild(syncButton);
+      
+      // Insert before the profile button if it exists
+      const profileButton = navElement.querySelector("button[aria-label='Profile']");
+      if (profileButton) {
+        profileButton.parentNode.insertBefore(container, profileButton);
+      } else {
+        // Otherwise add it to the end of the nav
+        navElement.appendChild(container);
+      }
+    }
+
+    updateSyncButtonState();
+    return syncButton;
+  });
 }
 
 function handleSyncClick() {
   if (isSyncing) return; // Prevent multiple clicks
   
-  // Get the sync button element
-  const syncButton = document.querySelector("#sync-button");
-  if (!syncButton) return;
-
-  // Check if user is logged in
-  chrome.storage.sync.get(["userLoggedIn", "access_token"], (data) => {
-    if (!data.userLoggedIn || !data.access_token) {
-      showLoginPopup();
-      return;
+  // First check if memory is enabled
+  getMemoryEnabledState().then(enabled => {
+    if (enabled === false) {
+      return; // Don't show login popup if memory is disabled
     }
+    
+    // Get the sync button element
+    const syncButton = document.querySelector("#sync-button");
+    if (!syncButton) return;
 
-    // Show loading state and sync
-    setSyncButtonLoadingState(true);
-    
-    // Get all messages for this conversation
-    const messages = getLastMessages(999); // Get a large number to get all messages
-    
-    // Process messages and sync
-    if (messages && messages.length > 0) {
-      const memoriesToSync = [];
+    // Check if user is logged in
+    chrome.storage.sync.get(["userLoggedIn", "access_token"], (data) => {
+      if (!data.userLoggedIn || !data.access_token) {
+        showLoginPopup();
+        return;
+      }
+
+      // Show loading state and sync
+      setSyncButtonLoadingState(true);
       
-      // Process each message to extract memory content
-      messages.forEach(message => {
-        if (message.role === 'user' && message.content.trim()) {
-          memoriesToSync.push({
-            content: message.content,
-            source: "Claude",
-            timestamp: new Date().toISOString()
-          });
-        }
-      });
+      // Get all messages for this conversation
+      const messages = getLastMessages(999); // Get a large number to get all messages
       
-      if (memoriesToSync.length > 0) {
-        // Send memories to Mem0
-        sendMemoriesToMem0(memoriesToSync)
-          .then(result => {
-            setSyncButtonLoadingState(false);
-            if (result.success) {
-              showSyncPopup(syncButton, `${memoriesToSync.length} memories synced`);
-            } else {
+      // Process messages and sync
+      if (messages && messages.length > 0) {
+        const memoriesToSync = [];
+        
+        // Process each message to extract memory content
+        messages.forEach(message => {
+          if (message.role === 'user' && message.content.trim()) {
+            memoriesToSync.push({
+              content: message.content,
+              source: "Claude",
+              timestamp: new Date().toISOString()
+            });
+          }
+        });
+        
+        if (memoriesToSync.length > 0) {
+          // Send memories to Mem0
+          sendMemoriesToMem0(memoriesToSync)
+            .then(result => {
+              setSyncButtonLoadingState(false);
+              if (result.success) {
+                showSyncPopup(syncButton, `${memoriesToSync.length} memories synced`);
+              } else {
+                showSyncPopup(syncButton, "Sync failed");
+              }
+            })
+            .catch(error => {
+              console.error("Error syncing memories:", error);
+              setSyncButtonLoadingState(false);
               showSyncPopup(syncButton, "Sync failed");
-            }
-          })
-          .catch(error => {
-            console.error("Error syncing memories:", error);
-            setSyncButtonLoadingState(false);
-            showSyncPopup(syncButton, "Sync failed");
-          });
+            });
+        } else {
+          setSyncButtonLoadingState(false);
+          showSyncPopup(syncButton, "No memories to sync");
+        }
       } else {
         setSyncButtonLoadingState(false);
-        showSyncPopup(syncButton, "No memories to sync");
+        showSyncPopup(syncButton, "No messages found");
       }
-    } else {
-      setSyncButtonLoadingState(false);
-      showSyncPopup(syncButton, "No messages found");
-    }
+    });
   });
 }
 

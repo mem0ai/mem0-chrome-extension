@@ -1753,7 +1753,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
 
     // Search API call
     const searchResponse = await fetch(
-      "https://api.mem0.ai/v1/memories/search/",
+      "https://api.mem0.ai/v2/memories/search/",
       {
         method: "POST",
         headers: {
@@ -1762,7 +1762,9 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
         },
         body: JSON.stringify({
           query: message,
-          user_id: userId,
+          filters: {
+            user_id: userId,
+          },
           rerank: false,
           threshold: 0.3,
           limit: 10,

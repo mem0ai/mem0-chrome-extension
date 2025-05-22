@@ -105,7 +105,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
 
     // Existing search API call
     const searchResponse = await fetch(
-      "https://api.mem0.ai/v1/memories/search/",
+      "https://api.mem0.ai/v2/memories/search/",
       {
         method: "POST",
         headers: {
@@ -114,7 +114,9 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
         },
         body: JSON.stringify({
           query: message,
-          user_id: userId,
+          filters: {
+            user_id: userId,
+          },
           rerank: false,
           threshold: 0.3,
           limit: 10,
@@ -1509,7 +1511,7 @@ async function handleMem0Modal(sourceButtonId = null) {
 
     // Existing search API call
     const searchResponse = await fetch(
-      "https://api.mem0.ai/v1/memories/search/",
+      "https://api.mem0.ai/v2/memories/search/",
       {
         method: "POST",
         headers: {
@@ -1518,7 +1520,9 @@ async function handleMem0Modal(sourceButtonId = null) {
         },
         body: JSON.stringify({
           query: message,
-          user_id: userId,
+          filters: {
+            user_id: userId,
+          },
           rerank: false,
           threshold: 0.3,
           limit: 10,

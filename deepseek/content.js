@@ -512,10 +512,12 @@ function searchMemories(query) {
           headers['Authorization'] = `Api-Key ${items.apiKey}`; 
       }
 
-      const url = `${MEM0_API_BASE_URL}/v1/memories/search/`;
+      const url = `${MEM0_API_BASE_URL}/v2/memories/search/`;
       const body = JSON.stringify({
         query: query,
-        user_id: userId 
+        filters: {
+          user_id: userId,
+        },
       });
 
       fetch(url, {

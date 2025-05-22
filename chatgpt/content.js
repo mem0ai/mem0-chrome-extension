@@ -1357,7 +1357,7 @@ async function handleMem0Modal(sourceButtonId = null) {
 
     // Existing search API call
     const searchResponse = await fetch(
-      "https://api.mem0.ai/v1/memories/search/",
+      "https://api.mem0.ai/v2/memories/search/",
       {
         method: "POST",
         headers: {
@@ -1366,7 +1366,9 @@ async function handleMem0Modal(sourceButtonId = null) {
         },
         body: JSON.stringify({
           query: message,
-          user_id: userId,
+          filter: {
+            user_id: userId,
+          },
           rerank: false,
           threshold: 0.3,
           limit: 10, // Show more memories instead of just 3

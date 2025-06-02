@@ -97,8 +97,9 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   
   // Helper function to position modal relative to input field
   function positionRelativeToInput() {
-    const inputElement = document.querySelector('div[contenteditable="true"]') || 
-                         document.querySelector("textarea");
+    const inputElement = document.querySelector('#prompt-textarea') ||
+    document.querySelector('div[contenteditable="true"]') || 
+    document.querySelector("textarea");
     
     if (!inputElement) {
       console.error("Input element not found");
@@ -920,7 +921,7 @@ function applyMemoriesToInput(memories) {
 
 // Shared function to update the input field with all collected memories
 function updateInputWithMemories() {
-  const inputElement =
+  const inputElement = document.querySelector('#prompt-textarea') ||
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
 
@@ -953,15 +954,18 @@ function updateInputWithMemories() {
 
 // Function to get the content without any memory wrappers
 function getContentWithoutMemories(message) {
-  const inputElement =
+
+  if (typeof message === 'string') {
+    return message;
+  }
+
+  const inputElement = document.querySelector('#prompt-textarea') ||
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
     
   if (!inputElement) return "";
   
-  let content = inputElement.tagName.toLowerCase() === "div" 
-    ? inputElement.innerHTML 
-    : inputElement.value;
+  let content = inputElement.value || inputElement.textContent || inputElement.innerHTML;
 
   if(message && (!content || content.trim() === '<p data-placeholder="Ask anything" class="placeholder"><br class="ProseMirror-trailingBreak"></p>')) {
     content = message;
@@ -984,8 +988,8 @@ function getContentWithoutMemories(message) {
 
 // Add an event listener for the send button to clear memories after sending
 function addSendButtonListener() {
-  const sendButton = document.querySelector('button[aria-label="Send prompt"]') || 
-                     document.querySelector('#composer-submit-button');
+  const sendButton = document.querySelector('#composer-submit-button');
+
   if (sendButton && !sendButton.dataset.mem0Listener) {
     sendButton.dataset.mem0Listener = 'true';
     sendButton.addEventListener('click', function() {
@@ -1000,8 +1004,10 @@ function addSendButtonListener() {
     });
     
     // Also handle Enter key press
-    const inputElement = document.querySelector('div[contenteditable="true"]') || 
-                         document.querySelector("textarea");
+    const inputElement = document.querySelector('#prompt-textarea') ||
+    document.querySelector('div[contenteditable="true"]') || 
+    document.querySelector("textarea");
+    
     if (inputElement && !inputElement.dataset.mem0KeyListener) {
       inputElement.dataset.mem0KeyListener = 'true';
       inputElement.addEventListener('keydown', function(event) {
@@ -1032,12 +1038,11 @@ function captureAndStoreMemory() {
   document.querySelector('div[contenteditable="true"]') || 
   document.querySelector("textarea") ||
   document.querySelector('textarea[data-virtualkeyboard="true"]');
+
   if (!inputElement) return;
   
   // Get raw content from the input element
-  let message = inputElement.tagName.toLowerCase() === "div" 
-    ? inputElement.textContent 
-    : inputElement.value;
+  let message = inputElement.textContent || inputElement.value;
 
   if(!message || message.trim() === '') {
     message = inputValueCopy;
@@ -1106,7 +1111,7 @@ async function addMem0IconButton() {
   }
 
   // Fix the selector to find the mic container
-  const micContainer = document.querySelector('div.absolute.end-3.bottom-0 div.ms-auto');
+  const micContainer = document.querySelector('div[data-testid="composer-trailing-actions"] div.ms-auto');
   
   if (micContainer && !document.querySelector('#mem0-icon-button')) {
     // Clone the mic button structure
@@ -1262,7 +1267,7 @@ async function updateNotificationDot() {
     return; // Don't update notification dot if memory is disabled
   }
 
-  const inputElement =
+  const inputElement = document.querySelector('#prompt-textarea') ||
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
   
@@ -1336,7 +1341,7 @@ async function handleMem0Modal(sourceButtonId = null) {
     return;
   }
 
-  const inputElement =
+  const inputElement = document.querySelector('#prompt-textarea') ||
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
   
@@ -1597,9 +1602,11 @@ function setButtonLoadingState(isLoading) {
 
 function getInputValue() {
   const inputElement =
+    document.querySelector('#prompt-textarea') ||
     document.querySelector('div[contenteditable="true"]') ||
     document.querySelector("textarea");
-  return inputElement ? inputElement.textContent || inputElement.value : null;
+
+  return inputElement ? (inputElement.textContent || inputElement.value) : null;
 }
 
 function addSyncButton() {

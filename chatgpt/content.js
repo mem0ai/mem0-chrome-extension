@@ -1725,7 +1725,7 @@ function handleSyncClick() {
                 showSyncPopup(syncButton, `${syncedCount} memories synced`);
                 setSyncButtonLoadingState(false);
                 // Open the modal with memories after syncing
-                handleMem0Modal('sync-button');
+                // handleMem0Modal('sync-button');
               }
             })
             .catch((error) => {
@@ -1736,7 +1736,7 @@ function handleSyncClick() {
                 );
                 setSyncButtonLoadingState(false);
                 // Open the modal with memories after syncing
-                handleMem0Modal('sync-button');
+                // handleMem0Modal('sync-button');
               }
             });
         }
@@ -1768,10 +1768,12 @@ function sendMemoriesToMem0(memories) {
     chrome.storage.sync.get(
       ["apiKey", "userId", "access_token"],
       function (items) {
-        if ((items.apiKey || items.access_token) && items.userId) {
+        if (items.apiKey || items.access_token) {
           const authHeader = items.access_token
             ? `Bearer ${items.access_token}`
             : `Token ${items.apiKey}`;
+          const userId = items.userId || "chrome-extension-user";
+          
           fetch("https://api.mem0.ai/v1/memories/", {
             method: "POST",
             headers: {
@@ -1780,7 +1782,7 @@ function sendMemoriesToMem0(memories) {
             },
             body: JSON.stringify({
               messages: memories,
-              user_id: items.userId,
+              user_id: userId,
               infer: true,
               metadata: {
                 provider: "ChatGPT",
@@ -1798,7 +1800,7 @@ function sendMemoriesToMem0(memories) {
               reject(`Error sending memories to Mem0: ${error}`)
             );
         } else {
-          reject("API Key/Access Token or User ID not set");
+          reject("API Key/Access Token not set");
         }
       }
     );
@@ -1863,10 +1865,12 @@ function sendMemoryToMem0(memory, infer = true) {
     chrome.storage.sync.get(
       ["apiKey", "userId", "access_token"],
       function (items) {
-        if ((items.apiKey || items.access_token) && items.userId) {
+        if (items.apiKey || items.access_token) {
           const authHeader = items.access_token
             ? `Bearer ${items.access_token}`
             : `Token ${items.apiKey}`;
+          const userId = items.userId || "chrome-extension-user";
+          
           fetch("https://api.mem0.ai/v1/memories/", {
             method: "POST",
             headers: {
@@ -1875,7 +1879,7 @@ function sendMemoryToMem0(memory, infer = true) {
             },
             body: JSON.stringify({
               messages: [{ content: memory.content, role: "user" }],
-              user_id: items.userId,
+              user_id: userId,
               infer: infer,
               metadata: {
                 provider: "ChatGPT",
@@ -1891,7 +1895,7 @@ function sendMemoryToMem0(memory, infer = true) {
             })
             .catch((error) => reject(`Error sending memory to Mem0: ${error}`));
         } else {
-          reject("API Key/Access Token or User ID not set");
+          reject("API Key/Access Token not set");
         }
       }
     );

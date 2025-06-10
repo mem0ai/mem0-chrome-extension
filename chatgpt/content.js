@@ -1924,7 +1924,7 @@ function initializeMem0Integration() {
     if (event.ctrlKey && event.key === "m") {
       event.preventDefault();
       (async () => {
-        await handleMem0Modal();
+        await handleMem0Modal('mem0-icon-button');
       })();
     }
   });

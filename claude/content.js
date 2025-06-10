@@ -2073,12 +2073,12 @@ function initializeMem0Integration() {
         const popup = document.querySelector(".mem0-popup");
         if (popup) {
           (async () => {
-            await handleMem0Modal(popup, true);
+            await handleMem0Modal(popup, false);
           })();
         } else {
           // If no popup is available, use the mem0-icon-button as source
           (async () => {
-            await handleMem0Modal(null, true, 'mem0-icon-button');
+            await handleMem0Modal(null, false, 'mem0-icon-button');
           })();
         }
       }

@@ -390,7 +390,7 @@ function initializeMem0Integration() {
           event.preventDefault();
           (async () => {
             try {
-              await handleMem0Modal();
+              await handleMem0Modal('mem0-icon-button');
             } catch (e) {
             }
           })();

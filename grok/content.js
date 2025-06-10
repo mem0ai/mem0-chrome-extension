@@ -327,6 +327,15 @@ function initializeMem0Integration() {
       }
     }
   });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.ctrlKey && event.key === "m") {
+      event.preventDefault();
+      (async () => {
+        await handleMem0Modal('mem0-icon-button');
+      })();
+    }
+  });
   
   observer.observe(document.body, {
     childList: true,

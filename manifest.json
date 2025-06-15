@@ -51,6 +51,10 @@
       "js": ["gemini/content.js"]
     },
     {
+      "matches": ["https://replit.com/*"],
+      "js": ["replit/content.js"]
+    },
+    {
       "matches": ["<all_urls>"],
       "js": ["sidebar.js"],
       "run_at": "document_end"

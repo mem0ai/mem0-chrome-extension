@@ -47,6 +47,10 @@
       "js": ["deepseek/content.js"]
     },
     {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["gemini/content.js"]
+    },
+    {
       "matches": ["<all_urls>"],
       "js": ["sidebar.js"],
       "run_at": "document_end"

@@ -43,6 +43,19 @@ https://github.com/user-attachments/assets/a069a178-631e-4b35-a182-9f4fef7735c4
 3. Start chatting with any supported AI assistant
 4. For ChatGPT and Perplexity, just press enter while chatting as you would normally
 5. On Claude, click the Mem0 button or use shortcut ^ + M
+6. For ChatGPT, you can now also use the dedicated Mem0 button (icon) next to the message input area to fetch and inject relevant memories before you send your message. This gives you a chance to review the memories. The Enter key will still work as before (if enabled in settings).
+
+*[Note: Screenshots to be updated to reflect new UI elements.]*
+
+## Settings
+
+You can access settings via the ellipsis (...) menu in the Mem0 sidebar.
+
+### API Key Management
+In the Settings panel, you can view and update your Mem0 API key. If you need to change your key, enter the new one and click 'Save'.
+
+### Preferences
+- **Enter-Key for Memory (ChatGPT):** A new preference allows you to control whether pressing the Enter key in ChatGPT automatically retrieves and injects memories. This is enabled by default. You can toggle this behavior in the Settings panel. The Enter-key behavior for Perplexity and other platforms remains unchanged.
 
 ## ❤️ Free to Use
 
@@ -54,8 +67,12 @@ Mem0 is completely free with:
 
 ## Configuration
 
-- API Key: Required for connecting to the Mem0 API. Obtain this from your Mem0 Dashboard.
-- User ID: Your unique identifier in the Mem0 system. If not provided, it defaults to 'chrome-extension-user'.
+The primary configuration, such as setting your API Key and managing preferences, is now done through the Settings panel in the Mem0 sidebar.
+
+- **API Key:** Required for connecting to the Mem0 API. Obtain this from your Mem0 Dashboard and enter it in the sidebar settings.
+- **User ID:** Your unique identifier in the Mem0 system. This is typically handled automatically upon login.
+- **Enter-Key Interception (ChatGPT):** Toggle this feature in the sidebar settings as described above.
+
 
 ## Troubleshooting
 

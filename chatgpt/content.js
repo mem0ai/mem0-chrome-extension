@@ -3,135 +3,185 @@ let isProcessingMem0 = false;
 // Initialize the MutationObserver variable
 let observer;
 
-// function createPopup(container) {
-//   const popup = document.createElement("div");
-//   popup.className = "mem0-popup";
-//   popup.style.cssText = `
-//         display: none;
-//         position: absolute;
-//         background-color: #171717;
-//         color: white;
-//         padding: 6px 8px;
-//         border-radius: 6px;
-//         font-size: 12px;
-//         z-index: 10000;
-//         bottom: 100%;
-//         left: 50%;
-//         transform: translateX(-50%);
-//         margin-bottom: 11px;
-//         white-space: nowrap;
-//         box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-//     `;
-//   container.appendChild(popup);
-//   return popup;
-// }
+function createPopup(container) {
+  const popup = document.createElement("div");
+  popup.className = "mem0-popup";
+  popup.style.cssText = `
+        display: none;
+        position: absolute;
+        background-color: #171717;
+        color: white;
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        z-index: 10000;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 11px;
+        white-space: nowrap;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    `;
+  container.appendChild(popup);
+  return popup;
+}
 
-// function addMem0Button() {
-//   const sendButton = document.querySelector('button[aria-label="Send prompt"]');
+function addMem0Button() {
+  const textArea = document.querySelector("textarea#prompt-textarea");
+  if (!textArea) return;
 
-//   if (sendButton && !document.querySelector("#mem0-button")) {
-//     const sendButtonContainer = sendButton.parentElement.parentElement;
+  const sendButton = textArea.parentElement.querySelector('button[data-testid="send-button"]');
 
-//     const mem0ButtonContainer = document.createElement("div");
-//     mem0ButtonContainer.style.position = "relative";
-//     mem0ButtonContainer.style.display = "inline-block";
+  if (sendButton && !document.querySelector("#mem0-button")) {
+    const mem0ButtonContainer = document.createElement("div");
+    mem0ButtonContainer.style.position = "relative";
+    mem0ButtonContainer.style.display = "flex";
+    mem0ButtonContainer.style.alignItems = "center";
+    mem0ButtonContainer.style.marginRight = "8px";
 
-//     const mem0Button = document.createElement("img");
-//     mem0Button.id = "mem0-button";
-//     mem0Button.src = chrome.runtime.getURL("icons/mem0-claude-icon-purple.png");
-//     mem0Button.style.width = "20px";
-//     mem0Button.style.height = "20px";
-//     mem0Button.style.cursor = "pointer";
-//     mem0Button.style.padding = "8px";
-//     mem0Button.style.borderRadius = "5px";
-//     mem0Button.style.transition = "filter 0.3s ease, opacity 0.3s ease";
-//     mem0Button.style.boxSizing = "content-box";
-//     mem0Button.style.marginBottom = "1px";
+    const mem0Button = document.createElement("button");
+    mem0Button.id = "mem0-button";
+    mem0Button.type = "button";
+    mem0Button.style.background = "none";
+    mem0Button.style.border = "none";
+    mem0Button.style.padding = "0";
+    mem0Button.style.margin = "0";
+    mem0Button.style.cursor = "pointer";
+    mem0Button.style.display = "flex";
+    mem0Button.style.alignItems = "center";
+    mem0Button.style.justifyContent = "center";
+    mem0Button.style.width = "38px";
+    mem0Button.style.height = "38px";
+    mem0Button.style.borderRadius = "5px";
+    mem0Button.style.transition = "background-color 0.2s ease, opacity 0.3s ease";
 
-//     const popup = createPopup(mem0ButtonContainer);
+    const icon = document.createElement("img");
+    icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-purple.png");
+    icon.style.width = "20px";
+    icon.style.height = "20px";
+    icon.style.transition = "filter 0.3s ease";
+    mem0Button.appendChild(icon);
 
-//     mem0Button.addEventListener("click", () => handleMem0Click(popup));
+    // const popup = createPopup(mem0ButtonContainer); // Kept if needed for specific messages for this button
 
-//     mem0Button.addEventListener("mouseenter", () => {
-//       if (!mem0Button.disabled) {
-//         mem0Button.style.filter = "brightness(70%)";
-//         tooltip.style.visibility = "visible";
-//         tooltip.style.opacity = "1";
-//       }
-//     });
-//     mem0Button.addEventListener("mouseleave", () => {
-//       mem0Button.style.filter = "none";
-//       tooltip.style.visibility = "hidden";
-//       tooltip.style.opacity = "0";
-//     });
+    mem0Button.addEventListener("click", () => handleMem0Click(false)); // Don't auto-send on button click
 
-//     const tooltip = document.createElement("div");
-//     tooltip.textContent = "Add related memories";
-//     tooltip.style.visibility = "hidden";
-//     tooltip.style.backgroundColor = "black";
-//     tooltip.style.color = "white";
-//     tooltip.style.textAlign = "center";
-//     tooltip.style.borderRadius = "4px";
-//     tooltip.style.padding = "3px 6px";
-//     tooltip.style.position = "absolute";
-//     tooltip.style.zIndex = "1";
-//     tooltip.style.top = "calc(100% + 5px)";
-//     tooltip.style.left = "50%";
-//     tooltip.style.transform = "translateX(-50%)";
-//     tooltip.style.whiteSpace = "nowrap";
-//     tooltip.style.opacity = "0";
-//     tooltip.style.transition = "opacity 0.3s";
-//     tooltip.style.fontSize = "12px";
+    mem0Button.addEventListener("mouseenter", () => {
+      if (!mem0Button.disabled) {
+        mem0Button.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+        tooltip.style.visibility = "visible";
+        tooltip.style.opacity = "1";
+      }
+    });
+    mem0Button.addEventListener("mouseleave", () => {
+      mem0Button.style.backgroundColor = "transparent";
+      tooltip.style.visibility = "hidden";
+      tooltip.style.opacity = "0";
+    });
 
-//     mem0ButtonContainer.appendChild(mem0Button);
-//     mem0ButtonContainer.appendChild(tooltip);
+    const tooltip = document.createElement("div");
+    tooltip.textContent = "Add related memories (Ctrl+M)";
+    tooltip.style.visibility = "hidden";
+    tooltip.style.backgroundColor = "black";
+    tooltip.style.color = "white";
+    tooltip.style.textAlign = "center";
+    tooltip.style.borderRadius = "4px";
+    tooltip.style.padding = "5px 8px";
+    tooltip.style.position = "absolute";
+    tooltip.style.zIndex = "10001";
+    tooltip.style.bottom = "calc(100% + 8px)";
+    tooltip.style.left = "50%";
+    tooltip.style.transform = "translateX(-50%)";
+    tooltip.style.whiteSpace = "nowrap";
+    tooltip.style.opacity = "0";
+    tooltip.style.transition = "opacity 0.2s ease, visibility 0.2s ease";
+    tooltip.style.fontSize = "12px";
 
-//     // Insert the mem0Button before the sendButton
-//     sendButtonContainer.insertBefore(
-//       mem0ButtonContainer,
-//       sendButtonContainer.children[1]
-//     );
+    mem0ButtonContainer.appendChild(mem0Button);
+    mem0ButtonContainer.appendChild(tooltip);
 
-//     // Function to update button states
-//     function updateButtonStates() {
-//       const inputElement =
-//         document.querySelector('div[contenteditable="true"]') ||
-//         document.querySelector("textarea");
-//       const hasText =
-//         inputElement && inputElement.textContent.trim().length > 0;
+    const sendButtonWrapper = sendButton.parentNode;
+    if (sendButtonWrapper) {
+      sendButtonWrapper.insertBefore(mem0ButtonContainer, sendButton);
+    }
 
-//       mem0Button.disabled = !hasText;
+    function updateButtonStates() {
+      const currentInputElement = document.querySelector("textarea#prompt-textarea");
+      const hasText = currentInputElement && currentInputElement.value.trim().length > 0;
+      mem0Button.disabled = !hasText;
+      mem0Button.style.opacity = hasText ? "1" : "0.5";
+      mem0Button.style.pointerEvents = hasText ? "auto" : "none";
+    }
 
-//       if (hasText) {
-//         mem0Button.style.opacity = "1";
-//         mem0Button.style.pointerEvents = "auto";
-//       } else {
-//         mem0Button.style.opacity = "0.5";
-//         mem0Button.style.pointerEvents = "none";
-//       }
-//     }
+    updateButtonStates();
+    const currentInputElement = document.querySelector("textarea#prompt-textarea");
+    if (currentInputElement) {
+      currentInputElement.addEventListener("input", updateButtonStates);
+    }
+  }
+}
 
-//     // Initial update
-//     updateButtonStates();
+// New function for toast-like notifications
+function showToastNotification(message, type = "info") {
+  const toastId = "mem0-toast-notification";
+  // Remove existing toast if any
+  const existingToast = document.getElementById(toastId);
+  if (existingToast) {
+    existingToast.remove();
+  }
 
-//     // Listen for input changes
-//     const inputElement =
-//       document.querySelector('div[contenteditable="true"]') ||
-//       document.querySelector("textarea");
-//     if (inputElement) {
-//       inputElement.addEventListener("input", updateButtonStates);
-//     }
-//   }
-// }
+  const toast = document.createElement("div");
+  toast.id = toastId;
+  toast.className = `mem0-toast mem0-toast-${type}`;
+  toast.textContent = message;
+
+  toast.style.position = "fixed";
+  toast.style.bottom = "20px";
+  toast.style.left = "50%";
+  toast.style.transform = "translateX(-50%)";
+  toast.style.padding = "12px 20px";
+  toast.style.borderRadius = "6px";
+  toast.style.color = "white";
+  toast.style.zIndex = "20000";
+  toast.style.fontSize = "14px";
+  toast.style.boxShadow = "0 4px 10px rgba(0,0,0,0.25)";
+  toast.style.fontFamily = "Arial, sans-serif";
+  toast.style.opacity = "0";
+  toast.style.transition = "opacity 0.3s ease-in-out";
+
+
+  if (type === "error") {
+    toast.style.backgroundColor = "#E53935"; // Material Design Red
+  } else if (type === "success") {
+    toast.style.backgroundColor = "#43A047"; // Material Design Green
+  } else { // info
+    toast.style.backgroundColor = "#1E88E5"; // Material Design Blue
+  }
+
+  document.body.appendChild(toast);
+
+  // Trigger fade in
+  setTimeout(() => {
+    toast.style.opacity = "1";
+  }, 50);
+
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    setTimeout(() => {
+      if (toast.parentElement) { // Check if still in DOM
+        toast.remove();
+      }
+    }, 300);
+  }, 3000);
+}
+
 
 async function handleMem0Click(clickSendButton = false) {
   const memoryEnabled = await getMemoryEnabledState();
   if (!memoryEnabled) {
-    // If memory is disabled, just click the send button if requested
     if (clickSendButton) {
-      const sendButton = document.querySelector(
-        'button[aria-label="Send prompt"]'
-      );
+      const sendButton = document.querySelector('button[data-testid="send-button"]');
       if (sendButton) {
         sendButton.click();
       } else {
@@ -141,27 +191,22 @@ async function handleMem0Click(clickSendButton = false) {
     return;
   }
 
-  // setButtonLoadingState(true);
-  const inputElement =
-    document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea");
+  setButtonLoadingState(true);
+  const inputElement = document.querySelector("textarea#prompt-textarea");
   let message = getInputValue();
-  if (!message) {
-    console.error("No input message found");
-    // showPopup(popup, "No input message found");
-    // setButtonLoadingState(false);
+
+  if (!message || message.trim() === "") {
+    showToastNotification("Mem0: No input message found", "error");
+    setButtonLoadingState(false);
     return;
   }
 
   const memInfoRegex =
-    /\s*Here is some of my preferences\/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):[\s\S]*$/;
+    /\s*Here is some of my preferences\/memories to help answer better \(don't respond to these memories but use them to assist in the response if relevant\):[\s\S]*$/;
   message = message.replace(memInfoRegex, "").trim();
-  const endIndex = message.indexOf("</p>");
-  if (endIndex !== -1) {
-    message = message.slice(0, endIndex + 4);
-  }
 
   if (isProcessingMem0) {
+    setButtonLoadingState(false); // Prevent button getting stuck in loading
     return;
   }
 
@@ -171,39 +216,28 @@ async function handleMem0Click(clickSendButton = false) {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
         ["apiKey", "userId", "access_token"],
-        function (items) {
-          resolve(items);
-        }
+        (items) => resolve(items)
       );
     });
 
-    const apiKey = data.apiKey;
-    const userId = data.userId || "chrome-extension-user";
-    const accessToken = data.access_token;
+    const { apiKey, userId = "chrome-extension-user", access_token: accessToken } = data;
 
     if (!apiKey && !accessToken) {
-      // showPopup(popup, "No API Key or Access Token found");
+      showToastNotification("Mem0: No API Key or Access Token found. Please set it in the extension popup.", "error");
       isProcessingMem0 = false;
-      // setButtonLoadingState(false);
+      setButtonLoadingState(false);
       return;
     }
 
-    const authHeader = accessToken
-      ? `Bearer ${accessToken}`
-      : `Token ${apiKey}`;
-
+    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
     const messages = getLastMessages(2);
     messages.push({ role: "user", content: message });
 
-    // Existing search API call
     const searchResponse = await fetch(
       "https://api.mem0.ai/v1/memories/search/",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
+        headers: { "Content-Type": "application/json", Authorization: authHeader },
         body: JSON.stringify({
           query: message,
           user_id: userId,
@@ -216,99 +250,66 @@ async function handleMem0Click(clickSendButton = false) {
     );
 
     if (!searchResponse.ok) {
-      throw new Error(
-        `API request failed with status ${searchResponse.status}`
-      );
+      showToastNotification(`Mem0: Error processing memories (Code: ${searchResponse.status})`, "error");
+      throw new Error(`API request failed with status ${searchResponse.status}`);
     }
 
     const responseData = await searchResponse.json();
 
     if (inputElement) {
       const memories = responseData.map((item) => item.memory);
-      const providers = responseData.map((item) =>
-        item.metadata && item.metadata.provider ? item.metadata.provider : ""
-      );
 
       if (memories.length > 0) {
-        let currentContent =
-          inputElement.tagName.toLowerCase() === "div"
-            ? inputElement.innerHTML
-            : inputElement.value;
-
-        const memInfoRegex =
-          /\s*Here is some of my preferences\/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):[\s\S]*$/;
+        let currentContent = inputElement.value;
         currentContent = currentContent.replace(memInfoRegex, "").trim();
-        const lastParagraphRegex =
-          /<p><br class="ProseMirror-trailingBreak"><\/p><p>$/;
-        currentContent = currentContent.replace(lastParagraphRegex, "").trim();
 
-        let memoriesContent =
-          '<div id="mem0-wrapper" style="background-color: rgb(220, 252, 231); padding: 8px; border-radius: 4px; margin-top: 8px; margin-bottom: 8px;">';
-        memoriesContent +=
-          "<strong>Here is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):</strong>";
+        let memoriesText = "\n\nHere is some of my preferences/memories to help answer better (don't respond to these memories but use them to assist in the response if relevant):\n";
         memories.forEach((mem) => {
-          memoriesContent += `<div>- ${mem}</div>`;
+          memoriesText += `- ${mem}\n`;
         });
-        memoriesContent += "</div>";
 
-        if (inputElement.tagName.toLowerCase() === "div") {
-          inputElement.innerHTML = `${currentContent}<div><br></div>${memoriesContent}`;
-        } else {
-          inputElement.value = `${currentContent}\n${memoriesContent}`;
-        }
+        inputElement.value = `${currentContent}${memoriesText}`;
         inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+        inputElement.style.height = 'auto';
+        inputElement.style.height = (inputElement.scrollHeight) + 'px';
+        showToastNotification("Mem0: Memories injected.", "success");
       } else {
-        if (inputElement.tagName.toLowerCase() === "div") {
-          inputElement.innerHTML = message;
-        } else {
-          inputElement.value = message;
-        }
+        inputElement.value = message;
         inputElement.dispatchEvent(new Event("input", { bubbles: true }));
-        // showPopup(popup, "No memories found");
+        showToastNotification("Mem0: No relevant memories found.");
       }
     } else {
-      // showPopup(popup, "No input field found to update");
+      showToastNotification("Mem0: Input field not found.", "error");
     }
 
-    // setButtonLoadingState(false);
-
     if (clickSendButton) {
-      const sendButton = document.querySelector(
-        'button[aria-label="Send prompt"]'
-      );
+      const sendButton = document.querySelector('button[data-testid="send-button"]');
       if (sendButton) {
         setTimeout(() => {
           sendButton.click();
         }, 100);
       } else {
-        console.error("Send button not found");
+        console.error("Send button not found for auto-click");
       }
     }
 
-    // Proceed with adding memory asynchronously without awaiting
     fetch("https://api.mem0.ai/v1/memories/", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
       body: JSON.stringify({
-        messages: messages,
+        messages,
         user_id: userId,
         infer: true,
-        metadata: {
-          provider: "ChatGPT",
-        },
+        metadata: { provider: "ChatGPT" },
       }),
-    }).catch((error) => {
-      console.error("Error adding memory:", error);
-    });
+    }).catch((error) => console.error("Error adding memory:", error));
+
   } catch (error) {
-    console.error("Error:", error);
-    // setButtonLoadingState(false);
-    throw error; // Rethrow the error to be caught in the calling function
+    console.error("Error in handleMem0Click:", error);
+    showToastNotification("Mem0: An unexpected error occurred.", "error");
   } finally {
     isProcessingMem0 = false;
+    setButtonLoadingState(false); // Ensure loading state is always reset
   }
 }
 
@@ -348,7 +349,6 @@ function getLastMessages(count) {
 }
 
 function showPopup(popup, message) {
-  // Create and add the (i) icon
   const infoIcon = document.createElement("span");
   infoIcon.textContent = "ⓘ ";
   infoIcon.style.marginRight = "3px";
@@ -360,31 +360,50 @@ function showPopup(popup, message) {
   popup.style.display = "block";
   setTimeout(() => {
     popup.style.display = "none";
-  }, 2000);
+  }, 3000);
 }
 
 function setButtonLoadingState(isLoading) {
   const mem0Button = document.querySelector("#mem0-button");
   if (mem0Button) {
+    const icon = mem0Button.querySelector("img");
     if (isLoading) {
       mem0Button.disabled = true;
-      document.body.style.cursor = "wait";
-      mem0Button.style.cursor = "wait";
       mem0Button.style.opacity = "0.7";
+      if (icon) {
+        icon.src = chrome.runtime.getURL("icons/loader.svg");
+        icon.style.animation = "spin 1s linear infinite";
+      }
     } else {
       mem0Button.disabled = false;
-      document.body.style.cursor = "default";
-      mem0Button.style.cursor = "pointer";
       mem0Button.style.opacity = "1";
+      if (icon) {
+        icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-purple.png");
+        icon.style.animation = "none";
+      }
     }
   }
 }
 
+function ensureSpinAnimation() {
+    if (!document.getElementById('mem0-spin-animation')) {
+        const style = document.createElement('style');
+        style.id = 'mem0-spin-animation';
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+ensureSpinAnimation();
+
+
 function getInputValue() {
-  const inputElement =
-    document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea");
-  return inputElement ? inputElement.textContent || inputElement.value : null;
+  const inputElement = document.querySelector("textarea#prompt-textarea");
+  return inputElement ? inputElement.value : null;
 }
 
 function addSyncButton() {
@@ -664,92 +683,92 @@ function sendMemoryToMem0(memory) {
   });
 }
 
-function initializeMem0Integration() {
-  document.addEventListener("DOMContentLoaded", () => {
-    // addMem0Button();
-    addSyncButton();
-    addEnterKeyInterception();
-  });
-
-  document.addEventListener("keydown", function (event) {
-    if (event.ctrlKey && event.key === "m") {
-      event.preventDefault();
-      (async () => {
-        await handleMem0Click(true);
-      })();
-    }
-  });
+function observeDOMChanges() {
+  if (observer) observer.disconnect();
 
   observer = new MutationObserver(() => {
-    // addMem0Button();
-    addSyncButton();
+      addMem0Button();
+      addSyncButton();
+      addEnterKeyInterception();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
+}
 
-  // Add a MutationObserver to watch for changes in the DOM
-  const observerForEnterKey = new MutationObserver(() => {
-    addEnterKeyInterception();
-  });
+function initializeMem0Integration() {
+  addMem0Button();
+  addSyncButton();
+  addEnterKeyInterception();
 
-  observerForEnterKey.observe(document.body, {
-    childList: true,
-    subtree: true,
+  document.addEventListener("keydown", function (event) {
+    if (event.ctrlKey && (event.key === "m" || event.key === "M")) {
+      event.preventDefault();
+      event.stopPropagation();
+      const activeElement = document.activeElement;
+      const inputElement = document.querySelector("textarea#prompt-textarea");
+      if (activeElement === inputElement || (inputElement && inputElement.value.trim() !== "")) {
+         handleMem0Click(true);
+      } else {
+         handleMem0Click(true); // Or some other behavior if input is empty
+      }
+    }
   });
+  observeDOMChanges();
 }
 
 function addEnterKeyInterception() {
-  const inputElement =
-    document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea");
+  const inputElement = document.querySelector("textarea#prompt-textarea");
 
   if (inputElement && !inputElement.dataset.enterKeyIntercepted) {
-    inputElement.dataset.enterKeyIntercepted = "true";
-
-    inputElement.addEventListener(
-      "keydown",
-      async function (event) {
-        if (event.key === "Enter" && !event.shiftKey) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const memoryEnabled = await getMemoryEnabledState();
-          if (memoryEnabled) {
-            // Call handleMem0Click
-            handleMem0Click(true)
-              .then(() => {
-                // If you want to submit the message after Mem0 processing:
-                // const sendButton = document.querySelector('button[aria-label="Send prompt"]');
+    chrome.storage.sync.get({ enterKeyInterceptionEnabled: true }, function (data) {
+      if (data.enterKeyInterceptionEnabled) {
+        inputElement.dataset.enterKeyIntercepted = "true";
+        inputElement.addEventListener(
+          "keydown",
+          async function (event) {
+            if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+              const memoryEnabled = await getMemoryEnabledState();
+              const currentInputValue = getInputValue();
+              if (memoryEnabled && currentInputValue && currentInputValue.trim() !== "") {
+                event.preventDefault();
+                event.stopPropagation();
+                try {
+                  await handleMem0Click(true);
+                } catch (error) {
+                  console.error("Error in Mem0 processing on Enter:", error);
+                }
+              } else if (!memoryEnabled && currentInputValue && currentInputValue.trim() !== "") {
+                // Allow default send if memory is disabled but there's text.
+                // Since we preventDefault, we might need to manually trigger send.
+                // For now, this path does nothing, relying on user to click send.
+                // To enable send:
+                // const sendButton = document.querySelector('button[data-testid="send-button"]');
                 // if (sendButton) sendButton.click();
-              })
-              .catch((error) => {
-                console.error("Error in Mem0 processing:", error);
-              });
-          } else {
-            // If memory is disabled, just click the send button
-            const sendButton = document.querySelector(
-              'button[aria-label="Send prompt"]'
-            );
-            if (sendButton) {
-              sendButton.click();
-            } else {
-              console.error("Send button not found");
+              }
             }
-          }
+          },
+          true
+        );
+      } else {
+        if (inputElement.dataset.enterKeyIntercepted) {
+            delete inputElement.dataset.enterKeyIntercepted;
         }
-      },
-      true
-    );
+      }
+    });
   }
 }
 
-// Add this new function to get the memory_enabled state
 function getMemoryEnabledState() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(["memory_enabled"], function (result) {
-      resolve(result.memory_enabled !== false); // Default to true if not set
+    chrome.storage.sync.get({ memory_enabled: true }, function (result) { // Default true
+      resolve(result.memory_enabled);
     });
   });
 }
 
-initializeMem0Integration();
+// Initialize after DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeMem0Integration);
+} else {
+  initializeMem0Integration();
+}

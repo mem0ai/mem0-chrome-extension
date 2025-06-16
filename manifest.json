@@ -54,7 +54,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*"],
+      "resources": ["icons/*", "sidebar.css"],
       "matches": ["<all_urls>"]
     }
   ]

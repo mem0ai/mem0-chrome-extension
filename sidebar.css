@@ -20,7 +20,7 @@
   width: 100%
 }
 .logo-container {
-  display: fixed;
+  display: flex;
   height: 24px;
 }
 .logo {

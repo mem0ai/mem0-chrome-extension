@@ -3,6 +3,16 @@ let isProcessingMem0 = false;
 // Initialize the MutationObserver variable
 let observer;
 
+// Debounce utility function
+function debounce(func, delay) {
+  let timeout;
+  return function(...args) {
+    const context = this;
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(context, args), delay);
+  };
+}
+
 function createPopup(container) {
   const popup = document.createElement("div");
   popup.className = "mem0-popup";
@@ -305,7 +315,13 @@ async function handleMem0Click(clickSendButton = false) {
     }).catch((error) => console.error("Error adding memory:", error));
 
   } catch (error) {
-    console.error("Error in handleMem0Click:", error);
+    const currentMessage = getInputValue(); // Get current message at time of error
+    console.error(
+      "Error in handleMem0Click processing input (length " +
+      (currentMessage ? currentMessage.length : 0) +
+      "):",
+      error
+    );
     showToastNotification("Mem0: An unexpected error occurred.", "error");
   } finally {
     isProcessingMem0 = false;
@@ -686,12 +702,13 @@ function sendMemoryToMem0(memory) {
 function observeDOMChanges() {
   if (observer) observer.disconnect();
 
-  observer = new MutationObserver(() => {
-      addMem0Button();
-      addSyncButton();
-      addEnterKeyInterception();
-  });
+  const debouncedHandler = debounce(function() {
+    addMem0Button();
+    addSyncButton();
+    addEnterKeyInterception();
+  }, 300);
 
+  observer = new MutationObserver(debouncedHandler);
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
@@ -700,56 +717,72 @@ function initializeMem0Integration() {
   addSyncButton();
   addEnterKeyInterception();
 
-  document.addEventListener("keydown", function (event) {
-    if (event.ctrlKey && (event.key === "m" || event.key === "M")) {
+  document.addEventListener("keydown", async function (event) { // Added async here
+    if ((event.ctrlKey || event.metaKey) && (event.key === "m" || event.key === "M")) {
       event.preventDefault();
       event.stopPropagation();
-      const activeElement = document.activeElement;
-      const inputElement = document.querySelector("textarea#prompt-textarea");
-      if (activeElement === inputElement || (inputElement && inputElement.value.trim() !== "")) {
-         handleMem0Click(true);
-      } else {
-         handleMem0Click(true); // Or some other behavior if input is empty
+      const inputElement = document.getElementById("prompt-textarea"); // Use getElementById for speed
+
+      if (document.activeElement === inputElement && inputElement && inputElement.value.trim() !== "") {
+         await handleMem0Click(false); // false = don't click send button, allow review
+      } else if (!inputElement || inputElement.value.trim() === "") {
+         showToastNotification("Input is empty. Type a message to use Mem0 with Ctrl+M.", "info");
       }
+      // If input has content but is not focused, consider if we should still trigger.
+      // Current logic: only triggers if focused and has content.
     }
   });
   observeDOMChanges();
 }
 
 function addEnterKeyInterception() {
-  const inputElement = document.querySelector("textarea#prompt-textarea");
+  const inputElement = document.getElementById("prompt-textarea"); // Use getElementById
 
   if (inputElement && !inputElement.dataset.enterKeyIntercepted) {
     chrome.storage.sync.get({ enterKeyInterceptionEnabled: true }, function (data) {
       if (data.enterKeyInterceptionEnabled) {
         inputElement.dataset.enterKeyIntercepted = "true";
-        inputElement.addEventListener(
-          "keydown",
-          async function (event) {
+
+        const handleEnterKey = async function (event) {
             if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-              const memoryEnabled = await getMemoryEnabledState();
-              const currentInputValue = getInputValue();
-              if (memoryEnabled && currentInputValue && currentInputValue.trim() !== "") {
-                event.preventDefault();
-                event.stopPropagation();
-                try {
-                  await handleMem0Click(true);
-                } catch (error) {
-                  console.error("Error in Mem0 processing on Enter:", error);
-                }
-              } else if (!memoryEnabled && currentInputValue && currentInputValue.trim() !== "") {
-                // Allow default send if memory is disabled but there's text.
-                // Since we preventDefault, we might need to manually trigger send.
-                // For now, this path does nothing, relying on user to click send.
-                // To enable send:
-                // const sendButton = document.querySelector('button[data-testid="send-button"]');
-                // if (sendButton) sendButton.click();
+              event.preventDefault(); // Always prevent default if we are handling it.
+              event.stopPropagation();
+
+              const memoryEnabled = await getMemoryEnabledState(); // Global toggle
+              const currentInputValue = inputElement.value;
+
+              if (memoryEnabled && currentInputValue.trim() !== "") {
+                  await handleMem0Click(true); // true to click send button after processing
+              } else {
+                  // Memory is disabled OR input is empty. We should send the message directly.
+                  if (currentInputValue.trim() !== "") {
+                      const sendButton = document.querySelector('button[data-testid="send-button"]');
+                      if (sendButton) {
+                          sendButton.click();
+                      } else {
+                          console.error("Send button not found for Enter key press.");
+                          // Fallback: try to submit the form if send button is not found
+                          let form = inputElement.closest('form');
+                          if (form) {
+                              form.requestSubmit();
+                          }
+                      }
+                  }
+                  // If input is truly empty (not just whitespace), ChatGPT itself won't send.
+                  // So, no action needed for an empty input here.
               }
             }
-          },
-          true
-        );
+        };
+
+        inputElement.addEventListener("keydown", handleEnterKey, true ); // Use capture phase
       } else {
+        // If interception is disabled, ensure we remove our flag if it was previously set
+        // Note: Properly removing the specific event listener added above would require storing
+        // a reference to `handleEnterKey`. For now, the check `!inputElement.dataset.enterKeyIntercepted`
+        // and `data.enterKeyInterceptionEnabled` prevents re-adding if already added for this state.
+        // If the setting is toggled off, the listener might remain but won't execute its core logic
+        // beyond the initial checks if the setting is re-read inside the handler (which it isn't currently).
+        // This is a minor inefficiency but shouldn't break functionality.
         if (inputElement.dataset.enterKeyIntercepted) {
             delete inputElement.dataset.enterKeyIntercepted;
         }

@@ -137,6 +137,7 @@
     sidebarContainer.appendChild(fixedHeader);
 
     // Create ellipsis menu
+    // Note: The settings button was added here in a previous step, ensure it's present.
     const ellipsisMenu = document.createElement("div");
     ellipsisMenu.id = "ellipsisMenu";
     ellipsisMenu.className = "ellipsis-menu";
@@ -146,15 +147,6 @@
         <button id="logoutBtn">Logout</button>
       `;
     fixedHeader.appendChild(ellipsisMenu);
-
-    // Create settings view (initially hidden)
-    const settingsView = document.createElement("div");
-    settingsView.id = "mem0-settings-view";
-    settingsView.style.display = "none"; // Hidden by default
-    settingsView.style.padding = "15px";
-    settingsView.style.width = "100%";
-    settingsView.style.boxSizing = "border-box";
-    // sidebarContainer.appendChild(settingsView); // Will be appended when shown
 
     // Create scroll area with loading indicator
     const scrollArea = document.createElement("div");
@@ -167,22 +159,17 @@
       `;
     sidebarContainer.appendChild(scrollArea);
 
-    // Add this line after creating the scroll area
     fetchAndDisplayMemories();
 
-    // Add event listener for the search button
     const searchBtn = fixedHeader.querySelector("#searchBtn");
     searchBtn.addEventListener("click", toggleSearch);
 
-    // Add event listener for the Add Memory button
     const addMemoryBtn = fixedHeader.querySelector("#addMemoryBtn");
     addMemoryBtn.addEventListener("click", addNewMemory);
 
-    // Add event listener for ellipsis menu button
     const ellipsisMenuBtn = fixedHeader.querySelector("#ellipsisMenuBtn");
     ellipsisMenuBtn.addEventListener("click", toggleEllipsisMenu);
 
-    // Add event listeners for ellipsis menu options
     const settingsBtn = ellipsisMenu.querySelector("#settingsBtn");
     settingsBtn.addEventListener("click", showSettingsView);
 
@@ -192,7 +179,6 @@
     const logoutBtn = ellipsisMenu.querySelector("#logoutBtn");
     logoutBtn.addEventListener("click", logout);
 
-    // Replace the existing footer-toggle div with this updated version
     const footerToggle = document.createElement("div");
     footerToggle.className = "footer-toggle";
     footerToggle.innerHTML = `
@@ -215,14 +201,12 @@
     });
     sidebarContainer.appendChild(footerToggle);
 
-    // Add event listener for the toggle
     const toggleCheckbox = footerToggle.querySelector("#mem0Toggle");
     const toggleText = footerToggle.querySelector(".toggle-text");
     toggleCheckbox.addEventListener("change", function () {
       toggleText.textContent = this.checked
         ? "Memory enabled"
         : "Memory disabled";
-      // Send toggle event to API
       chrome.storage.sync.get(["memory_enabled", "apiKey", "access_token"], function (data) {
         const headers = getHeaders(data.apiKey, data.access_token);
         fetch(`https://api.mem0.ai/v1/extension/`, {
@@ -240,23 +224,20 @@
         action: "toggleMem0",
         enabled: this.checked,
       });
-      // Update the memory_enabled state when the toggle changes
       chrome.storage.sync.set({ memory_enabled: this.checked });
     });
 
     document.body.appendChild(sidebarContainer);
 
-    // Slide in the sidebar immediately after creation
     setTimeout(() => {
       sidebarContainer.style.right = "0";
     }, 0);
 
-    // Prevent clicks within the sidebar from closing it
     sidebarContainer.addEventListener("click", (event) => {
       event.stopPropagation();
     });
 
-    // Add styles
+    // Link to the external CSS file
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.type = "text/css";
@@ -276,7 +257,6 @@
           })
             .then((response) => response.json())
             .then((data) => {
-              // Sort memories by created_at in descending order
               data.sort(
                 (a, b) => new Date(b.created_at) - new Date(a.created_at)
               );
@@ -284,8 +264,7 @@
               if (newMemory) {
                 const scrollArea = document.querySelector(".scroll-area");
                 if (scrollArea) {
-                  scrollArea.scrollTop = 0; // Scroll to the top
-                  // Highlight the new memory
+                  scrollArea.scrollTop = 0;
                   const newMemoryElement = scrollArea.firstElementChild;
                   if (newMemoryElement) {
                     newMemoryElement.classList.add("highlight");
@@ -314,7 +293,6 @@
     const scrollArea = document.querySelector(".scroll-area");
     scrollArea.innerHTML = "";
 
-    // Show or hide search button based on presence of memories
     const searchBtn = document.getElementById("searchBtn");
     if (memories.length === 0) {
       searchBtn.style.display = "none";
@@ -348,7 +326,6 @@
                 .join("")}</div>`
             : "";
 
-        // Get the provider from metadata or use "Mem0" as default
         const provider =
           memoryItem.metadata && memoryItem.metadata.provider
             ? memoryItem.metadata.provider.toLowerCase()
@@ -357,7 +334,6 @@
         const iconPath = (iconName) =>
           chrome.runtime.getURL(`icons/${iconName}`);
 
-        // Define the icon mapping
         const providerIcons = {
           chatgpt: "chatgpt.png",
           claude: "claude.png",
@@ -366,7 +342,6 @@
           grok: "grok.svg",
         };
 
-        // Get the appropriate icon or use the default
         const providerIcon =
           providerIcons[provider] || "mem0-claude-icon-purple.png";
 
@@ -402,7 +377,6 @@
         `;
         scrollArea.appendChild(memoryElement);
 
-        // Add event listeners for edit and delete buttons
         const editBtn = memoryElement.querySelector(".edit-btn");
         const deleteBtn = memoryElement.querySelector(".delete-btn");
 
@@ -433,10 +407,8 @@
     const editBtn = memoryElement.querySelector(".edit-btn");
 
     if (editBtn.classList.contains("editing")) {
-      // Save the edited memory
       saveEditedMemory();
     } else {
-      // Enter edit mode
       memoryText.contentEditable = "true";
       memoryText.classList.add("editing");
       memoryText.setAttribute(
@@ -449,7 +421,6 @@
       )}" alt="Done" class="svg-icon">`;
       editBtn.classList.add("editing");
 
-      // Set cursor to the end of the text
       const range = document.createRange();
       const selection = window.getSelection();
       range.selectNodeContents(memoryText);
@@ -458,7 +429,6 @@
       selection.addRange(range);
       memoryText.focus();
 
-      // Add event listener for the Enter key
       memoryText.addEventListener("keydown", handleEnterKey);
     }
 
@@ -474,7 +444,6 @@
       const originalContent = memoryText.getAttribute("data-original-content");
 
       if (newContent === originalContent) {
-        // Memory content hasn't changed, exit edit mode without making an API call
         exitEditMode();
         return;
       }
@@ -485,7 +454,6 @@
         editBtn.innerHTML = `<div class="loader"></div>`;
         editBtn.disabled = true;
 
-        // Send edit event to API
         fetch(`https://api.mem0.ai/v1/extension/`, {
           method: "POST",
           headers: headers,
@@ -531,7 +499,6 @@
     const deleteBtn = memoryElement.querySelector(".delete-btn");
     const originalContent = deleteBtn.innerHTML;
 
-    // Replace delete icon with a smaller loading spinner
     deleteBtn.innerHTML = `
       <div style="
         border: 2px solid #f3f3f3;
@@ -547,7 +514,6 @@
     chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
       const headers = getHeaders(data.apiKey, data.access_token);
 
-      // Send delete event to API
       fetch(`https://api.mem0.ai/v1/extension/`, {
         method: "POST",
         headers: headers,
@@ -574,28 +540,24 @@
             }
           } else {
             console.error("Failed to delete memory");
-            // Restore original delete button
             deleteBtn.innerHTML = originalContent;
             deleteBtn.disabled = false;
           }
         })
         .catch((error) => {
           console.error("Error deleting memory:", error);
-          // Restore original delete button
           deleteBtn.innerHTML = originalContent;
           deleteBtn.disabled = false;
         });
     });
   }
 
-  // Add this new function to handle search functionality
   function toggleSearch() {
     const inputContainer = document.querySelector(".input-container");
     const existingSearchInput = inputContainer.querySelector(".search-memory");
     const searchBtn = document.getElementById("searchBtn");
     const addMemoryBtn = document.getElementById("addMemoryBtn");
 
-    // Close add memory input if it's open
     const existingAddInput = inputContainer.querySelector(".add-memory");
     if (existingAddInput) {
       existingAddInput.remove();
@@ -619,28 +581,13 @@
       inputContainer.appendChild(searchMemoryInput);
 
       const searchMemorySpan = searchMemoryInput.querySelector("span");
-
-      // Focus the search memory input
       searchMemorySpan.focus();
-
-      // Add this line to set the text color to black
       searchMemorySpan.style.color = "black";
 
-      // Modify the event listener for the input event
       searchMemorySpan.addEventListener("input", function () {
         const searchTerm = this.textContent.trim().toLowerCase();
         filterMemories(searchTerm);
       });
-
-      // Remove the existing event listener for the Escape key
-      searchMemorySpan.removeEventListener("keydown", function (event) {
-        if (event.key === "Escape") {
-          closeSearchInput();
-        }
-      });
-
-      // The Escape key is now handled by the global handleEscapeKey function
-
       searchBtn.classList.add("active");
     }
   }
@@ -653,14 +600,12 @@
     if (existingSearchInput) {
       existingSearchInput.remove();
       searchBtn.classList.remove("active");
-      // Remove filter when search is closed
       filterMemories("");
     }
   }
 
   function filterMemories(searchTerm) {
     const memoryItems = document.querySelectorAll(".memory-item");
-
     memoryItems.forEach((item) => {
       const memoryText = item
         .querySelector(".memory-text")
@@ -671,19 +616,14 @@
         item.style.display = "none";
       }
     });
-
-    // Add this line to maintain the width of the sidebar
     document.getElementById("mem0-sidebar").style.width = "400px";
   }
 
-  // Add this new function to handle adding a new memory
   function addNewMemory() {
     const inputContainer = document.querySelector(".input-container");
     const existingAddInput = inputContainer.querySelector(".add-memory");
     const addMemoryBtn = document.getElementById("addMemoryBtn");
-    const searchBtn = document.getElementById("searchBtn");
 
-    // Close search input if it's open
     const existingSearchInput = inputContainer.querySelector(".search-memory");
     if (existingSearchInput) {
       closeSearchInput();
@@ -702,18 +642,10 @@
           <span contenteditable="true" placeholder="Add a new memory..."></span>
         </div>
       `;
-
       inputContainer.appendChild(addMemoryInput);
-
       const addMemorySpan = addMemoryInput.querySelector("span");
-
-      // Focus the add memory input
       addMemorySpan.focus();
-
-      // Add this line to set the text color to black
       addMemorySpan.style.color = "black";
-
-      // Add event listener for the Enter key
       addMemorySpan.addEventListener("keydown", function (event) {
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
@@ -725,7 +657,6 @@
           }
         }
       });
-
       addMemoryBtn.classList.add("active");
     }
   }
@@ -746,15 +677,11 @@
       ["apiKey", "access_token", "userId"],
       function (data) {
         const headers = getHeaders(data.apiKey, data.access_token);
-
-        // Show loading indicator
         addMemoryInput.innerHTML = `
           <div class="loading-indicator" style="width: 100%; display: flex; justify-content: center; align-items: center;">
             <div class="loader"></div>
           </div>
         `;
-
-        // Send add event to API
         fetch(`https://api.mem0.ai/v1/extension/`, {
           method: "POST",
           headers: headers,
@@ -762,7 +689,6 @@
         }).catch(error => {
           console.error("Error sending add event:", error);
         });
-
         fetch("https://api.mem0.ai/v1/memories/", {
           method: "POST",
           headers: headers,
@@ -771,14 +697,14 @@
             user_id: data.userId,
             infer: false,
             metadata: {
-              provider: "Mem0", // Add this line to set the provider
+              provider: "Mem0",
             },
           }),
         })
           .then((response) => response.json())
           .then((data) => {
             addMemoryInput.remove();
-            fetchAndDisplayMemories(true); // Refresh the memories list and highlight the new memory
+            fetchAndDisplayMemories(true);
           })
           .catch((error) => {
             console.error("Error adding memory:", error);
@@ -791,7 +717,39 @@
     );
   }
 
-  // Add these new functions
+  /**
+   * Returns the HTML string for the settings view.
+   * @returns {string} HTML string for the settings view.
+   */
+  function _getSettingsViewHTML() {
+    return `
+      <div style="display: flex; align-items: center; margin-bottom: 20px;">
+        <button id="backToMemoriesBtn" class="header-icon-button" style="margin-right: 10px;" title="Back to Memories">
+          <img src="${chrome.runtime.getURL("icons/back-arrow.svg")}" alt="Back" class="svg-icon" style="width: 20px; height: 20px;">
+        </button>
+        <h2 style="margin: 0; font-size: 18px; font-weight: bold;">Settings</h2>
+      </div>
+
+      <h4 style="font-size: 15px; margin-top: 20px; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">API Key</h4>
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <input type="password" id="apiKeyInput" placeholder="Enter your API Key" class="settings-input" style="flex-grow: 1; margin-right: 5px;">
+        <button id="toggleApiKeyVisibilityBtn" class="settings-button" style="margin-right: 5px;">Show</button>
+        <button id="saveApiKeyBtn" class="settings-button">Save</button>
+      </div>
+
+      <h4 style="font-size: 15px; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Preferences</h4>
+      <div class="settings-preference-item">
+        <label for="enterKeyToggle" style="display: flex; align-items: center; justify-content: space-between; width: 100%; cursor: pointer;">
+          <span style="font-size: 14px;">Enable Enter-Key for Memory (ChatGPT)</span>
+          <label class="switch" style="margin-left: 10px;">
+            <input type="checkbox" id="enterKeyToggle">
+            <span class="slider round"></span>
+          </label>
+        </label>
+      </div>
+      <p id="settingsStatus" style="font-size: 12px; color: green; margin-top: 15px; text-align: center; min-height: 18px;"></p>
+    `;
+  }
 
   function showSettingsView() {
     const sidebarContainer = document.getElementById("mem0-sidebar");
@@ -799,13 +757,10 @@
     const inputContainer = sidebarContainer.querySelector(".input-container");
     let settingsView = document.getElementById("mem0-settings-view");
 
-    // Hide memories view
     if (scrollArea) scrollArea.style.display = "none";
     if (inputContainer) inputContainer.style.display = "none";
-     // Hide ellipsis menu itself when in settings view
     const ellipsisMenu = document.getElementById("ellipsisMenu");
     if (ellipsisMenu) ellipsisMenu.style.display = "none";
-
 
     if (!settingsView) {
       settingsView = document.createElement("div");
@@ -813,53 +768,23 @@
       settingsView.style.padding = "15px";
       settingsView.style.width = "100%";
       settingsView.style.boxSizing = "border-box";
-      settingsView.style.color = "#333"; // Darker text for readability
+      settingsView.style.color = "#333";
+      settingsView.innerHTML = _getSettingsViewHTML();
 
-      settingsView.innerHTML = `
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
-          <button id="backToMemoriesBtn" class="header-icon-button" style="margin-right: 10px;" title="Back to Memories">
-            <img src="${chrome.runtime.getURL("icons/back-arrow.svg")}" alt="Back" class="svg-icon" style="width: 20px; height: 20px;">
-          </button>
-          <h2 style="margin: 0; font-size: 18px; font-weight: bold;">Settings</h2>
-        </div>
-
-        <h4 style="font-size: 15px; margin-top: 20px; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 5px;">API Key</h4>
-        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-          <input type="password" id="apiKeyInput" placeholder="Enter your API Key" class="settings-input" style="flex-grow: 1; margin-right: 5px;">
-          <button id="toggleApiKeyVisibilityBtn" class="settings-button" style="margin-right: 5px;">Show</button>
-          <button id="saveApiKeyBtn" class="settings-button">Save</button>
-        </div>
-
-        <h4 style="font-size: 15px; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Preferences</h4>
-        <div class="settings-preference-item">
-          <label for="enterKeyToggle" style="display: flex; align-items: center; justify-content: space-between; width: 100%; cursor: pointer;">
-            <span style="font-size: 14px;">Enable Enter-Key for Memory (ChatGPT)</span>
-            <label class="switch" style="margin-left: 10px;">
-              <input type="checkbox" id="enterKeyToggle">
-              <span class="slider round"></span>
-            </label>
-          </label>
-        </div>
-        <p id="settingsStatus" style="font-size: 12px; color: green; margin-top: 15px; text-align: center; min-height: 18px;"></p>
-      `;
-      // Insert settingsView after the fixed-header
       const fixedHeader = sidebarContainer.querySelector(".fixed-header");
       if (fixedHeader) {
         fixedHeader.insertAdjacentElement("afterend", settingsView);
       } else {
-        sidebarContainer.appendChild(settingsView); // Fallback
+        sidebarContainer.appendChild(settingsView);
       }
+
+      document.getElementById("backToMemoriesBtn").addEventListener("click", showMemoriesView);
+      document.getElementById("saveApiKeyBtn").addEventListener("click", saveApiKey);
+      document.getElementById("toggleApiKeyVisibilityBtn").addEventListener("click", toggleApiKeyVisibility);
+      document.getElementById("enterKeyToggle").addEventListener("change", saveEnterKeyPreference);
     }
 
     settingsView.style.display = "block";
-
-    // Add event listeners
-    document.getElementById("backToMemoriesBtn").addEventListener("click", showMemoriesView);
-    document.getElementById("saveApiKeyBtn").addEventListener("click", saveApiKey);
-    document.getElementById("toggleApiKeyVisibilityBtn").addEventListener("click", toggleApiKeyVisibility);
-    document.getElementById("enterKeyToggle").addEventListener("change", saveEnterKeyPreference);
-
-    // Load current settings values
     loadSettingsValues();
   }
 
@@ -870,27 +795,33 @@
     const settingsView = document.getElementById("mem0-settings-view");
 
     if (settingsView) settingsView.style.display = "none";
-    if (scrollArea) scrollArea.style.display = "block"; // Or "flex" if it's a flex container
-    if (inputContainer) inputContainer.style.display = "block"; // Or "flex"
+    if (scrollArea) scrollArea.style.display = "block";
+    if (inputContainer) inputContainer.style.display = "block";
 
-    fetchAndDisplayMemories(); // Refresh memories
+    fetchAndDisplayMemories();
   }
 
+  /**
+   * Loads settings values from chrome.storage.sync and populates the
+   * settings view fields.
+   * The API key is fetched and displayed, initially masked (as type="password").
+   */
   function loadSettingsValues() {
     const apiKeyInput = document.getElementById("apiKeyInput");
     chrome.storage.sync.get(["apiKey", "enterKeyInterceptionEnabled"], function (data) {
       if (data.apiKey) {
         apiKeyInput.value = data.apiKey;
-        // Mask it by default or show last 4 chars:
-        // apiKeyInput.value = "****" + data.apiKey.slice(-4);
-        // For this example, we'll just load it as password type.
       }
       const enterKeyToggle = document.getElementById("enterKeyToggle");
-      // Default to true if not set
       enterKeyToggle.checked = data.enterKeyInterceptionEnabled !== false;
     });
   }
 
+  /**
+   * Saves the user's Mem0 API key to chrome.storage.sync.
+   * API keys are sensitive credentials.
+   * Note: chrome.storage.sync may sync this key if the user has browser sync enabled.
+   */
   function saveApiKey() {
     const apiKeyInput = document.getElementById("apiKeyInput");
     const newApiKey = apiKeyInput.value.trim();
@@ -906,20 +837,33 @@
       settingsStatus.style.color = "red";
       setTimeout(() => {
         settingsStatus.textContent = "";
-        settingsStatus.style.color = "green"; // Reset color
+        settingsStatus.style.color = "green";
       }, 3000);
     }
   }
 
+  /**
+   * Toggles the visibility of the API key in the settings input field
+   * between "password" and "text" type.
+   * Displays a warning when the key is made visible, as this can be a security
+   * risk if the user's screen is being observed (e.g., via screen sharing
+   * or shoulder surfing).
+   */
   function toggleApiKeyVisibility() {
     const apiKeyInput = document.getElementById("apiKeyInput");
     const toggleBtn = document.getElementById("toggleApiKeyVisibilityBtn");
+    const settingsStatus = document.getElementById("settingsStatus");
+
     if (apiKeyInput.type === "password") {
       apiKeyInput.type = "text";
       toggleBtn.textContent = "Hide";
+      settingsStatus.textContent = "Warning: API key is now visible.";
+      settingsStatus.style.color = "#D32F2F";
     } else {
       apiKeyInput.type = "password";
       toggleBtn.textContent = "Show";
+      settingsStatus.textContent = "";
+      settingsStatus.style.color = "green";
     }
   }
 
@@ -932,11 +876,9 @@
     });
   }
 
-
   function toggleEllipsisMenu(event) {
-    event.stopPropagation(); // Prevent the click from bubbling up
+    event.stopPropagation();
     const ellipsisMenu = document.getElementById("ellipsisMenu");
-    // Do not show ellipsis if settings view is active
     const settingsView = document.getElementById("mem0-settings-view");
     if (settingsView && settingsView.style.display === "block") {
       ellipsisMenu.style.display = "none";
@@ -946,12 +888,11 @@
     ellipsisMenu.style.display =
       ellipsisMenu.style.display === "block" ? "none" : "block";
 
-    // Close menu when clicking outside
     document.addEventListener("click", function closeMenu(e) {
       if (
         !ellipsisMenu.contains(e.target) &&
         e.target !== document.getElementById("ellipsisMenuBtn") &&
-        (!settingsView || settingsView.style.display === "none") // Also ensure settings isn't blocking this logic
+        (!settingsView || settingsView.style.display === "none")
       ) {
         ellipsisMenu.style.display = "none";
         document.removeEventListener("click", closeMenu);
@@ -993,7 +934,6 @@
     });
   }
 
-  // Initialize the listener when the script loads
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initializeMem0Sidebar);
   } else {

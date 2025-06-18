@@ -16,6 +16,11 @@ let currentModalOverlay = null;
 // Added variable to track sync button status
 let isSyncing = false;
 
+// Variables to track modal position for draggable functionality
+let modalPosition = null;
+let isDragging = false;
+let dragOffset = { x: 0, y: 0 };
+
 // Function to get memory enabled state from storage
 async function getMemoryEnabledState() {
   return new Promise((resolve) => {
@@ -531,75 +536,84 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   let topPosition;
   let leftPosition;
   
-  // Different positioning based on which button triggered the modal
-  if (sourceButtonId === 'mem0-icon-button') {
-    // Position relative to the mem0-icon-button
-    const iconButton = document.querySelector('#mem0-icon-button');
-    if (iconButton) {
-      const buttonRect = iconButton.getBoundingClientRect();
-      
-      // Determine if there's enough space above the button
-      const spaceAbove = buttonRect.top;
-      const viewportHeight = window.innerHeight;
-      
-      // Calculate position - for icon button, prefer to show ABOVE
-      leftPosition = buttonRect.left - modalWidth + buttonRect.width;
-      
-      // Make sure modal doesn't go off-screen to the left
-      leftPosition = Math.max(leftPosition, 10);
-      
-      // For icon button, show above if enough space, otherwise below
-      if (spaceAbove >= modalHeight + 10) {
-        // Place above
-        topPosition = buttonRect.top - modalHeight - 10;
-        memoriesPerPage = 3; // Show 3 memories when above
-      } else {
-        // Not enough space above, place below
-        topPosition = buttonRect.bottom + 10;
-        
-        // Check if it's in the lower half of the screen
-        if (buttonRect.bottom > viewportHeight / 2) {
-          modalHeight = 300; // Reduced height
-          memoriesPerPage = 2; // Show only 2 memories
-        }
-      }
-    } else {
-      // Fallback to input-based positioning
-      positionRelativeToInput();
-    }
+  // Use stored position if available and modal is being recreated after loading
+  if (modalPosition && currentModalOverlay) {
+    topPosition = modalPosition.top;
+    leftPosition = modalPosition.left;
   } else {
-    // Default positioning relative to the Mem0 button
-    const mem0Button = document.querySelector("#mem0-button");
-    if (mem0Button) {
-      const buttonRect = mem0Button.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const spaceAbove = buttonRect.top;
-      
-      // Position to the right of the button by default
-      leftPosition = buttonRect.left;
-      
-      // Decide whether to place modal above or below based on available space
-      if (spaceAbove >= modalHeight + 10) {
-        // Place above
-        topPosition = buttonRect.top - modalHeight - 10;
-        memoriesPerPage = 3; // Show 3 memories when placed above
-      } else {
-        // Place below
-        topPosition = buttonRect.bottom + 10;
+    // Different positioning based on which button triggered the modal
+    if (sourceButtonId === 'mem0-icon-button') {
+      // Position relative to the mem0-icon-button
+      const iconButton = document.querySelector('#mem0-icon-button');
+      if (iconButton) {
+        const buttonRect = iconButton.getBoundingClientRect();
         
-        // Check if it's in the lower half of the screen
-        if (buttonRect.bottom > viewportHeight / 2) {
-          modalHeight = 300; // Reduced height
-          memoriesPerPage = 2; // Show only 2 memories
+        // Determine if there's enough space above the button
+        const spaceAbove = buttonRect.top;
+        const viewportHeight = window.innerHeight;
+        
+        // Calculate position - for icon button, prefer to show ABOVE
+        leftPosition = buttonRect.left - modalWidth + buttonRect.width;
+        
+        // Make sure modal doesn't go off-screen to the left
+        leftPosition = Math.max(leftPosition, 10);
+        
+        // For icon button, show above if enough space, otherwise below
+        if (spaceAbove >= modalHeight + 10) {
+          // Place above
+          topPosition = buttonRect.top - modalHeight - 10;
+          memoriesPerPage = 3; // Show 3 memories when above
+        } else {
+          // Not enough space above, place below
+          topPosition = buttonRect.bottom + 10;
+          
+          // Check if it's in the lower half of the screen
+          if (buttonRect.bottom > viewportHeight / 2) {
+            modalHeight = 300; // Reduced height
+            memoriesPerPage = 2; // Show only 2 memories
+          }
         }
+      } else {
+        // Fallback to input-based positioning
+        positionRelativeToInput();
       }
-      
-      // Make sure modal doesn't go off-screen to the right
-      leftPosition = Math.min(leftPosition, window.innerWidth - modalWidth - 10);
     } else {
-      // Fallback to input-based positioning
-      positionRelativeToInput();
+      // Default positioning relative to the Mem0 button
+      const mem0Button = document.querySelector("#mem0-button");
+      if (mem0Button) {
+        const buttonRect = mem0Button.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceAbove = buttonRect.top;
+        
+        // Position to the right of the button by default
+        leftPosition = buttonRect.left;
+        
+        // Decide whether to place modal above or below based on available space
+        if (spaceAbove >= modalHeight + 10) {
+          // Place above
+          topPosition = buttonRect.top - modalHeight - 10;
+          memoriesPerPage = 3; // Show 3 memories when placed above
+        } else {
+          // Place below
+          topPosition = buttonRect.bottom + 10;
+          
+          // Check if it's in the lower half of the screen
+          if (buttonRect.bottom > viewportHeight / 2) {
+            modalHeight = 300; // Reduced height
+            memoriesPerPage = 2; // Show only 2 memories
+          }
+        }
+        
+        // Make sure modal doesn't go off-screen to the right
+        leftPosition = Math.min(leftPosition, window.innerWidth - modalWidth - 10);
+      } else {
+        // Fallback to input-based positioning
+        positionRelativeToInput();
+      }
     }
+    
+    // Store the initial position
+    modalPosition = { top: topPosition, left: leftPosition };
   }
   
   // Helper function to position modal relative to input field
@@ -701,6 +715,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     justify-content: space-between;
     background-color: #232325;
     flex-shrink: 0;
+    cursor: move;
+    user-select: none;
   `;
 
   // Create header left section with just the logo
@@ -1370,6 +1386,70 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   modalHeader.appendChild(headerLeft);
   modalHeader.appendChild(headerRight);
 
+  // Add draggable functionality to the modal header
+  modalHeader.addEventListener('mousedown', (e) => {
+    // Don't start dragging if clicking on a button or interactive element
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.tagName === 'SVG' || e.target.closest('svg')) {
+      return;
+    }
+    
+    isDragging = true;
+    const modalRect = modalContainer.getBoundingClientRect();
+    dragOffset.x = e.clientX - modalRect.left;
+    dragOffset.y = e.clientY - modalRect.top;
+    
+    // Prevent default to avoid text selection
+    e.preventDefault();
+    
+    // Add styles to indicate dragging
+    modalContainer.style.transition = 'none';
+    document.body.style.userSelect = 'none';
+    modalHeader.style.cursor = 'grabbing';
+  });
+
+  // Add global mouse move and mouse up handlers
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    
+    const newLeft = e.clientX - dragOffset.x;
+    const newTop = e.clientY - dragOffset.y;
+    
+    // Constrain to viewport bounds
+    const maxLeft = window.innerWidth - modalWidth;
+    const maxTop = window.innerHeight - modalHeight;
+    
+    const constrainedLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    const constrainedTop = Math.max(0, Math.min(newTop, maxTop));
+    
+    modalContainer.style.left = `${constrainedLeft}px`;
+    modalContainer.style.top = `${constrainedTop}px`;
+    
+    // Update stored position
+    modalPosition = { top: constrainedTop, left: constrainedLeft };
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    
+    isDragging = false;
+    
+    // Restore styles
+    modalContainer.style.transition = '';
+    document.body.style.userSelect = '';
+    modalHeader.style.cursor = 'move';
+  };
+
+  // Add event listeners to document for global mouse events
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', handleMouseUp);
+
+  // Store cleanup function for later use
+  modalOverlay._cleanupDragEvents = () => {
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    isDragging = false;
+  };
+
   contentSection.appendChild(memoriesCounter);
   contentSection.appendChild(memoriesContent);
 
@@ -1397,10 +1477,17 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Function to close the modal
   function closeModal() {
     if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
+      // Clean up drag event listeners
+      if (currentModalOverlay._cleanupDragEvents) {
+        currentModalOverlay._cleanupDragEvents();
+      }
       document.body.removeChild(currentModalOverlay);
     }
     currentModalOverlay = null;
     memoryModalShown = false;
+    // Reset modal position when closing
+    modalPosition = null;
+    isDragging = false;
   }
 
   // Update Add to Prompt button click handler

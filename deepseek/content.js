@@ -9,6 +9,7 @@ let allMemories = [];
 let allMemoriesById = new Set();
 let currentModalOverlay = null;
 let mem0ButtonCheckInterval = null; // Add interval variable for button checks
+let modalDragPosition = null; // Store the dragged position of the modal
 
 // Function to remove the Mem0 icon button when memory is disabled
 function removeMem0IconButton() {
@@ -788,7 +789,7 @@ async function handleMem0Processing() {
 
 // Function to create a memory modal
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
-  // Close existing modal if it exists
+  // Close existing modal if it exists (but preserve drag position for updates)
   if (memoryModalShown && currentModalOverlay) {
     document.body.removeChild(currentModalOverlay);
   }
@@ -804,39 +805,45 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   let topPosition;
   let leftPosition;
   
-  // Different positioning based on which button triggered the modal
-  if (sourceButtonId === 'mem0-icon-button') {
-    // Position relative to the mem0-icon-button
-    const iconButton = document.querySelector('#mem0-icon-button');
-    if (iconButton) {
-      const buttonRect = iconButton.getBoundingClientRect();
-      
-      // Determine if there's enough space above the button
-      const spaceAbove = buttonRect.top;
-      const viewportHeight = window.innerHeight;
-      
-      leftPosition = buttonRect.left - modalWidth + buttonRect.width;
-      leftPosition = Math.max(leftPosition, 10);
-      
-      if (spaceAbove >= modalHeight + 10) {
-        // Place above
-        topPosition = buttonRect.top - modalHeight - 10;
-      } else {
-        // Not enough space above, place below
-        topPosition = buttonRect.bottom + 10;
+  // Check if we have a stored drag position and use it
+  if (modalDragPosition) {
+    topPosition = modalDragPosition.top;
+    leftPosition = modalDragPosition.left;
+  } else {
+    // Different positioning based on which button triggered the modal
+    if (sourceButtonId === 'mem0-icon-button') {
+      // Position relative to the mem0-icon-button
+      const iconButton = document.querySelector('#mem0-icon-button');
+      if (iconButton) {
+        const buttonRect = iconButton.getBoundingClientRect();
         
-        if (buttonRect.bottom > viewportHeight / 2) {
-          modalHeight = 300; // Reduced height
-          memoriesPerPage = 2; // Show only 2 memories
+        // Determine if there's enough space above the button
+        const spaceAbove = buttonRect.top;
+        const viewportHeight = window.innerHeight;
+        
+        leftPosition = buttonRect.left - modalWidth + buttonRect.width;
+        leftPosition = Math.max(leftPosition, 10);
+        
+        if (spaceAbove >= modalHeight + 10) {
+          // Place above
+          topPosition = buttonRect.top - modalHeight - 10;
+        } else {
+          // Not enough space above, place below
+          topPosition = buttonRect.bottom + 10;
+          
+          if (buttonRect.bottom > viewportHeight / 2) {
+            modalHeight = 300; // Reduced height
+            memoriesPerPage = 2; // Show only 2 memories
+          }
         }
+      } else {
+        // Fallback to input-based positioning
+        positionRelativeToInput();
       }
     } else {
-      // Fallback to input-based positioning
+      // Default positioning relative to the input field
       positionRelativeToInput();
     }
-  } else {
-    // Default positioning relative to the input field
-    positionRelativeToInput();
   }
   
   // Helper function to position modal relative to input field
@@ -927,6 +934,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     justify-content: space-between;
     background-color: #232325;
     flex-shrink: 0;
+    cursor: move;
+    user-select: none;
   `;
 
   // Create header left section with logo
@@ -935,6 +944,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     display: flex;
     flex-direction: row;
     align-items: center;
+    pointer-events: none;
   `;
 
   // Add Mem0 logo
@@ -963,6 +973,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     flex-direction: row;
     align-items: center;
     gap: 8px;
+    pointer-events: auto;
   `;
 
   // Create Add to Prompt button with arrow
@@ -1243,6 +1254,53 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   
   modalOverlay.appendChild(modalContainer);
 
+  // Add drag functionality
+  let isDragging = false;
+  let dragOffset = { x: 0, y: 0 };
+  
+  modalHeader.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    const containerRect = modalContainer.getBoundingClientRect();
+    dragOffset.x = e.clientX - containerRect.left;
+    dragOffset.y = e.clientY - containerRect.top;
+    
+    modalHeader.style.cursor = 'grabbing';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    e.preventDefault();
+  });
+  
+  function handleMouseMove(e) {
+    if (!isDragging) return;
+    
+    const newLeft = e.clientX - dragOffset.x;
+    const newTop = e.clientY - dragOffset.y;
+    
+    // Keep modal within viewport bounds
+    const maxLeft = window.innerWidth - modalWidth;
+    const maxTop = window.innerHeight - modalHeight;
+    
+    const constrainedLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    const constrainedTop = Math.max(0, Math.min(newTop, maxTop));
+    
+    modalContainer.style.left = constrainedLeft + 'px';
+    modalContainer.style.top = constrainedTop + 'px';
+    
+    // Store the position for future modal recreations
+    modalDragPosition = {
+      left: constrainedLeft,
+      top: constrainedTop
+    };
+  }
+  
+  function handleMouseUp() {
+    isDragging = false;
+    modalHeader.style.cursor = 'move';
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  }
+  
   // Append to body
   document.body.appendChild(modalOverlay);
   
@@ -1260,6 +1318,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     }
     currentModalOverlay = null;
     memoryModalShown = false;
+    // Reset drag position when modal is truly closed by user action
+    modalDragPosition = null;
   }
 
   // Function to show memories

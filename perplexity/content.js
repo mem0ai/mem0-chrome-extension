@@ -41,7 +41,7 @@ async function addMem0Button() {
   }
   
   // Find the container div that holds the buttons
-  const buttonContainer = modelSelectionButton.closest('.bg-background.dark\\:bg-offsetDark.flex.items-center.justify-self-end.rounded-full');
+  const buttonContainer = modelSelectionButton.closest('.bg-background-50.dark\\:bg-offsetDark.flex.items-center.justify-self-end.rounded-full');
   
   if (!buttonContainer) {
     setTimeout(addMem0Button, 500);

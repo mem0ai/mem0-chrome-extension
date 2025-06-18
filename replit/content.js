@@ -30,6 +30,7 @@ let notificationObserver = null;
 
 function getTextarea() {
   const selectors = [
+    'div[contenteditable="true"][class="cm-content cm-lineWrapping"][role="textbox"]',
     'div.cm-content.cm-lineWrapping[contenteditable="true"]',
     '.cm-content[contenteditable="true"]',
     'div[contenteditable="true"].cm-content',
@@ -232,6 +233,7 @@ let lastCapturedMessage = "";
 function addSendButtonListener() {
   
   const selectors = [
+    'button[data-cy="ai-prompt-submit"]',
     'button[data-cy="ai-chat-send-button"]',
     'button[aria-label="Send"]',
     'button[type="button"][aria-label="Send"]',
@@ -354,16 +356,28 @@ function addSendButtonListener() {
   if (textarea) {
     if (!textarea.dataset.mem0KeyListener) {
       textarea.dataset.mem0KeyListener = 'true';
+      
+      // Add keydown listener for Enter key
       textarea.addEventListener('keydown', function(event) {
-        if (event.key !== 'Enter' && event.key !== 'Shift') {
-          lastInputValue = lastInputValue + event.key;
+        // Update lastInputValue for non-control keys
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          setTimeout(() => {
+            lastInputValue = textarea.textContent || textarea.innerText || "";
+          }, 0);
         }
 
         // Check if Enter was pressed without Shift (standard send behavior)
         if (event.key === 'Enter' && !event.shiftKey) {
-          // Capture and store memory when Enter is pressed to send
-          captureAndStoreMemory();
+          // Small delay to ensure content is captured before send
+          setTimeout(() => {
+            captureAndStoreMemory();
+          }, 10);
         }
+      });
+      
+      // Also add keyup listener as backup
+      textarea.addEventListener('keyup', function(event) {
+        lastInputValue = textarea.textContent || textarea.innerText || "";
       });
     }
   } 
@@ -585,7 +599,7 @@ function initializeMem0Integration() {
 
        // Update notification dot
        updateNotificationDot();
-     }, 300); // Increase debounce to 300ms to give elements more time to appear
+     }, 100); // Reduce debounce to 100ms for faster response
   });
 
   // Add keyboard shortcut for Ctrl+M (only once)
@@ -641,8 +655,19 @@ setTimeout(() => {
   if (!isInitialized) {
     initializeMem0Integration();
   } else {
+    // Even if initialized, check if button needs to be injected
+    if (!document.querySelector('button[aria-label="Mem0"]')) {
+      injectMem0Button();
+    }
   }
 }, 2000);
+
+// Add another retry after 5 seconds
+setTimeout(() => {
+  if (!document.querySelector('button[aria-label="Mem0"]')) {
+    injectMem0Button();
+  }
+}, 5000);
 
 // Add a function to apply just the current memory to the input
 function applyMemoryToInput(memoryText) {
@@ -902,8 +927,16 @@ function showLoginPopup() {
 
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
   
-  // Close existing modal if it exists
+  // Preserve current modal position if it exists
+  let preservedPosition = null;
   if (memoryModalShown && currentModalOverlay) {
+    const existingModal = currentModalOverlay.querySelector('div[style*="position: absolute"]');
+    if (existingModal) {
+      preservedPosition = {
+        top: parseInt(existingModal.style.top) || 0,
+        left: parseInt(existingModal.style.left) || 0
+      };
+    }
     document.body.removeChild(currentModalOverlay);
   }
 
@@ -918,40 +951,52 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   let topPosition;
   let leftPosition;
   
-  // Position relative to the Mem0 button
-  const mem0Button = document.querySelector('button[aria-label="Mem0"]');
-  
-  if (mem0Button) {
-    const buttonRect = mem0Button.getBoundingClientRect();
+  // Use preserved position if available, otherwise calculate new position
+  if (preservedPosition) {
+    topPosition = preservedPosition.top;
+    leftPosition = preservedPosition.left;
     
-    // Determine if there's enough space below the button
-    const viewportHeight = window.innerHeight;
-    const spaceBelow = viewportHeight - buttonRect.bottom;
-    
-    // Position the modal centered under the button
-    leftPosition = Math.max(buttonRect.left + (buttonRect.width / 2) - (modalWidth / 2), 10);
-    // Ensure the modal doesn't go off the right edge of the screen
-    const rightEdgePosition = leftPosition + modalWidth;
-    if (rightEdgePosition > window.innerWidth - 10) {
-      leftPosition = window.innerWidth - modalWidth - 10;
-    }
-    
-    if (spaceBelow >= modalHeight) {
-      // Place below the button
-      topPosition = buttonRect.bottom + 10;
-    } else {
-      // Place above the button if not enough space below
-      topPosition = buttonRect.top - modalHeight - 10;
-      // Check if it's in the upper half of the screen
-      if (buttonRect.top < viewportHeight / 2) {
-        modalHeight = 300; // Reduced height
-        memoriesPerPage = 2; // Show only 2 memories
-      }
-    }
+    // Ensure the preserved position is still within viewport bounds
+    const maxX = window.innerWidth - modalWidth;
+    const maxY = window.innerHeight - modalHeight;
+    leftPosition = Math.max(0, Math.min(leftPosition, maxX));
+    topPosition = Math.max(0, Math.min(topPosition, maxY));
   } else {
-    // Fallback positioning
-    topPosition = 100;
-    leftPosition = window.innerWidth / 2 - modalWidth / 2;
+    // Position relative to the Mem0 button (original logic)
+    const mem0Button = document.querySelector('#mem0-floating-button');
+    
+    if (mem0Button) {
+      const buttonRect = mem0Button.getBoundingClientRect();
+      
+      // Determine if there's enough space below the button
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - buttonRect.bottom;
+      
+      // Position the modal centered under the button
+      leftPosition = Math.max(buttonRect.left + (buttonRect.width / 2) - (modalWidth / 2), 10);
+      // Ensure the modal doesn't go off the right edge of the screen
+      const rightEdgePosition = leftPosition + modalWidth;
+      if (rightEdgePosition > window.innerWidth - 10) {
+        leftPosition = window.innerWidth - modalWidth - 10;
+      }
+      
+      if (spaceBelow >= modalHeight) {
+        // Place below the button
+        topPosition = buttonRect.bottom + 10;
+      } else {
+        // Place above the button if not enough space below
+        topPosition = buttonRect.top - modalHeight - 10;
+        // Check if it's in the upper half of the screen
+        if (buttonRect.top < viewportHeight / 2) {
+          modalHeight = 300; // Reduced height
+          memoriesPerPage = 2; // Show only 2 memories
+        }
+      }
+    } else {
+      // Fallback positioning
+      topPosition = 100;
+      leftPosition = window.innerWidth / 2 - modalWidth / 2;
+    }
   }
   
   // Create modal overlay
@@ -997,10 +1042,61 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     border: 1px solid #5f6368;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     overflow: hidden;
+    cursor: move;
     `;
+
+  // Add drag functionality
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let modalStartX = 0;
+  let modalStartY = 0;
+
+  function startDrag(e) {
+    // Only allow dragging from the header area
+    if (e.target.closest('.mem0-modal-header') || e.target === modalContainer) {
+      isDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      modalStartX = parseInt(modalContainer.style.left);
+      modalStartY = parseInt(modalContainer.style.top);
+      modalContainer.style.cursor = 'grabbing';
+      e.preventDefault();
+    }
+  }
+
+  function doDrag(e) {
+    if (!isDragging) return;
+    
+    const deltaX = e.clientX - dragStartX;
+    const deltaY = e.clientY - dragStartY;
+    
+    let newX = modalStartX + deltaX;
+    let newY = modalStartY + deltaY;
+    
+    // Constrain to viewport
+    const maxX = window.innerWidth - modalWidth;
+    const maxY = window.innerHeight - modalHeight;
+    
+    newX = Math.max(0, Math.min(newX, maxX));
+    newY = Math.max(0, Math.min(newY, maxY));
+    
+    modalContainer.style.left = newX + 'px';
+    modalContainer.style.top = newY + 'px';
+  }
+
+  function stopDrag() {
+    isDragging = false;
+    modalContainer.style.cursor = 'move';
+  }
+
+  modalContainer.addEventListener('mousedown', startDrag);
+  document.addEventListener('mousemove', doDrag);
+  document.addEventListener('mouseup', stopDrag);
 
   // Create modal header
   const modalHeader = document.createElement('div');
+  modalHeader.className = 'mem0-modal-header';
   modalHeader.style.cssText = `
     display: flex;
     align-items: center;
@@ -1008,7 +1104,16 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     justify-content: space-between;
     background-color: #35373a;
     flex-shrink: 0;
+    cursor: grab;
   `;
+  
+  modalHeader.addEventListener('mousedown', () => {
+    modalHeader.style.cursor = 'grabbing';
+  });
+  
+  modalHeader.addEventListener('mouseup', () => {
+    modalHeader.style.cursor = 'grab';
+  });
 
   // Create header left section with just the logo
   const headerLeft = document.createElement('div');
@@ -1727,6 +1832,10 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   // Function to close the modal
   function closeModal() {
     if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
+      // Clean up drag event listeners
+      document.removeEventListener('mousemove', doDrag);
+      document.removeEventListener('mouseup', stopDrag);
+      
       document.body.removeChild(currentModalOverlay);
     }
     currentModalOverlay = null;
@@ -1736,76 +1845,52 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
 function injectMem0Button() {
   // Prevent duplicate button injection
-  if (buttonInjected || document.querySelector('button[aria-label="Mem0"]')) {
+  if (buttonInjected || document.querySelector('#mem0-floating-button')) {
     return;
   }
 
-  // Function to add the button (with limited retries)
-  async function tryAddButton(retryCount = 0) {
-    const maxRetries = 5;
-    
+  // Function to add the button
+  async function tryAddButton() {
     // First check if memory is enabled
     const memoryEnabled = await getMemoryEnabledState();
     
     // Remove existing button if memory is disabled
     if (!memoryEnabled) {
-      const existingButton = document.querySelector('button[aria-label="Mem0"]');
-      if (existingButton && existingButton.parentElement) {
-        existingButton.parentElement.remove();
+      const existingButton = document.querySelector('#mem0-floating-button');
+      if (existingButton) {
+        existingButton.remove();
         buttonInjected = false;
       }
       return;
     }
     
-    // Look for Replit's file upload/action buttons container
-    const buttonContainer = document.querySelector('.useView_view__C2mnv.useView_isHorizontal__Q1YOp.css-1jvoort') ||
-                           document.querySelector('[data-cy="ai-chat-input-container"]') || 
-                           document.querySelector('.cm-content') ||
-                           document.querySelector('[data-cy="ai-chat-send-button"]')?.parentElement?.parentElement;
-    
-    if (!buttonContainer && retryCount < maxRetries) {
-      setTimeout(() => tryAddButton(retryCount + 1), 1000);
-      return;
-    }
-    
-    if (!buttonContainer) {
-      return; // Give up after max retries
-    }
-    
     // Check if our button already exists
-    if (document.querySelector('button[aria-label="Mem0"]')) {
+    if (document.querySelector('#mem0-floating-button')) {
       buttonInjected = true;
       return;
     }
     
-    // Create mem0 button container - adapted for Replit's interface
-    const mem0ButtonContainer = document.createElement('div');
-    mem0ButtonContainer.style.cssText = `
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      margin-left: 8px;
-    `;
     
-    // Create mem0 button to match Replit's style
-    const mem0Button = document.createElement('button');
-    mem0Button.className = 'useView_view__C2mnv css-xi3tly';
-    mem0Button.setAttribute('aria-label', 'Mem0');
-    mem0Button.setAttribute('type', 'button');
-    mem0Button.id = 'mem0-icon-button';
-    mem0Button.style.cssText = `
-      --height: 24px;
-      --width: 24px;
-      padding: 8px;
-      border: none;
-      background: transparent;
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background-color 0.2s;
-      position: relative;
+    // Create floating button container
+    const floatingButton = document.createElement('div');
+    floatingButton.id = 'mem0-floating-button';
+    floatingButton.style.cssText = `
+      position: fixed !important;
+      bottom: 10px !important;
+      left: 10px !important;
+      width: 28px !important;
+      height: 28px !important;
+      border-radius: 50% !important;
+      background: linear-gradient(135deg,rgb(59, 59, 59) 0%,rgb(0, 0, 0) 100%) !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      z-index: 9999 !important;
+      transition: all 0.3s ease !important;
+      border: none !important;
+      user-select: none !important;
     `;
     
     // Create notification dot
@@ -1813,17 +1898,52 @@ function injectMem0Button() {
     notificationDot.id = 'mem0-notification-dot';
     notificationDot.style.cssText = `
       position: absolute;
-      top: 2px;
-      right: 2px;
+      top: -2px;
+      right: -2px;
       width: 8px;
       height: 8px;
       background-color: #34a853;
       border-radius: 50%;
-      border: 1px solid #fff;
+      border: 2px solid #fff;
       display: none;
-      z-index: 1001;
+      z-index: 10000;
       pointer-events: none;
     `;
+    
+    // Add icon to button
+    const iconImg = document.createElement('img');
+    iconImg.src = chrome.runtime.getURL('icons/mem0-claude-icon.png');
+    iconImg.style.cssText = `
+      width: 14px !important;
+      height: 14px !important;
+      border-radius: 50% !important;
+      pointer-events: none !important;
+    `;
+    
+    floatingButton.appendChild(iconImg);
+    floatingButton.appendChild(notificationDot);
+    
+    // Add hover effects
+    floatingButton.addEventListener('mouseenter', () => {
+      floatingButton.style.transform = 'scale(1.1)';
+      floatingButton.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.4)';
+    });
+    
+    floatingButton.addEventListener('mouseleave', () => {
+      floatingButton.style.transform = 'scale(1)';
+      floatingButton.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+    });
+    
+    // Add click event
+    floatingButton.addEventListener('click', function() {
+      getMemoryEnabledState().then(memoryEnabled => {
+        if (memoryEnabled) {
+          handleMem0Modal('mem0-floating-button');
+        } else {
+          chrome.runtime.sendMessage({ action: 'openOptions' });
+        }
+      });
+    });
     
     // Add keyframe animation for the dot (only once)
     if (!document.getElementById('notification-dot-animation')) {
@@ -1844,117 +1964,8 @@ function injectMem0Button() {
       document.head.appendChild(style);
     }
     
-    // Add icon to button
-    const iconImg = document.createElement('img');
-    iconImg.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
-    iconImg.style.cssText = `
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-    `;
-    
-    mem0Button.appendChild(iconImg);
-    
-    // Create popover element (hidden by default)
-    const popover = document.createElement('div');
-    popover.className = 'mem0-button-popover';
-    popover.style.cssText = `
-      position: absolute;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: #2d2e30;
-      border: 1px solid #5f6368;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      white-space: nowrap;
-      z-index: 10001;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-      display: none;
-      transition: opacity 0.2s;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    `;
-    popover.textContent = 'Add memories to your prompt';
-    
-    // Add arrow
-    const arrow = document.createElement('div');
-    arrow.style.cssText = `
-      position: absolute;
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%) rotate(45deg);
-      width: 8px;
-      height: 8px;
-      background-color: #2d2e30;
-      border-right: 1px solid #5f6368;
-      border-bottom: 1px solid #5f6368;
-    `;
-    popover.appendChild(arrow);
-    
-    // Add hover event for popover (prevent duplicate listeners)
-    if (!mem0ButtonContainer.dataset.hoverListener) {
-      mem0ButtonContainer.dataset.hoverListener = 'true';
-      
-      mem0ButtonContainer.addEventListener('mouseenter', () => {
-        popover.style.display = 'block';
-        setTimeout(() => popover.style.opacity = '1', 10);
-      });
-      
-      mem0ButtonContainer.addEventListener('mouseleave', () => {
-        popover.style.opacity = '0';
-        setTimeout(() => popover.style.display = 'none', 200);
-      });
-    }
-    
-    // Add hover effect for the button
-    mem0Button.addEventListener('mouseenter', () => {
-      mem0Button.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-    });
-    
-    mem0Button.addEventListener('mouseleave', () => {
-      mem0Button.style.backgroundColor = 'transparent';
-    });
-    
-    // Add click event to the mem0 button to show memory modal
-    mem0Button.addEventListener('click', function() {
-      // Check if the memories are enabled
-      getMemoryEnabledState().then(memoryEnabled => {
-        if (memoryEnabled) {
-          handleMem0Modal('mem0-icon-button');
-        } else {
-          // If memories are disabled, open options
-          chrome.runtime.sendMessage({ action: 'openOptions' });
-        }
-      });
-    });
-    
-    // Assemble button components
-    mem0ButtonContainer.appendChild(mem0Button);
-    mem0ButtonContainer.appendChild(notificationDot);
-    mem0ButtonContainer.appendChild(popover);
-    
-    // Insert the button into the file upload/action buttons container
-    
-    // Try to find the "2 files" button to place our button after it
-    const filesButton = buttonContainer.querySelector('button[aria-label="Select files"]') || 
-                       buttonContainer.querySelector('.Button_button__oRQ_x.css-vvpf01') ||
-                       buttonContainer.querySelector('button:has(span:contains("files"))');
-    
-    if (filesButton) {
-      // Insert our button after the "2 files" button
-      filesButton.insertAdjacentElement('afterend', mem0ButtonContainer);
-    } else {
-      // Fallback: try to find the first child div and place after it
-      const firstChild = buttonContainer.querySelector('.useView_view__C2mnv');
-      if (firstChild) {
-        firstChild.insertAdjacentElement('afterend', mem0ButtonContainer);
-      } else {
-        // Final fallback: append to button container
-        buttonContainer.appendChild(mem0ButtonContainer);
-      }
-    }
+    // Add to body
+    document.body.appendChild(floatingButton);
     
     buttonInjected = true;
     

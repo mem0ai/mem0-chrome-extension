@@ -13,6 +13,9 @@ let allMemoriesById = new Set();
 // Reference to the modal overlay for updates
 let currentModalOverlay = null;
 
+// Store dragged position
+let draggedPosition = null;
+
 let inputValueCopy = "";
 
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
@@ -32,8 +35,11 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   let topPosition;
   let leftPosition;
   
-  // Different positioning based on which button triggered the modal
-  if (sourceButtonId === 'mem0-icon-button') {
+  // Use dragged position if available, otherwise calculate based on button
+  if (draggedPosition) {
+    topPosition = draggedPosition.top;
+    leftPosition = draggedPosition.left;
+  } else if (sourceButtonId === 'mem0-icon-button') {
     // Position relative to the mem0-icon-button (in the input area)
     const iconButton = document.querySelector('#mem0-icon-button');
     if (iconButton) {
@@ -187,6 +193,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     justify-content: space-between;
     background-color: #232325;
     flex-shrink: 0;
+    cursor: move;
+    user-select: none;
   `;
 
   // Create header left section with just the logo
@@ -277,6 +285,56 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   });
   settingsBtn.addEventListener('mouseleave', () => {
     settingsBtn.style.opacity = '0.6';
+  });
+
+  // Add drag functionality to modal header
+  let isDragging = false;
+  let dragOffset = { x: 0, y: 0 };
+
+  modalHeader.addEventListener('mousedown', (e) => {
+    // Don't start dragging if clicking on buttons
+    if (e.target.closest('button')) return;
+    
+    isDragging = true;
+    modalHeader.style.cursor = 'grabbing';
+    
+    const modalRect = modalContainer.getBoundingClientRect();
+    dragOffset.x = e.clientX - modalRect.left;
+    dragOffset.y = e.clientY - modalRect.top;
+    
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    
+    const newLeft = e.clientX - dragOffset.x;
+    const newTop = e.clientY - dragOffset.y;
+    
+    // Constrain to viewport
+    const maxLeft = window.innerWidth - modalWidth;
+    const maxTop = window.innerHeight - modalHeight;
+    
+    const constrainedLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    const constrainedTop = Math.max(0, Math.min(newTop, maxTop));
+    
+    modalContainer.style.left = `${constrainedLeft}px`;
+    modalContainer.style.top = `${constrainedTop}px`;
+    
+    // Store the dragged position
+    draggedPosition = {
+      left: constrainedLeft,
+      top: constrainedTop
+    };
+    
+    e.preventDefault();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      modalHeader.style.cursor = 'move';
+    }
   });
 
   // Content section
@@ -860,6 +918,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     }
     currentModalOverlay = null;
     memoryModalShown = false;
+    // Reset dragged position when modal is explicitly closed
+    draggedPosition = null;
   }
 
   // Update Add to Prompt button click handler

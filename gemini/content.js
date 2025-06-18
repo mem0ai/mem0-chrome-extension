@@ -16,6 +16,20 @@ let currentModalOverlay = null;
 let inputObserver = null;
 let lastInputValue = "";
 
+// **PERFORMANCE FIX: Add initialization flags and cleanup variables**
+let isInitialized = false;
+let sendListenerAdded = false;
+let mainObserver = null;
+let notificationObserver = null;
+let memoryStateCheckInterval = null;
+let setupRetryCount = 0;
+const MAX_SETUP_RETRIES = 10;
+
+// **TIMING FIX: Add periodic element detection**
+let elementDetectionInterval = null;
+let lastFoundTextarea = null;
+let lastFoundSendButton = null;
+
 function getTextarea() {
   const selectors = [
     'rich-textarea .ql-editor[contenteditable="true"]',
@@ -28,17 +42,114 @@ function getTextarea() {
 
   for (const selector of selectors) {
     const textarea = document.querySelector(selector);
-    if (textarea) return textarea;
+    if (textarea) {
+      // **TIMING FIX: Store reference for comparison**
+      if (lastFoundTextarea !== textarea) {
+        lastFoundTextarea = textarea;
+        // Reset listener flag when new textarea is found
+        if (textarea.dataset.mem0KeyListener !== 'true') {
+          sendListenerAdded = false;
+        }
+      }
+      
+      // **PERFORMANCE FIX: Trigger listener setup if not done yet**
+      if (!sendListenerAdded) {
+        setTimeout(() => {
+          if (!sendListenerAdded) {
+            addSendButtonListener();
+          } else {
+          }
+        }, 500);
+      } else {
+      }
+      return textarea;
+    }
   }
   return null;
 }
 
+// **TIMING FIX: Add function to detect send button**
+function getSendButton() {
+  const selectors = [
+    'button[aria-label="Send message"]',
+    'button[data-testid="send-button"]',
+    'button[type="submit"]:not([aria-label*="attachment"])',
+    '.send-button',
+    'button[aria-label*="Send"]',
+    'button[title*="Send"]'
+  ];
+
+  for (const selector of selectors) {
+    const button = document.querySelector(selector);
+    if (button) {
+      
+      // **TIMING FIX: Store reference for comparison**
+      if (lastFoundSendButton !== button) {
+        lastFoundSendButton = button;
+        // Reset listener flag when new button is found
+        if (button.dataset.mem0Listener !== 'true') {
+          sendListenerAdded = false;
+        }
+      }
+      
+      return button;
+    }
+  }
+  return null;
+}
+
+// **TIMING FIX: Add periodic element detection**
+function startElementDetection() {
+  
+  if (elementDetectionInterval) {
+    clearInterval(elementDetectionInterval);
+  }
+  
+  elementDetectionInterval = setInterval(() => {
+    
+    const textarea = getTextarea();
+    const sendButton = getSendButton();
+    
+    // If we found elements and listeners aren't set up, try to set them up
+    if ((textarea || sendButton) && !sendListenerAdded) {
+      addSendButtonListener();
+    }
+    
+    // If both elements are found and listeners are set up, we can reduce frequency
+    if (textarea && sendButton && sendListenerAdded) {
+      clearInterval(elementDetectionInterval);
+      // Check less frequently once everything is set up
+      elementDetectionInterval = setInterval(() => {
+        const currentTextarea = getTextarea();
+        const currentSendButton = getSendButton();
+        
+        if ((!currentTextarea || !currentSendButton) && sendListenerAdded) {
+          sendListenerAdded = false;
+          lastFoundTextarea = null;
+          lastFoundSendButton = null;
+        }
+      }, 5000); // Check every 5 seconds for maintenance
+    }
+  }, 1000); // Check every second initially
+}
+
 function setupInputObserver() {
-  const textarea = getTextarea();
-  if (!textarea) {
-    setTimeout(setupInputObserver, 500);
+  // **PERFORMANCE FIX: Prevent multiple observers and add retry limit**
+  if (inputObserver) {
     return;
   }
+  
+  const textarea = getTextarea();
+  if (!textarea) {
+    if (setupRetryCount < MAX_SETUP_RETRIES) {
+      setupRetryCount++;
+      setTimeout(setupInputObserver, 500);
+    }
+    return;
+  }
+
+  // **PERFORMANCE FIX: Reset retry count on success**
+  setupRetryCount = 0;
 
   inputObserver = new MutationObserver((mutations) => {
     for (let mutation of mutations) {
@@ -57,6 +168,7 @@ function setupInputObserver() {
   textarea.addEventListener("input", function () {
     lastInputValue = this.textContent || this.innerText || "";
   });
+  
 }
 
 function setInputValue(inputElement, value) {
@@ -164,22 +276,22 @@ let lastCapturedMessage = "";
 
 // Add a function to handle send button actions and clear memories after sending
 function addSendButtonListener() {
-  const selectors = [
-    'button[aria-label="Send message"]',
-    'button[data-testid="send-button"]',
-    'button[type="submit"]:not([aria-label*="attachment"])',
-    '.send-button',
-    'button[aria-label*="Send"]',
-    'button[title*="Send"]'
-  ];
+  // **PERFORMANCE FIX: Prevent duplicate listener registration**
+  if (sendListenerAdded) {
+    return;
+  }
 
   // Handle capturing and storing the current message
   function captureAndStoreMemory() {
     const textarea = getTextarea();
-    if (!textarea) return;
+    if (!textarea) {
+      return;
+    }
     
     const message = (textarea.textContent || textarea.innerText || "").trim();
-    if (!message) return;
+    if (!message) {
+      return;
+    }
     
     // Clean message from any existing memory content
     const cleanMessage = getContentWithoutMemories();
@@ -241,31 +353,41 @@ function addSendButtonListener() {
     }, 100);
   }
 
-  // Find and add listeners to the send button
-  let sendButton = null;
-  for (const selector of selectors) {
-    sendButton = document.querySelector(selector);
-    if (sendButton && !sendButton.dataset.mem0Listener) {
-      sendButton.dataset.mem0Listener = 'true';
-      sendButton.addEventListener('click', function() {
-        captureAndStoreMemory();
-      });
-      break;
-    }
+  // **TIMING FIX: Use the new getSendButton function**
+  const sendButton = getSendButton();
+  
+  if (sendButton && !sendButton.dataset.mem0Listener) {
+    sendButton.dataset.mem0Listener = 'true';
+    sendButton.addEventListener('click', function() {
+      captureAndStoreMemory();
+    });
+  } else if (sendButton) {
   }
   
   // Handle textarea for Enter key press separately
   const textarea = getTextarea();
-  if (textarea && !textarea.dataset.mem0KeyListener) {
-    textarea.dataset.mem0KeyListener = 'true';
-    textarea.addEventListener('keydown', function(event) {
-      // Check if Enter was pressed without Shift (standard send behavior)
-      if (event.key === 'Enter' && !event.shiftKey) {
-        // Don't capture here if send button will also trigger
-        // The send button click will handle the capture
-        return;
-      }
-    });
+  
+  if (textarea) {
+    if (!textarea.dataset.mem0KeyListener) {
+      textarea.dataset.mem0KeyListener = 'true';
+      textarea.addEventListener('keydown', function(event) {
+        
+        // Check if Enter was pressed without Shift (standard send behavior)
+        if (event.key === 'Enter' && !event.shiftKey) {
+          // Don't capture here if send button will also trigger
+          // The send button click will handle the capture
+          return;
+        }
+      });
+    } else {
+    }
+  } else {
+  }
+  
+  // **TIMING FIX: Only mark as added if we actually found and set up both elements**
+  if (textarea && sendButton) {
+    sendListenerAdded = true;
+  } else {
   }
 }
 
@@ -390,8 +512,18 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
 }
 
 function injectMem0Button() {
+  // **PERFORMANCE FIX: Add retry counter for button injection**
+  let buttonRetryCount = 0;
+  const maxButtonRetries = 10;
+  
   // Function to periodically check and add the button if the parent element exists
   async function tryAddButton() {
+    
+    // **PERFORMANCE FIX: Add retry limit**
+    if (buttonRetryCount >= maxButtonRetries) {
+      return;
+    }
+    buttonRetryCount++;
     
     // First check if memory is enabled
     const memoryEnabled = await getMemoryEnabledState();
@@ -402,8 +534,9 @@ function injectMem0Button() {
       if (existingButton && existingButton.parentElement) {
         existingButton.parentElement.remove();
       }
-      // Check again after some time in case the state changes
-      setTimeout(tryAddButton, 5000);
+      // **PERFORMANCE FIX: Reset retry count and set longer timeout**
+      buttonRetryCount = 0;
+      setTimeout(tryAddButton, 10000);
       return;
     }
     
@@ -417,8 +550,13 @@ function injectMem0Button() {
     
     // Check if our button already exists
     if (document.querySelector('button[aria-label="Mem0"]')) {
+      // **PERFORMANCE FIX: Reset retry count on success**
+      buttonRetryCount = 0;
       return;
     }
+    
+    // **PERFORMANCE FIX: Reset retry count when successfully creating button**
+    buttonRetryCount = 0;
     
     // Create mem0 button container to match toolbox-drawer-item structure
     const mem0ButtonContainer = document.createElement('toolbox-drawer-item');
@@ -581,21 +719,6 @@ function injectMem0Button() {
   
   // Start trying to add the button
   tryAddButton();
-  
-  // Also observe DOM changes to add button when needed
-  const observer = new MutationObserver(() => {
-    if (!document.querySelector('button[aria-label="Mem0"]')) {
-      tryAddButton();
-    }
-    
-    // Also update notification dot when DOM changes
-    updateNotificationDot();
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
 }
 
 // Function to update notification dot visibility based on text in the input
@@ -619,11 +742,16 @@ function updateNotificationDot() {
       }
     };
     
+    // **PERFORMANCE FIX: Clean up existing observer first**
+    if (notificationObserver) {
+      notificationObserver.disconnect();
+    }
+    
     // Set up an observer to watch for changes to the input field
-    const inputObserver = new MutationObserver(checkForText);
+    notificationObserver = new MutationObserver(checkForText);
     
     // Start observing the input element
-    inputObserver.observe(textarea, { 
+    notificationObserver.observe(textarea, { 
       characterData: true, 
       subtree: true,
       childList: true
@@ -640,8 +768,18 @@ function updateNotificationDot() {
     // Force check after a small delay to ensure DOM is fully loaded
     setTimeout(checkForText, 500);
   } else {
-    // If elements aren't found immediately, try again after a short delay
-    setTimeout(updateNotificationDot, 1000);
+    // **PERFORMANCE FIX: Add retry limit for notification dot setup**
+    let notificationRetryCount = 0;
+    const maxNotificationRetries = 5;
+    
+    const retryNotificationSetup = () => {
+      if (notificationRetryCount < maxNotificationRetries) {
+        notificationRetryCount++;
+        setTimeout(updateNotificationDot, 1000);
+      }
+    };
+    
+    retryNotificationSetup();
   }
 }
 
@@ -1898,57 +2036,207 @@ async function handleMem0Modal(sourceButtonId = null) {
 }
 
 function initializeMem0Integration() {
-  setupInputObserver();
-  injectMem0Button();
-  addSendButtonListener();
+  // **PERFORMANCE FIX: Prevent multiple initializations**
+  if (isInitialized) {
+    return;
+  }
   
-  // Set up mutation observer to reinject elements when DOM changes
-  const observer = new MutationObserver(async () => {
-    // Check memory state first
-    const memoryEnabled = await getMemoryEnabledState();
+  try {
+    setupInputObserver();
+    injectMem0Button();
+    addSendButtonListener();
     
-    // Only inject the button if memory is enabled
-    if (memoryEnabled) {
-      injectMem0Button();
-      addSendButtonListener();
-      updateNotificationDot();
-    } else {
-      // Remove the button if memory is disabled
-      const existingButton = document.querySelector('button[aria-label="Mem0"]');
-      if (existingButton && existingButton.parentElement) {
-        existingButton.parentElement.remove();
+    // **TIMING FIX: Start periodic element detection**
+    startElementDetection();
+    
+    // **PERFORMANCE FIX: Clean up existing main observer**
+    if (mainObserver) {
+      mainObserver.disconnect();
+      if (mainObserver.memoryStateInterval) {
+        clearInterval(mainObserver.memoryStateInterval);
       }
     }
-  });
 
-  // Add keyboard shortcut for Ctrl+M
-  document.addEventListener("keydown", function (event) {
-    if (event.ctrlKey && event.key === "m") {
-      event.preventDefault();
-      (async () => {
-        await handleMem0Modal('mem0-icon-button');
-      })();
-    }
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  // Also check memory state periodically in case it changes
-  setInterval(async () => {
-    const memoryEnabled = await getMemoryEnabledState();
-    if (!memoryEnabled) {
-      const existingButton = document.querySelector('button[aria-label="Mem0"]');
-      if (existingButton && existingButton.parentElement) {
-        existingButton.parentElement.remove();
+    // **PERFORMANCE FIX: Consolidated debounced observer with self-trigger prevention**
+    let isObserverRunning = false; // Prevent self-triggering
+    
+    mainObserver = new MutationObserver(async (mutations) => {
+      // **PERFORMANCE FIX: Prevent observer self-triggering**
+      if (isObserverRunning) {
+        return;
       }
-    } else if (!document.querySelector('button[aria-label="Mem0"]')) {
-      injectMem0Button();
-    }
-  }, 5000);
+      
+      // **PERFORMANCE FIX: Filter out our own changes**
+      const relevantMutations = mutations.filter(mutation => {
+        // Skip mutations on our own elements
+        if (mutation.target && (
+          mutation.target.id === 'mem0-notification-dot' ||
+          mutation.target.classList?.contains('mem0-button-popover') ||
+          mutation.target.classList?.contains('toolbox-drawer-item') ||
+          mutation.target.querySelector?.('[aria-label="Mem0"]')
+        )) {
+          return false;
+        }
+        
+        // Only care about significant structural changes
+        if (mutation.type === 'childList') {
+          // Only if nodes were added/removed, not just text changes
+          return mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0;
+        }
+        
+        return mutation.type === 'attributes' && 
+               (mutation.attributeName === 'class' || mutation.attributeName === 'id');
+      });
+      
+      if (relevantMutations.length === 0) {
+        return;
+      }
+      
+      
+      // Clear existing debounce timer
+      clearTimeout(mainObserver.debounceTimer);
+      
+      // Debounce the actual work
+      mainObserver.debounceTimer = setTimeout(async () => {
+        if (isObserverRunning) {
+          return;
+        }
+        
+        isObserverRunning = true;
+        
+        try {
+          // **PERFORMANCE FIX: Temporarily disconnect observer during DOM modifications**
+          mainObserver.disconnect();
+          
+          // Check memory state first
+          const memoryEnabled = await getMemoryEnabledState();
+          
+          // Only inject the button if memory is enabled
+          if (memoryEnabled) {
+            if (!document.querySelector('button[aria-label="Mem0"]')) {
+              injectMem0Button();
+            }
+            if (!sendListenerAdded) {
+              addSendButtonListener();
+            }
+            updateNotificationDot();
+          } else {
+            // Remove the button if memory is disabled
+            const existingButton = document.querySelector('button[aria-label="Mem0"]');
+            if (existingButton && existingButton.parentElement) {
+              existingButton.parentElement.remove();
+            }
+          }
+          
+          // **PERFORMANCE FIX: Reconnect observer after DOM modifications**
+          setTimeout(() => {
+            if (mainObserver) {
+              mainObserver.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributeFilter: ['class', 'id']
+              });
+            }
+          }, 100);
+          
+        } catch (error) {
+          console.error('[MEM0 DEBUG] Error in main observer:', error);
+          // Reconnect observer even if there was an error
+          setTimeout(() => {
+            if (mainObserver) {
+              mainObserver.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributeFilter: ['class', 'id']
+              });
+            }
+          }, 100);
+        } finally {
+          isObserverRunning = false;
+        }
+      }, 500); // Increased debounce to 500ms
+    });
+
+    // Add keyboard shortcut for Ctrl+M
+    document.addEventListener("keydown", function (event) {
+      if (event.ctrlKey && event.key === "m") {
+        event.preventDefault();
+        (async () => {
+          await handleMem0Modal('mem0-icon-button');
+        })();
+      }
+    });
+    
+    // **PERFORMANCE FIX: Observe with more specific targeting**
+    mainObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributeFilter: ['class', 'id'] // Only observe relevant attribute changes
+    });
+    
+    // **PERFORMANCE FIX: Reduce polling frequency and add cleanup**
+    const memoryStateCheckInterval = setInterval(async () => {
+      try {
+        const memoryEnabled = await getMemoryEnabledState();
+        if (!memoryEnabled) {
+          const existingButton = document.querySelector('button[aria-label="Mem0"]');
+          if (existingButton && existingButton.parentElement) {
+            existingButton.parentElement.remove();
+          }
+        } else if (!document.querySelector('button[aria-label="Mem0"]')) {
+          injectMem0Button();
+        }
+      } catch (error) {
+        console.error('[MEM0 DEBUG] Error in memory state check:', error);
+      }
+    }, 15000); // Increased from 10s to 15s to reduce frequency further
+    
+    // Store reference for cleanup
+    mainObserver.memoryStateInterval = memoryStateCheckInterval;
+    
+    // **PERFORMANCE FIX: Mark as initialized**
+    isInitialized = true;
+    
+  } catch (error) {
+    console.error('[MEM0 DEBUG] Error initializing Mem0 integration:', error);
+  }
 }
+
+// **PERFORMANCE FIX: Add cleanup function**
+function cleanup() {
+  if (mainObserver) {
+    mainObserver.disconnect();
+    if (mainObserver.memoryStateInterval) {
+      clearInterval(mainObserver.memoryStateInterval);
+    }
+    if (mainObserver.debounceTimer) {
+      clearTimeout(mainObserver.debounceTimer);
+    }
+  }
+  
+  if (notificationObserver) {
+    notificationObserver.disconnect();
+  }
+  
+  if (inputObserver) {
+    inputObserver.disconnect();
+  }
+  
+  // **TIMING FIX: Clean up element detection interval**
+  if (elementDetectionInterval) {
+    clearInterval(elementDetectionInterval);
+  }
+  
+  // Reset flags
+  isInitialized = false;
+  sendListenerAdded = false;
+  setupRetryCount = 0;
+  lastFoundTextarea = null;
+  lastFoundSendButton = null;
+}
+
+// **PERFORMANCE FIX: Clean up on page unload**
+window.addEventListener('beforeunload', cleanup);
 
 // Initialize the integration when the page loads
 initializeMem0Integration();

@@ -21,37 +21,32 @@
     if (sidebar) {
       // If sidebar exists, toggle its visibility
       sidebarVisible = !sidebarVisible;
-      sidebar.style.right = sidebarVisible ? "0px" : "-450px";
+      sidebar.style.right = sidebarVisible ? "0px" : "-600px";
 
       // Add or remove click listener based on sidebar visibility
       if (sidebarVisible) {
         document.addEventListener("click", handleOutsideClick);
-        document.addEventListener("keydown", handleEscapeKey); // Add this line
-        fetchAndDisplayMemories(); // Fetch and display memories when sidebar is opened
+        document.addEventListener("keydown", handleEscapeKey);
+        fetchMemoriesAndCount();
       } else {
         document.removeEventListener("click", handleOutsideClick);
-        document.removeEventListener("keydown", handleEscapeKey); // Add this line
+        document.removeEventListener("keydown", handleEscapeKey);
       }
     } else {
       // If sidebar doesn't exist, create it
       createSidebar();
       sidebarVisible = true;
       document.addEventListener("click", handleOutsideClick);
-      document.addEventListener("keydown", handleEscapeKey); // Add this line
-      fetchAndDisplayMemories(); // Fetch and display memories when sidebar is created
+      document.addEventListener("keydown", handleEscapeKey);
     }
   }
 
-  // Add this new function
   function handleEscapeKey(event) {
     if (event.key === "Escape") {
       const searchInput = document.querySelector(".search-memory");
-      const addInput = document.querySelector(".add-memory");
 
       if (searchInput) {
         closeSearchInput();
-      } else if (addInput) {
-        closeAddMemoryInput();
       } else {
         toggleSidebar();
       }
@@ -76,139 +71,117 @@
 
     const sidebarContainer = document.createElement("div");
     sidebarContainer.id = "mem0-sidebar";
-    sidebarContainer.style.cssText = `
-        position: fixed; 
-        top: 10px;
-        right: -400px;
-        color: #000;
-        width: 400px;
-        height: calc(100vh - 20px);
-        background-color: #ffffff;
-        z-index: 2147483647;
-        box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
-        transition: right 0.3s ease-in-out;
-        display: flex;
-        flex-direction: column;
-        justify-content: flex-start;
-        align-items: center;
-        padding: 0;
-        box-sizing: border-box;
-        overflow-y: auto;
-        border-radius: 10px;
-        margin-right: 10px;
-      `;
 
     // Create fixed header
     const fixedHeader = document.createElement("div");
     fixedHeader.className = "fixed-header";
-    const iconPath = (iconName) => chrome.runtime.getURL(`icons/${iconName}`);
     fixedHeader.innerHTML = `
-        <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="header">
           <div class="logo-container">
-            <img src="${iconPath(
-              "mem0-logo.png"
-            )}" alt="Mem0 Logo" class="logo">
+            <img src=${chrome.runtime.getURL("icons/mem0-claude-icon.png")} class="openmemory-icon" alt="OpenMemory Logo">
+            <span class="openmemory-logo">OpenMemory</span>
           </div>
           <div class="header-buttons">
-            <button id="searchBtn" class="header-icon-button" title="Search Memories">
-              <img src="${iconPath(
-                "search.svg"
-              )}" alt="Search" class="svg-icon">
-            </button>
-            <button id="addMemoryBtn" class="header-icon-button" title="Add Memory">
-              <img src="${iconPath(
-                "add.svg"
-              )}" alt="Add Memory" class="svg-icon">
-            </button>
-            <button id="ellipsisMenuBtn" class="header-icon-button" title="More options">
-              <img src="${iconPath(
-                "ellipsis.svg"
-              )}" alt="More options" class="svg-icon">
+            <button id="closeBtn" class="close-button" title="Close">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </button>
           </div>
         </div>
       `;
 
-    // Create a container for search and add inputs
+    // Create a container for search inputs
     const inputContainer = document.createElement("div");
     inputContainer.className = "input-container";
     fixedHeader.appendChild(inputContainer);
 
     sidebarContainer.appendChild(fixedHeader);
 
-    // Create ellipsis menu
-    const ellipsisMenu = document.createElement("div");
-    ellipsisMenu.id = "ellipsisMenu";
-    ellipsisMenu.className = "ellipsis-menu";
-    ellipsisMenu.innerHTML = `
-        <button id="openDashboardBtn">Open Dashboard</button>
-        <button id="logoutBtn">Logout</button>
-      `;
-    fixedHeader.appendChild(ellipsisMenu);
-
-    // Create scroll area with loading indicator
-    const scrollArea = document.createElement("div");
-    scrollArea.className = "scroll-area";
-    scrollArea.innerHTML = `
-        <div class="loading-indicator">
-          <div class="loader"></div><br/>
-          <p style="font-size: 12px; color: #888;">Loading memories...</p>
+    // Create content container
+    const contentContainer = document.createElement("div");
+    contentContainer.className = "content";
+    
+    // Create memory count display
+    const memoryCountContainer = document.createElement("div");
+    memoryCountContainer.className = "total-memories";
+    memoryCountContainer.innerHTML = `
+      <div class="total-memories-content">
+        <div>
+          <p class="total-memories-label">Total Memories</p>
+          <h3 class="memory-count loading">Loading...</h3>
         </div>
-      `;
-    sidebarContainer.appendChild(scrollArea);
-
-    // Add this line after creating the scroll area
-    fetchAndDisplayMemories();
-
-    // Add event listener for the search button
-    const searchBtn = fixedHeader.querySelector("#searchBtn");
-    searchBtn.addEventListener("click", toggleSearch);
-
-    // Add event listener for the Add Memory button
-    const addMemoryBtn = fixedHeader.querySelector("#addMemoryBtn");
-    addMemoryBtn.addEventListener("click", addNewMemory);
-
-    // Add event listener for ellipsis menu button
-    const ellipsisMenuBtn = fixedHeader.querySelector("#ellipsisMenuBtn");
-    ellipsisMenuBtn.addEventListener("click", toggleEllipsisMenu);
-
-    // Add event listeners for ellipsis menu options
-    const openDashboardBtn = ellipsisMenu.querySelector("#openDashboardBtn");
-    openDashboardBtn.addEventListener("click", openDashboard);
-
-    const logoutBtn = ellipsisMenu.querySelector("#logoutBtn");
-    logoutBtn.addEventListener("click", logout);
-
-    // Replace the existing footer-toggle div with this updated version
-    const footerToggle = document.createElement("div");
-    footerToggle.className = "footer-toggle";
-    footerToggle.innerHTML = `
-      <span class="shortcut-text">Mem0 Shortcut: ^ + M</span>
-      <div class="toggle-container">
-        <span class="toggle-text">Memory enabled</span>
-        <label class="switch">
-          <input type="checkbox" id="mem0Toggle">
-          <span class="slider round"></span>
-        </label>
+        <button id="openDashboardBtn" class="dashboard-button">
+          Open Dashboard
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="external-link-icon">
+            <path d="M7 17L17 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 7H17V17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     `;
+    contentContainer.appendChild(memoryCountContainer);
+
+    // Create toggle section with section header and description
+    const toggleSection = document.createElement("div");
+    toggleSection.className = "section";
+    toggleSection.innerHTML = `
+      <div class="section-header">
+        <h2 class="section-title">Memory Suggestions</h2>
+        <label class="switch">
+          <input type="checkbox" id="mem0Toggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="section-description">Get relevant memories suggested while interacting with AI Agents</p>
+    `;
+    contentContainer.appendChild(toggleSection);
+    
+    // Add memories section
+    const memoriesSection = document.createElement("div");
+    memoriesSection.className = "section";
+    memoriesSection.innerHTML = `
+      <h2 class="section-title">Recent Memories</h2>
+      <div class="memory-cards">
+        <div class="memory-loader">
+          <div class="loader"></div>
+        </div>
+      </div>
+    `;
+    contentContainer.appendChild(memoriesSection);
+    
+    sidebarContainer.appendChild(contentContainer);
+
+    // Create footer with shortcut and logout
+    const footerToggle = document.createElement("div");
+    footerToggle.className = "footer";
+    footerToggle.innerHTML = `
+      <div class="shortcut">Shortcut : ^ + M</div>
+      <button id="logoutBtn" class="logout-button"><span>Logout</span></button>
+    `;
+    
     chrome.storage.sync.get(["memory_enabled"], function (result) {
-      const toggleCheckbox = footerToggle.querySelector("#mem0Toggle");
+      const toggleCheckbox = toggleSection.querySelector("#mem0Toggle");
       toggleCheckbox.checked = result.memory_enabled !== false;
-      const toggleText = footerToggle.querySelector(".toggle-text");
-      toggleText.textContent = toggleCheckbox.checked
-        ? "Memory enabled"
-        : "Memory disabled";
     });
+    
     sidebarContainer.appendChild(footerToggle);
 
+    // Add event listener for the close button
+    const closeBtn = fixedHeader.querySelector("#closeBtn");
+    closeBtn.addEventListener("click", toggleSidebar);
+
+    // Add event listeners for dashboard and logout
+    const openDashboardBtn = memoryCountContainer.querySelector("#openDashboardBtn");
+    openDashboardBtn.addEventListener("click", openDashboard);
+
+    const logoutBtn = footerToggle.querySelector("#logoutBtn");
+    logoutBtn.addEventListener("click", logout);
+
     // Add event listener for the toggle
-    const toggleCheckbox = footerToggle.querySelector("#mem0Toggle");
-    const toggleText = footerToggle.querySelector(".toggle-text");
+    const toggleCheckbox = toggleSection.querySelector("#mem0Toggle");
     toggleCheckbox.addEventListener("change", function () {
-      toggleText.textContent = this.checked
-        ? "Memory enabled"
-        : "Memory disabled";
       // Send toggle event to API
       chrome.storage.sync.get(["memory_enabled", "apiKey", "access_token"], function (data) {
         const headers = getHeaders(data.apiKey, data.access_token);
@@ -217,7 +190,7 @@
           headers: headers,
           body: JSON.stringify({
             event_type: "extension_toggle_button",
-            additional_data: { "status": data.memory_enabled },
+            additional_data: { "status": toggleCheckbox.checked },
           }),
         }).catch(error => {
           console.error("Error sending toggle event:", error);
@@ -245,157 +218,48 @@
 
     // Add styles
     addStyles();
+    
+    // Fetch memories and count
+    fetchMemoriesAndCount();
   }
 
-  function fetchAndDisplayMemories(newMemory = false) {
+  function fetchMemoriesAndCount() {
     chrome.storage.sync.get(
       ["apiKey", "userId", "access_token"],
       function (data) {
         if (data.apiKey || data.access_token) {
           const headers = getHeaders(data.apiKey, data.access_token);
-          fetch(`https://api.mem0.ai/v1/memories/?user_id=${data.userId}`, {
+          const userId = "chrome-extension-user";
+          fetch(`https://api.mem0.ai/v1/memories/?user_id=${userId}&page=1&page_size=20`, {
             method: "GET",
             headers: headers,
           })
             .then((response) => response.json())
             .then((data) => {
-              // Sort memories by created_at in descending order
-              data.sort(
-                (a, b) => new Date(b.created_at) - new Date(a.created_at)
-              );
-              displayMemories(data);
-              if (newMemory) {
-                const scrollArea = document.querySelector(".scroll-area");
-                if (scrollArea) {
-                  scrollArea.scrollTop = 0; // Scroll to the top
-                  // Highlight the new memory
-                  const newMemoryElement = scrollArea.firstElementChild;
-                  if (newMemoryElement) {
-                    newMemoryElement.classList.add("highlight");
-                    newMemoryElement.scrollIntoView({ behavior: "smooth" });
-                    setTimeout(() => {
-                      newMemoryElement.classList.remove("highlight");
-                    }, 750);
-                  }
-                }
-              }
+              // Update count and display memories
+              updateMemoryCount(data.count || 0);
+              displayMemories(data.results || []);
             })
             .catch((error) => {
               console.error("Error fetching memories:", error);
-              const scrollArea = document.querySelector(".scroll-area");
-              scrollArea.innerHTML = "<p>Error fetching memories</p>";
+              updateMemoryCount("Error");
+              displayErrorMessage();
             });
         } else {
-          const scrollArea = document.querySelector(".scroll-area");
-          scrollArea.innerHTML = "<p>Please set up your API key or log in</p>";
+          updateMemoryCount("Login required");
+          displayErrorMessage("Login required to view memories");
         }
       }
     );
   }
 
-  function displayMemories(memories) {
-    const scrollArea = document.querySelector(".scroll-area");
-    scrollArea.innerHTML = "";
-
-    // Show or hide search button based on presence of memories
-    const searchBtn = document.getElementById("searchBtn");
-    if (memories.length === 0) {
-      searchBtn.style.display = "none";
-      scrollArea.innerHTML = `
-        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; padding: 0px 15px 15px 15px; text-align: center;">
-          <p>No memories found</p><br/>
-          <p style="color: grey;">Click the + button to add a new memory or use Mem0 with the AI chatbot of your choice.</p>
-        </div>
-      `;
-    } else {
-      searchBtn.style.display = "flex";
-      memories.forEach((memoryItem) => {
-        const memoryElement = document.createElement("div");
-        memoryElement.className = "memory-item";
-
-        const createdAt = new Date(memoryItem.created_at);
-        const formattedDate = createdAt.toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        });
-
-        const allCategories = [
-          ...(memoryItem.categories || []),
-          ...(memoryItem.custom_categories || []),
-        ];
-        const categoryHtml =
-          allCategories.length > 0
-            ? `<div class="categories">${allCategories
-                .map((cat) => `<span class="category">${cat}</span>`)
-                .join("")}</div>`
-            : "";
-
-        // Get the provider from metadata or use "Mem0" as default
-        const provider =
-          memoryItem.metadata && memoryItem.metadata.provider
-            ? memoryItem.metadata.provider.toLowerCase()
-            : "mem0";
-
-        const iconPath = (iconName) =>
-          chrome.runtime.getURL(`icons/${iconName}`);
-
-        // Define the icon mapping
-        const providerIcons = {
-          chatgpt: "chatgpt.png",
-          claude: "claude.png",
-          perplexity: "perplexity.png",
-          mem0: "mem0-claude-icon-purple.png",
-          grok: "grok.svg",
-        };
-
-        // Get the appropriate icon or use the default
-        const providerIcon =
-          providerIcons[provider] || "mem0-claude-icon-purple.png";
-
-        memoryElement.innerHTML = `
-          <div class="memory-content">
-            <div class="memory-top">
-              <span class="memory-text">${memoryItem.memory}</span>
-              <div class="memory-buttons">
-                <button class="icon-button edit-btn" data-id="${memoryItem.id}">
-                  <img src="${iconPath(
-                    "edit.svg"
-                  )}" alt="Edit" class="svg-icon">
-                </button>
-                <button class="icon-button delete-btn" data-id="${
-                  memoryItem.id
-                }">
-                  <img src="${iconPath(
-                    "delete.svg"
-                  )}" alt="Delete" class="svg-icon">
-                </button>
-              </div>
-            </div>
-            <div class="memory-bottom">
-              <div class="memory-categories">
-                <img src="${iconPath(
-                  providerIcon
-                )}" alt="${provider}" class="provider-icon" style="width: 16px; height: 16px; margin-right: 5px;">
-                ${categoryHtml}
-              </div>
-              <div class="memory-date">${formattedDate}</div>
-            </div>
-          </div>
-        `;
-        scrollArea.appendChild(memoryElement);
-
-        // Add event listeners for edit and delete buttons
-        const editBtn = memoryElement.querySelector(".edit-btn");
-        const deleteBtn = memoryElement.querySelector(".delete-btn");
-
-        editBtn.addEventListener("click", () =>
-          editMemory(memoryItem.id, memoryElement)
-        );
-        deleteBtn.addEventListener("click", () =>
-          deleteMemory(memoryItem.id, memoryElement)
-        );
-      });
+  function updateMemoryCount(count) {
+    const countDisplay = document.querySelector(".memory-count");
+    if (countDisplay) {
+      countDisplay.classList.remove("loading");
+      countDisplay.textContent = typeof count === 'number' ? 
+        new Intl.NumberFormat().format(count) + " Memories" : 
+        count;
     }
   }
 
@@ -409,223 +273,6 @@
       headers["Authorization"] = `Bearer ${accessToken}`;
     }
     return headers;
-  }
-
-  function editMemory(memoryId, memoryElement) {
-    const memoryText = memoryElement.querySelector(".memory-text");
-    const editBtn = memoryElement.querySelector(".edit-btn");
-
-    if (editBtn.classList.contains("editing")) {
-      // Save the edited memory
-      saveEditedMemory();
-    } else {
-      // Enter edit mode
-      memoryText.contentEditable = "true";
-      memoryText.classList.add("editing");
-      memoryText.setAttribute(
-        "data-original-content",
-        memoryText.textContent.trim()
-      );
-      const iconPath = (iconName) => chrome.runtime.getURL(`icons/${iconName}`);
-      editBtn.innerHTML = `<img src="${iconPath(
-        "done.svg"
-      )}" alt="Done" class="svg-icon">`;
-      editBtn.classList.add("editing");
-
-      // Set cursor to the end of the text
-      const range = document.createRange();
-      const selection = window.getSelection();
-      range.selectNodeContents(memoryText);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      memoryText.focus();
-
-      // Add event listener for the Enter key
-      memoryText.addEventListener("keydown", handleEnterKey);
-    }
-
-    function handleEnterKey(event) {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        saveEditedMemory();
-      }
-    }
-
-    function saveEditedMemory() {
-      const newContent = memoryText.textContent.trim();
-      const originalContent = memoryText.getAttribute("data-original-content");
-
-      if (newContent === originalContent) {
-        // Memory content hasn't changed, exit edit mode without making an API call
-        exitEditMode();
-        return;
-      }
-
-      chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-        const headers = getHeaders(data.apiKey, data.access_token);
-
-        editBtn.innerHTML = `<div class="loader"></div>`;
-        editBtn.disabled = true;
-
-        // Send edit event to API
-        fetch(`https://api.mem0.ai/v1/extension/`, {
-          method: "POST",
-          headers: headers,
-          body: JSON.stringify({ event_type: "extension_edit_event" }),
-        }).catch(error => {
-          console.error("Error sending edit event:", error);
-        });
-
-        fetch(`https://api.mem0.ai/v1/memories/${memoryId}/`, {
-          method: "PUT",
-          headers: headers,
-          body: JSON.stringify({ text: newContent }),
-        })
-          .then((response) => {
-            if (response.ok) {
-              exitEditMode();
-            } else {
-              console.error("Failed to update memory");
-            }
-          })
-          .catch((error) => {
-            console.error("Error updating memory:", error);
-          })
-          .finally(() => {
-            editBtn.disabled = false;
-          });
-      });
-    }
-
-    function exitEditMode() {
-      editBtn.innerHTML = `<img src="${chrome.runtime.getURL(
-        "icons/edit.svg"
-      )}" alt="Edit" class="svg-icon">`;
-      editBtn.classList.remove("editing");
-      memoryText.contentEditable = "false";
-      memoryText.classList.remove("editing");
-      memoryText.removeAttribute("data-original-content");
-      memoryText.removeEventListener("keydown", handleEnterKey);
-    }
-  }
-
-  function deleteMemory(memoryId, memoryElement) {
-    const deleteBtn = memoryElement.querySelector(".delete-btn");
-    const originalContent = deleteBtn.innerHTML;
-
-    // Replace delete icon with a smaller loading spinner
-    deleteBtn.innerHTML = `
-      <div style="
-        border: 2px solid #f3f3f3;
-        border-top: 2px solid #3498db;
-        border-radius: 50%;
-        width: 12px;
-        height: 12px;
-        animation: spin 1s linear infinite;
-      "></div>
-    `;
-    deleteBtn.disabled = true;
-
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-      const headers = getHeaders(data.apiKey, data.access_token);
-
-      // Send delete event to API
-      fetch(`https://api.mem0.ai/v1/extension/`, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify({ event_type: "extension_delete_event" }),
-      }).catch(error => {
-        console.error("Error sending delete event:", error);
-      });
-
-      fetch(`https://api.mem0.ai/v1/memories/${memoryId}/`, {
-        method: "DELETE",
-        headers: headers,
-      })
-        .then((response) => {
-          if (response.ok) {
-            memoryElement.remove();
-            const scrollArea = document.querySelector(".scroll-area");
-            if (scrollArea.children.length === 0) {
-              scrollArea.innerHTML = `
-                <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; padding: 0px 15px 15px 15px; text-align: center;">
-          <p>No memories found</p><br/>
-          <p style="color: grey;">Click the + button to add a new memory or use Mem0 with the AI chatbot of your choice.</p>
-        </div>
-              `;
-            }
-          } else {
-            console.error("Failed to delete memory");
-            // Restore original delete button
-            deleteBtn.innerHTML = originalContent;
-            deleteBtn.disabled = false;
-          }
-        })
-        .catch((error) => {
-          console.error("Error deleting memory:", error);
-          // Restore original delete button
-          deleteBtn.innerHTML = originalContent;
-          deleteBtn.disabled = false;
-        });
-    });
-  }
-
-  // Add this new function to handle search functionality
-  function toggleSearch() {
-    const inputContainer = document.querySelector(".input-container");
-    const existingSearchInput = inputContainer.querySelector(".search-memory");
-    const searchBtn = document.getElementById("searchBtn");
-    const addMemoryBtn = document.getElementById("addMemoryBtn");
-
-    // Close add memory input if it's open
-    const existingAddInput = inputContainer.querySelector(".add-memory");
-    if (existingAddInput) {
-      existingAddInput.remove();
-      addMemoryBtn.classList.remove("active");
-    }
-
-    if (existingSearchInput) {
-      closeSearchInput();
-    } else {
-      const searchMemoryInput = document.createElement("div");
-      searchMemoryInput.className = "search-memory";
-      searchMemoryInput.innerHTML = `
-        <div class="search-container">
-          <img src="${chrome.runtime.getURL(
-            "icons/search.svg"
-          )}" alt="Search" class="search-icon">
-          <span contenteditable="true" placeholder="Search memories..."></span>
-        </div>
-      `;
-
-      inputContainer.appendChild(searchMemoryInput);
-
-      const searchMemorySpan = searchMemoryInput.querySelector("span");
-
-      // Focus the search memory input
-      searchMemorySpan.focus();
-
-      // Add this line to set the text color to black
-      searchMemorySpan.style.color = "black";
-
-      // Modify the event listener for the input event
-      searchMemorySpan.addEventListener("input", function () {
-        const searchTerm = this.textContent.trim().toLowerCase();
-        filterMemories(searchTerm);
-      });
-
-      // Remove the existing event listener for the Escape key
-      searchMemorySpan.removeEventListener("keydown", function (event) {
-        if (event.key === "Escape") {
-          closeSearchInput();
-        }
-      });
-
-      // The Escape key is now handled by the global handleEscapeKey function
-
-      searchBtn.classList.add("active");
-    }
   }
 
   function closeSearchInput() {
@@ -659,528 +306,246 @@
     document.getElementById("mem0-sidebar").style.width = "400px";
   }
 
-  // Add this new function to handle adding a new memory
-  function addNewMemory() {
-    const inputContainer = document.querySelector(".input-container");
-    const existingAddInput = inputContainer.querySelector(".add-memory");
-    const addMemoryBtn = document.getElementById("addMemoryBtn");
-    const searchBtn = document.getElementById("searchBtn");
-
-    // Close search input if it's open
-    const existingSearchInput = inputContainer.querySelector(".search-memory");
-    if (existingSearchInput) {
-      closeSearchInput();
-    }
-
-    if (existingAddInput) {
-      closeAddMemoryInput();
-    } else {
-      const addMemoryInput = document.createElement("div");
-      addMemoryInput.className = "add-memory";
-      addMemoryInput.innerHTML = `
-        <div class="add-container">
-          <img src="${chrome.runtime.getURL(
-            "icons/add.svg"
-          )}" alt="Add" class="add-icon">
-          <span contenteditable="true" placeholder="Add a new memory..."></span>
-        </div>
-      `;
-
-      inputContainer.appendChild(addMemoryInput);
-
-      const addMemorySpan = addMemoryInput.querySelector("span");
-
-      // Focus the add memory input
-      addMemorySpan.focus();
-
-      // Add this line to set the text color to black
-      addMemorySpan.style.color = "black";
-
-      // Add event listener for the Enter key
-      addMemorySpan.addEventListener("keydown", function (event) {
-        if (event.key === "Enter" && !event.shiftKey) {
-          event.preventDefault();
-          const newContent = this.textContent.trim();
-          if (newContent) {
-            saveNewMemory(newContent, addMemoryInput);
-          } else {
-            closeAddMemoryInput();
-          }
-        }
-      });
-
-      addMemoryBtn.classList.add("active");
-    }
-  }
-
-  function closeAddMemoryInput() {
-    const inputContainer = document.querySelector(".input-container");
-    const existingAddInput = inputContainer.querySelector(".add-memory");
-    const addMemoryBtn = document.getElementById("addMemoryBtn");
-
-    if (existingAddInput) {
-      existingAddInput.remove();
-      addMemoryBtn.classList.remove("active");
-    }
-  }
-
-  function saveNewMemory(newContent, addMemoryInput) {
-    chrome.storage.sync.get(
-      ["apiKey", "access_token", "userId"],
-      function (data) {
-        const headers = getHeaders(data.apiKey, data.access_token);
-
-        // Show loading indicator
-        addMemoryInput.innerHTML = `
-          <div class="loading-indicator" style="width: 100%; display: flex; justify-content: center; align-items: center;">
-            <div class="loader"></div>
-          </div>
-        `;
-
-        // Send add event to API
-        fetch(`https://api.mem0.ai/v1/extension/`, {
-          method: "POST",
-          headers: headers,
-          body: JSON.stringify({ event_type: "extension_add_event" }),
-        }).catch(error => {
-          console.error("Error sending add event:", error);
-        });
-
-        fetch("https://api.mem0.ai/v1/memories/", {
-          method: "POST",
-          headers: headers,
-          body: JSON.stringify({
-            messages: [{ role: "user", content: newContent }],
-            user_id: data.userId,
-            infer: false,
-            metadata: {
-              provider: "Mem0", // Add this line to set the provider
-            },
-          }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            addMemoryInput.remove();
-            fetchAndDisplayMemories(true); // Refresh the memories list and highlight the new memory
-          })
-          .catch((error) => {
-            console.error("Error adding memory:", error);
-            addMemoryInput.remove();
-          })
-          .finally(() => {
-            document.getElementById("addMemoryBtn").classList.remove("active");
-          });
-      }
-    );
-  }
-
   function addStyles() {
     const style = document.createElement("style");
     style.textContent = `
-        #mem0-sidebar {
-          font-family: Arial, sans-serif;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+          --bg-dark: #18181b;
+          --bg-card: #27272a;
+          --bg-button: #3b3b3f;
+          --bg-button-hover: #4b4b4f;
+          --text-white: #ffffff;
+          --text-gray: #a1a1aa;
+          --purple: #7a5bf7;
+          --border-color: #27272a;
+          --tag-bg: #3b3b3f;
+          --scrollbar-bg: #18181b;
+          --scrollbar-thumb: #3b3b3f;
+          --success-color: #22c55e;
         }
-        .fixed-header {
-          position: sticky;
-          top: 0;
-          background-image: url('${chrome.runtime.getURL(
-            "icons/header-bg.png"
-          )}');
-          background-size: cover;
-          background-position: center;
-          z-index: 1000;
-          width: 100%;
+        
+        #mem0-sidebar {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          position: fixed; 
+          top: 60px;
+          right: 50px;
+          width: 400px;
+          height: auto;
+          max-height: 85vh;
+          background: var(--bg-dark);
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          box-sizing: border-box;
           display: flex;
           flex-direction: column;
+          padding: 0px;
+          color: var(--text-white);
+          z-index: 2147483647;
+          transition: right 0.3s ease-in-out;
+          overflow: hidden;
+          box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.5);
         }
+        
+        .fixed-header {
+          box-sizing: border-box;
+          width: 100%;
+          background: var(--bg-dark);
+          border-bottom: 1px solid var(--border-color);
+        }
+        
         .header {
           display: flex;
+          flex-direction: row;
           justify-content: space-between;
           align-items: center;
-          padding: 20px 10px 15px 15px;
-          width: 100%
+          padding: 16px;
+          width: 100%;
+          height: 62px;
         }
+        
         .logo-container {
-          display: fixed;
-          height: 24px;
-        }
-        .logo {
-          width: auto;
-          height: 24px;
-        }
-        .header-buttons {
           display: flex;
-          gap: 8px;
-          margin-bottom: 4px;
-        }
-        .header-icon-button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          display: flex;
+          flex-direction: row;
           align-items: center;
-          justify-content: center;
+          padding: 0px;
+          gap: 8px;
+          height: 24px;
+        }
+        
+        .openmemory-icon {
           width: 24px;
           height: 24px;
-          transition: filter 0.3s ease;
         }
-        .header-icon-button:hover {
-          filter: brightness(70%);
+        
+        .openmemory-logo {
+          height: 24px;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-style: normal;
+          font-weight: 600;
+          font-size: 20px;
+          line-height: 24px;
+          letter-spacing: -0.03em;
+          color: var(--text-white);
         }
-        .header-icon-button .svg-icon {
-          width: 20px;
-          height: 20px;
-          filter: invert(0%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(60%) contrast(100%);
+        
+        .header-buttons {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          padding: 0px;
+          gap: 16px;
+          height: 30px;
         }
-        .header-icon-button.active {
-          filter: brightness(50%);
+        
+        .close-button {
+          background: none;
+          border: none;
+          width: 24px;
+          height: 24px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-gray);
+          font-size: 20px;
+          transition: color 0.2s ease;
         }
-        .scroll-area {
-          flex-grow: 1;
+        
+        .close-button:hover {
+          color: var(--text-white);
+        }
+        
+        /* Custom scrollbar styles */
+        .content {
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
           overflow-y: auto;
-          padding: 10px;
-          width: 100%;
+          max-height: calc(85vh - 62px - 60px); /* Subtract header and footer heights */
+          
+          /* Firefox */
+          scrollbar-width: thin;
+          scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-bg);
         }
-        .shortcut-info {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 5px;
-          padding: 6px;
-          font-size: 12px;
-          color: #666;
-          background-color: #f5f5f5;
-          position: sticky;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          z-index: 1000;
-          width: 100%;
+        
+        /* WebKit browsers (Chrome, Safari, Edge) */
+        .content::-webkit-scrollbar {
+          width: 4px;
         }
-        .ellipsis-menu {
-          position: absolute;
-          top: 100%;
-          right: 10px;
-          background-color: white;
-          border: 1px solid #ccc;
+        
+        .content::-webkit-scrollbar-track {
+          background: var(--scrollbar-bg);
+        }
+        
+        .content::-webkit-scrollbar-thumb {
+          background-color: var(--scrollbar-thumb);
           border-radius: 4px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          display: none;
-          z-index: 1001;
-          width: 140px;
+          border: none;
         }
-        .loading-indicator {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          height: 100%;
-        }
-        .loader {
-          border: 2px solid #f3f3f3;
-          border-top: 2px solid #3498db;
-          border-radius: 50%;
-          width: 20px;
-          height: 20px;
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .memory-item {
-          display: flex;
-          flex-direction: column;
-          padding: 15px;
-          border: 1px solid #e0e0e0;
+        
+        .total-memories {
+          background-color: var(--bg-card);
           border-radius: 8px;
-          margin-bottom: 10px;
-          background-color: #ffffff;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-          transition: background-color 0.3s ease, box-shadow 0.3s ease;
+          padding: 16px;
         }
-        .memory-item:hover {
-          box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        
+        .total-memories-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
-        .memory-content {
+        
+        .total-memories-label {
+          color: var(--text-gray);
+          font-size: 14px;
+          margin-bottom: 4px;
+        }
+        
+        .memory-count {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-style: normal;
+          font-weight: 500;
+          font-size: 18px;
+          line-height: 140%;
+          letter-spacing: -0.03em;
+          color: var(--text-white);
+        }
+        
+        .memory-count.loading {
+          color: var(--text-gray);
+          font-size: 16px;
+        }
+        
+        .dashboard-button {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          padding: 4px 8px;
+          gap: 4px;
+          background: var(--bg-button);
+          background-opacity: 0.5;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          color: var(--text-white);
+          font-size: 14px;
+        }
+        
+        .dashboard-button:hover {
+          background: var(--bg-button-hover);
+        }
+        
+        .external-link-icon {
+          width: 14px;
+          height: 14px;
+        }
+        
+        .section {
           display: flex;
           flex-direction: column;
-          width: 100%;
+          gap: 8px;
         }
-        .memory-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          
-        }
-        .memory-text {
-          flex: 1;
-          word-wrap: break-word;
-          white-space: pre-wrap;
-          font-size: 14px;
-          margin-right: 10px;
-          color: black;
-        }
-        .memory-buttons {
-          display: flex;
-          gap: 5px;
-          flex-shrink: 0;
-        }
-        .memory-bottom {
+        
+        .section-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-top: 10px;
-        }
-        .memory-categories {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 5px;
-          align-items: center; // Add this line
-        }
-        .category {
-          font-size: 12px;
-          background-color: #f0f0f0;
-          color: #888;
-          padding: 3px 8px;
-          border-radius: 10px;
-          margin-right: 4px;
-        }
-        .memory-date {
-          font-size: 12px;
-          color: #999;
-          text-align: right;
-          flex-shrink: 0;
-        }
-        .icon-button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 20px;
-          height: 20px;
-          transition: filter 0.3s ease;
-        }
-        .icon-button:hover {
-          filter: brightness(70%);
-        }
-        .icon-button .svg-icon {
-          width: 16px;
-          height: 16px;
-          filter: invert(0%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(80%) contrast(100%);
-        }
-        .icon-button:disabled {
-          cursor: default;
-        }
-        .memory-text[contenteditable="true"] {
-          padding: 5px;
-          border: 1px solid #ccc;
-          border-radius: 4px;
-          outline: none;
-        }
-        .search-memory {
-          display: flex;
-          
-          align-items: center;
-          
           width: 100%;
-          box-sizing: border-box;
-          background-color: transparent;
         }
-
-        .search-container {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          background-color: #ffffff;
-          border-radius: 20px;
-          padding: 5px 10px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        
+        .section-title {
+          font-size: 18px;
+          font-weight: 500;
+          color: var(--text-white);
         }
-
-        .search-icon {
-          width: 16px;
-          height: 16px;
-          margin-right: 8px;
-          filter: invert(0%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(60%) contrast(100%);
-        }
-
-        .search-memory span[contenteditable] {
-          flex: 1;
-          border: none;
-          outline: none;
-          min-height: 16px;
-          color: black;
+        
+        .section-description {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          font-style: normal;
+          font-weight: 400;
           font-size: 14px;
-        }
-
-        .search-memory span[contenteditable]:empty:before {
-          content: attr(placeholder);
-          color: #999;
-        }
-
-        #mem0-sidebar {
-          width: 400px !important;
-          min-width: 400px;
-        }
-
-        .memory-item {
-          width: 100%;
-          box-sizing: border-box;
-        }
-
-        .memory-content {
-          width: 100%;
-        }
-
-        .memory-text {
-          width: 100%;
-          word-break: break-word;
-        }
-
-        .add-memory {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          box-sizing: border-box;
-          background-color: transparent;
-        }
-
-        .add-container {
-          display: flex;
-          align-items: center;
-          width: 100%;
-          background-color: #ffffff;
-          border-radius: 20px;
-          padding: 5px 10px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .add-icon {
-          width: 16px;
-          height: 16px;
-          margin-right: 8px;
-          filter: invert(0%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(60%) contrast(100%);
-        }
-
-        .add-memory span[contenteditable] {
-          flex: 1;
-          border: none;
-          padding: 0;
-          outline: none;
-          min-height: 16px;
-          color: black;
-          font-size: 14px;
-        }
-
-        .add-memory span[contenteditable]:empty:before {
-          content: attr(placeholder);
-          color: #999;
-        }
-
-        .memory-item.highlight {
-          background-color: #f0f0f0;
-          transition: background-color 0.5s ease;
-        }
-
-        .ellipsis-menu {
-          position: absolute;
-          top: 100%;
-          right: 10px;
-          background-color: white;
-          border: 1px solid #ccc;
-          border-radius: 4px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          display: none;
-          z-index: 1001;
-          width: 140px;
-        }
-
-        .ellipsis-menu button {
-          display: block;
-          width: 100%;
-          padding: 8px 12px;
-          text-align: left;
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-size: 14px;
-          color: #333;
-        }
-
-        .ellipsis-menu button:hover {
-          background-color: #f5f5f5;
-        }
-
-        .input-container {
-          width: 100%;
-          padding: 0px 10px 0px 10px;
-          box-sizing: border-box;
-        }
-
-        .scroll-area {
-          flex-grow: 1;
-          overflow-y: auto;
-          padding: 10px;
-          width: 100%;
-        }
-
-        .search-memory,
-        .add-memory {
-          width: 100%;
-          box-sizing: border-box;
-          margin-bottom: 15px;
-          padding-right: 5px;
-        }
-
-        .footer-toggle {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 10px 15px;
-          background-color: #f5f5f5;
-          position: sticky;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          z-index: 1000;
-          width: 100%;
-          box-sizing: border-box;
-          font-size: 12px;
-          color: #666;
-        }
-
-        .shortcut-text {
-          flex-grow: 1;
-        }
-
-        .toggle-container {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .toggle-text {
-          font-size: 12px;
-          color: #666;
+          line-height: 140%;
+          letter-spacing: -0.03em;
+          color: var(--text-gray);
         }
 
         .switch {
           position: relative;
           display: inline-block;
-          width: 36px;
-          height: 20px;
+          width: 44px;
+          height: 22px;
         }
-
+        
         .switch input {
           opacity: 0;
           width: 0;
           height: 0;
         }
-
+        
         .slider {
           position: absolute;
           cursor: pointer;
@@ -1188,69 +553,181 @@
           left: 0;
           right: 0;
           bottom: 0;
-          background-color: #ccc;
+          background-color: var(--bg-card);
           transition: .4s;
+          border-radius: 34px;
         }
-
+        
         .slider:before {
           position: absolute;
           content: "";
-          height: 16px;
-          width: 16px;
-          left: 2px;
+          height: 18px;
+          width: 18px;
+          left: 3px;
           bottom: 2px;
           background-color: white;
           transition: .4s;
-        }
-
-        input:checked + .slider {
-          background-color: #444; /* Dark gray for "on" state */
-        }
-
-        input:focus + .slider {
-          box-shadow: 0 0 1px #444;
-        }
-
-        input:checked + .slider:before {
-          transform: translateX(16px);
-        }
-
-        .slider.round {
-          border-radius: 20px;
-        }
-
-        .slider.round:before {
           border-radius: 50%;
         }
-
-        .provider-icon {
-          width: 14px;
-          height: 14px;
-          vertical-align: middle;
-          margin-left: 0;
-          margin-top: 2px;
+        
+        input:checked + .slider {
+          background-color: var(--purple);
         }
-  `;
+        
+        input:focus + .slider {
+          box-shadow: 0 0 1px var(--purple);
+        }
+        
+        input:checked + .slider:before {
+          transform: translateX(20px);
+        }
+        
+        .memory-cards {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        
+        .memory-card {
+          background-color: var(--bg-card);
+          border-radius: 8px;
+          padding: 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+        }
+        
+        .memory-content {
+          flex: 1;
+          padding-right: 8px;
+        }
+        
+        .memory-text {
+          color: var(--text-gray);
+          font-size: 14px;
+          margin: 0 0 8px 0;
+        }
+        
+        .memory-categories {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+          margin-top: 4px;
+        }
+        
+        .memory-category {
+          background-color: var(--tag-bg);
+          color: var(--text-white);
+          font-size: 12px;
+          padding: 2px 8px;
+          border-radius: 4px;
+        }
+        
+        .memory-actions {
+          display: flex;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+        
+        .memory-action-button {
+          background: none;
+          border: none;
+          color: var(--text-gray);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: color 0.2s;
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+        }
+        
+        .memory-action-button:hover {
+          color: var(--text-white);
+          background-color: var(--bg-button);
+        }
+        
+        .memory-action-button.copied {
+          color: var(--success-color);
+        }
+        
+        .memory-loader {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          padding: 20px 0;
+        }
+        
+        .no-memories, .memory-error {
+          color: var(--text-gray);
+          text-align: center;
+          font-style: italic;
+          padding: 20px 0;
+        }
+        
+        .footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px;
+          border-top: 1px solid var(--border-color);
+        }
+        
+        .shortcut {
+          padding: 6px 12px;
+          background-color: var(--bg-card);
+          color: var(--text-gray);
+          border-radius: 8px;
+          font-size: 14px;
+        }
+        
+        .logout-button {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          padding: 6px 16px;
+          background: var(--bg-button);
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          color: var(--text-white);
+          font-size: 14px;
+        }
+        
+        .logout-button:hover {
+          background: var(--bg-button-hover);
+        }
+        
+        .loader {
+          border: 2px solid var(--bg-button);
+          border-top: 2px solid var(--purple);
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .input-container {
+          width: 100%;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        .search-memory {
+          width: 100%;
+          box-sizing: border-box;
+          margin-top: 16px;
+        }
+    `;
     document.head.appendChild(style);
-  }
-
-  // Add these new functions
-  function toggleEllipsisMenu(event) {
-    event.stopPropagation(); // Prevent the click from bubbling up
-    const ellipsisMenu = document.getElementById("ellipsisMenu");
-    ellipsisMenu.style.display =
-      ellipsisMenu.style.display === "block" ? "none" : "block";
-
-    // Close menu when clicking outside
-    document.addEventListener("click", function closeMenu(e) {
-      if (
-        !ellipsisMenu.contains(e.target) &&
-        e.target !== document.getElementById("ellipsisMenuBtn")
-      ) {
-        ellipsisMenu.style.display = "none";
-        document.removeEventListener("click", closeMenu);
-      }
-    });
   }
 
   function logout() {
@@ -1271,7 +748,7 @@
       function () {
         const sidebar = document.getElementById("mem0-sidebar");
         if (sidebar) {
-          sidebar.style.right = "-450px";
+          sidebar.style.right = "-500px";
         }
       }
     );
@@ -1279,12 +756,115 @@
 
   function openDashboard() {
     chrome.storage.sync.get(["userId"], function (data) {
-      const userId = data.userId || "chrome-extension-user";
+      const userId = "chrome-extension-user";
       chrome.runtime.sendMessage({
         action: "openDashboard",
-        url: `https://app.mem0.ai/dashboard/user/${userId}`,
+        url: `https://app.mem0.ai/dashboard/requests`,
       });
     });
+  }
+
+  // Add function to display memories
+  function displayMemories(memories) {
+    const memoryCardsContainer = document.querySelector(".memory-cards");
+    
+    if (!memoryCardsContainer) return;
+    
+    // Clear loading indicator
+    memoryCardsContainer.innerHTML = '';
+    
+    if (!memories || memories.length === 0) {
+      memoryCardsContainer.innerHTML = '<p class="no-memories">No memories found</p>';
+      return;
+    }
+    
+    // Add memory cards
+    memories.forEach(memory => {
+      // Extract memory content from the new format
+      const memoryContent = memory.memory || ""; 
+      
+      // Truncate long text
+      const truncatedContent = memoryContent.length > 120 ? 
+        memoryContent.substring(0, 120) + '...' : 
+        memoryContent;
+      
+      // Get categories if available
+      const categories = memory.categories || [];
+      const categoryTags = categories.length > 0 
+        ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join('')}</div>` 
+        : '';
+      
+      const memoryCard = document.createElement('div');
+      memoryCard.className = 'memory-card';
+      memoryCard.innerHTML = `
+        <div class="memory-content">
+          <p class="memory-text">${truncatedContent}</p>
+          ${categoryTags}
+        </div>
+        <div class="memory-actions">
+          <button class="memory-action-button copy-button" title="Copy Memory" data-content="${encodeURIComponent(memoryContent)}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+          </button>
+          <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ''}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      `;
+      
+      memoryCardsContainer.appendChild(memoryCard);
+    });
+    
+    // Add event listener for the copy button
+    document.querySelectorAll('.copy-button').forEach(button => {
+      button.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const content = decodeURIComponent(this.getAttribute('data-content'));
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(content)
+          .then(() => {
+            // Visual feedback for copy
+            const originalTitle = this.getAttribute('title');
+            this.setAttribute('title', 'Copied!');
+            this.classList.add('copied');
+            
+            // Reset after a short delay
+            setTimeout(() => {
+              this.setAttribute('title', originalTitle);
+              this.classList.remove('copied');
+            }, 2000);
+          })
+          .catch(err => {
+            console.error('Failed to copy: ', err);
+          });
+      });
+    });
+    
+    // Add event listener for the view button
+    document.querySelectorAll('.view-button').forEach(button => {
+      button.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const memoryId = this.getAttribute('data-id');
+        if (memoryId) {
+          chrome.storage.sync.get(["userId"], function (data) {
+            const userId = "chrome-extension-user";
+            chrome.runtime.sendMessage({
+              action: "openDashboard",
+              url: `https://app.mem0.ai/dashboard/user/${userId}?memoryId=${memoryId}`,
+            });
+          });
+        }
+      });
+    });
+  }
+
+  // Add function to display error message
+  function displayErrorMessage(message = "Error loading memories") {
+    const memoryCardsContainer = document.querySelector(".memory-cards");
+    
+    if (!memoryCardsContainer) return;
+    
+    memoryCardsContainer.innerHTML = `<p class="memory-error">${message}</p>`;
   }
 
   // Initialize the listener when the script loads

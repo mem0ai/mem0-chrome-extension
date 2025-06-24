@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Mem0",
-  "version": "1.3.8",
-  "description": "🧠 Share context across ChatGPT, Claude & Perplexity. 🔄 No more repeating yourself to different AI assistants! ✨",
+  "name": "OpenMemory",
+  "version": "1.3.12",
+  "description": "🧠 OpenMemory keeps your conversations in sync. 🔄 No more repeating yourself—just seamless AI collaboration! ✨",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -45,6 +45,14 @@
     {
       "matches": ["https://chat.deepseek.com/*"],
       "js": ["deepseek/content.js"]
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["gemini/content.js"]
+    },
+    {
+      "matches": ["https://replit.com/*"],
+      "js": ["replit/content.js"]
     },
     {
       "matches": ["<all_urls>"],

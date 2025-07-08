@@ -312,7 +312,7 @@ function addSendButtonListener() {
     
     // Asynchronously store the memory
     chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token", "memory_enabled"],
+      ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
       function (items) {
         // Skip if memory is disabled or no credentials
         if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
@@ -323,8 +323,15 @@ function addSendButtonListener() {
           ? `Bearer ${items.access_token}`
           : `Token ${items.apiKey}`;
         
-        const userId = items.userId || "chrome-extension-user";
+        const userId = items.userId || items.user_id || "chrome-extension-user";
         
+        const optionalParams = {}
+        if(items.selected_org) {
+          optionalParams.org_id = items.selected_org;
+        }
+        if(items.selected_project) {
+          optionalParams.project_id = items.selected_project;
+        }
         // Send memory to mem0 API asynchronously without waiting for response
         fetch("https://api.mem0.ai/v1/memories/", {
           method: "POST",
@@ -339,6 +346,7 @@ function addSendButtonListener() {
             metadata: {
               provider: "Gemini",
             },
+            ...optionalParams,
           }),
         }).catch((error) => {
           console.error("Error saving memory:", error);
@@ -403,7 +411,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "memory_enabled"],
+        ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
         function (items) {
           resolve(items);
         }
@@ -411,7 +419,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     });
 
     const apiKey = data.apiKey;
-    const userId = data.userId || "chrome-extension-user";
+    const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const memoryEnabled = data.memory_enabled !== false; // Default to true if not set
 
@@ -433,6 +441,14 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
 
     const messages = [{ role: "user", content: message }];
 
+    const optionalParams = {}
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
+    }
+
     // Existing search API call
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
@@ -451,6 +467,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
           threshold: 0.3,
           limit: 10,
           filter_memories: true,
+          ...optionalParams,
         }),
       }
     );
@@ -496,6 +513,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
         metadata: {
           provider: "Gemini",
         },
+        ...optionalParams,
       }),
     })
       .then((response) => {
@@ -1942,7 +1960,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token"],
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"],
         function (items) {
           resolve(items);
         }
@@ -1950,7 +1968,7 @@ async function handleMem0Modal(sourceButtonId = null) {
     });
 
     const apiKey = data.apiKey;
-    const userId = data.userId || "chrome-extension-user";
+    const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
 
     if (!apiKey && !accessToken) {
@@ -1963,6 +1981,15 @@ async function handleMem0Modal(sourceButtonId = null) {
       : `Token ${apiKey}`;
 
     const messages = [{ role: "user", content: message }];
+
+    const optionalParams = {}
+
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
+    }
 
     // Existing search API call
     const searchResponse = await fetch(
@@ -1982,6 +2009,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: 0.3,
           limit: 10,
           filter_memories: true,
+          ...optionalParams,
         }),
       }
     );
@@ -2020,6 +2048,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "Gemini",
         },
+        ...optionalParams,
       }),
     }).catch((error) => {
       console.error("Error adding memory:", error);

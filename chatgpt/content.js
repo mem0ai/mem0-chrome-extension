@@ -1118,7 +1118,7 @@ function captureAndStoreMemory() {
   
   // Asynchronously store the memory
   chrome.storage.sync.get(
-    ["apiKey", "userId", "access_token", "memory_enabled"],
+    ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
     function (items) {
       // Skip if memory is disabled or no credentials
       if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
@@ -1129,11 +1129,19 @@ function captureAndStoreMemory() {
         ? `Bearer ${items.access_token}`
         : `Token ${items.apiKey}`;
       
-      const userId = items.userId || "chrome-extension-user";
+      const userId = items.userId || items.user_id || "chrome-extension-user";
       
       // Get recent messages for context (if available)
       const messages = getLastMessages(2);
       messages.push({ role: "user", content: message });
+
+      const optionalParams = {}
+      if(items.selected_org) {
+        optionalParams.org_id = items.selected_org;
+      }
+      if(items.selected_project) {
+        optionalParams.project_id = items.selected_project;
+      }
       
       // Send memory to mem0 API asynchronously without waiting for response
       fetch("https://api.mem0.ai/v1/memories/", {
@@ -1149,6 +1157,7 @@ function captureAndStoreMemory() {
           metadata: {
             provider: "ChatGPT",
           },
+          ...optionalParams,
         }),
       }).catch((error) => {
         console.error("Error saving memory:", error);
@@ -1436,7 +1445,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token"],
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id" ],
         function (items) {
           resolve(items);
         }
@@ -1444,7 +1453,7 @@ async function handleMem0Modal(sourceButtonId = null) {
     });
 
     const apiKey = data.apiKey;
-    const userId = data.userId || "chrome-extension-user";
+    const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
 
     if (!apiKey && !accessToken) {
@@ -1458,6 +1467,14 @@ async function handleMem0Modal(sourceButtonId = null) {
 
     const messages = getLastMessages(2);
     messages.push({ role: "user", content: message });
+
+    const optionalParams = {}
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
+    }
 
     // Existing search API call
     const searchResponse = await fetch(
@@ -1477,6 +1494,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: 0.3,
           limit: 10, // Show more memories instead of just 3
           filter_memories: true,
+          ...optionalParams,
         }),
       }
     );
@@ -1514,6 +1532,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "ChatGPT",
         },
+        ...optionalParams,
       }),
     }).catch((error) => {
       console.error("Error adding memory:", error);
@@ -1826,13 +1845,21 @@ function handleSyncClick() {
 function sendMemoriesToMem0(memories) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token"],
+      ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"],
       function (items) {
         if (items.apiKey || items.access_token) {
           const authHeader = items.access_token
             ? `Bearer ${items.access_token}`
             : `Token ${items.apiKey}`;
-          const userId = items.userId || "chrome-extension-user";
+          const userId = items.userId || items.user_id || "chrome-extension-user";
+
+          const optionalParams = {}
+          if(items.selected_org) {
+            optionalParams.org_id = items.selected_org;
+          }
+          if(items.selected_project) {
+            optionalParams.project_id = items.selected_project;
+          }
           
           fetch("https://api.mem0.ai/v1/memories/", {
             method: "POST",
@@ -1847,6 +1874,7 @@ function sendMemoriesToMem0(memories) {
               metadata: {
                 provider: "ChatGPT",
               },
+              ...optionalParams,
             }),
           })
             .then((response) => {
@@ -1923,13 +1951,21 @@ function showSyncPopup(button, message) {
 function sendMemoryToMem0(memory, infer = true) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token"],
+      ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"],
       function (items) {
         if (items.apiKey || items.access_token) {
           const authHeader = items.access_token
             ? `Bearer ${items.access_token}`
             : `Token ${items.apiKey}`;
-          const userId = items.userId || "chrome-extension-user";
+          const userId = items.userId || items.user_id || "chrome-extension-user";
+
+          const optionalParams = {}
+          if(items.selected_org) {
+            optionalParams.org_id = items.selected_org;
+          }
+          if(items.selected_project) {
+            optionalParams.project_id = items.selected_project;
+          }
           
           fetch("https://api.mem0.ai/v1/memories/", {
             method: "POST",
@@ -1944,6 +1980,7 @@ function sendMemoryToMem0(memory, infer = true) {
               metadata: {
                 provider: "ChatGPT",
               },
+              ...optionalParams,
             }),
           })
             .then((response) => {

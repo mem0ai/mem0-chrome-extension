@@ -540,11 +540,19 @@ const MEM0_API_BASE_URL = "https://api.mem0.ai";
 
 async function searchMemories(query) {
     try {
-      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token"]);
-      const userId = items.userId || "chrome-extension-user"; 
+      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"]);
+      const userId = items.userId || items.user_id || "chrome-extension-user"; 
 
       if (!items.access_token && !items.apiKey) {
         return reject(new Error("Authentication details missing"));
+      }
+
+      const optionalParams = {}
+      if(items.selected_org) {
+        optionalParams.org_id = items.selected_org;
+      }
+      if(items.selected_project) {
+        optionalParams.project_id = items.selected_project;
       }
 
       const headers = {
@@ -566,6 +574,7 @@ async function searchMemories(query) {
         threshold: 0.3,
         limit: 10,
         filter_memories: true,
+        ...optionalParams,
       });
 
       const response = await fetch(url, {
@@ -600,12 +609,20 @@ async function searchMemories(query) {
 function addMemory(memoryText) {
   return new Promise(async (resolve, reject) => {
     try {
-      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token"]);
-      const userId = items.userId || "chrome-extension-user"; 
+      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"]);
+      const userId = items.userId || items.user_id || "chrome-extension-user"; 
 
       if (!items.access_token && !items.apiKey) {
         console.error("No API Key or Access Token found for adding memory.");
         return reject(new Error("Authentication details missing"));
+      }
+
+      const optionalParams = {}
+      if(items.selected_org) {
+        optionalParams.org_id = items.selected_org;
+      }
+      if(items.selected_project) {
+        optionalParams.project_id = items.selected_project;
       }
       
       const headers = {
@@ -625,7 +642,8 @@ function addMemory(memoryText) {
             content: memoryText
           }
         ],
-        user_id: userId 
+        user_id: userId,
+        ...optionalParams,
       });
 
       fetch(url, {

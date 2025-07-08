@@ -281,7 +281,7 @@ function addSendButtonListener() {
     
     // Asynchronously store the memory
     chrome.storage.sync.get(
-      ["apiKey", "userId", "access_token", "memory_enabled"],
+      ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
       function (items) {
         
         
@@ -294,7 +294,15 @@ function addSendButtonListener() {
           ? `Bearer ${items.access_token}`
           : `Token ${items.apiKey}`;
         
-        const userId = items.userId || "chrome-extension-user";
+        const userId = items.userId || items.user_id || "chrome-extension-user";
+        
+        const optionalParams = {}
+        if(items.selected_org) {
+          optionalParams.org_id = items.selected_org;
+        }
+        if(items.selected_project) {
+          optionalParams.project_id = items.selected_project;
+        }
         
         // Send memory to mem0 API asynchronously without waiting for response
         fetch("https://api.mem0.ai/v1/memories/", {
@@ -310,6 +318,7 @@ function addSendButtonListener() {
             metadata: {
               provider: "Replit",
             },
+            ...optionalParams,
           }),
         })
         .then(response => {
@@ -453,7 +462,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token"],
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"],
         function (items) {
           resolve(items);
         }
@@ -461,8 +470,17 @@ async function handleMem0Modal(sourceButtonId = null) {
     });
 
     const apiKey = data.apiKey;
-    const userId = data.userId || "chrome-extension-user";
+    const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
+
+    const optionalParams = {}
+
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
+    }
 
     if (!apiKey && !accessToken) {
       isProcessingMem0 = false;
@@ -493,6 +511,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: 0.3,
           limit: 10,
           filter_memories: true,
+          ...optionalParams,
         }),
       }
     );
@@ -532,6 +551,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "Replit",
         },
+        ...optionalParams,
       }),
     }).catch((error) => {
       console.error("Error adding memory:", error);

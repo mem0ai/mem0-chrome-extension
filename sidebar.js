@@ -178,8 +178,15 @@
     userIdSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">User ID</h2>
+        <button id="userDashboardBtn" class="link-button" title="Open Users Dashboard">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link-icon lucide-external-link">
+            <path d="M15 3h6v6"/>
+            <path d="M10 14 21 3"/>
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          </svg>
+        </button>
       </div>
-      <input type="text" id="userIdInput" class="settings-input" placeholder="Enter your user ID">
+      <input type="text" id="userIdInput" class="settings-input" placeholder="Enter your user ID" value="chrome-extension-user">
     `;
     settingsTabContent.appendChild(userIdSection);
     
@@ -241,9 +248,11 @@
       toggleCheckbox.checked = result.memory_enabled !== false;
       
       const userIdInput = userIdSection.querySelector("#userIdInput");
+      // Set saved value or keep default value
       if (result.user_id) {
         userIdInput.value = result.user_id;
       }
+      // If no saved value, default is already set in HTML
     });
     
     sidebarContainer.appendChild(footerToggle);
@@ -401,6 +410,15 @@
       } else {
         projectSelect.innerHTML = '<option value="">Select an organization first</option>';
       }
+    });
+
+    // User dashboard link button
+    const userDashboardBtn = userIdSection.querySelector("#userDashboardBtn");
+    userDashboardBtn.addEventListener("click", function() {
+      chrome.runtime.sendMessage({
+        action: "openDashboard",
+        url: "https://app.mem0.ai/dashboard/users",
+      });
     });
 
     // Save button
@@ -1085,6 +1103,25 @@
         
         .settings-select:hover {
           border-color: var(--text-gray);
+        }
+        
+        .link-button {
+          background: none;
+          border: none;
+          color: var(--text-gray);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 4px;
+          transition: all 0.2s ease;
+        }
+        
+        .link-button:hover {
+          color: var(--text-white);
+          background: var(--bg-button);
         }
         
         .save-button {

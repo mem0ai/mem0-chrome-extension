@@ -1887,7 +1887,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token"],
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"],
         function (items) {
           resolve(items);
         }
@@ -1895,7 +1895,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     });
 
     const apiKey = data.apiKey;
-    const userId = data.userId || "chrome-extension-user";
+    const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
 
     if (!apiKey && !accessToken) {
@@ -1963,6 +1963,14 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
       }
     }
 
+    const optionalParams = {}
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
+    }
+
     // Search API call
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
@@ -1981,6 +1989,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
           threshold: 0.3,
           limit: 10,
           filter_memories: true,
+          ...optionalParams,
         }),
       }
     );
@@ -2019,6 +2028,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
         metadata: {
           provider: "Claude",
         },
+        ...optionalParams,
       }),
     })
       .then((response) => {
@@ -2471,7 +2481,7 @@ async function captureAndStoreMemory() {
   
   // Asynchronously store the memory
   chrome.storage.sync.get(
-    ["apiKey", "userId", "access_token", "memory_enabled"],
+    ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
     function (items) {
       // Skip if memory is disabled or no credentials
       if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
@@ -2482,12 +2492,21 @@ async function captureAndStoreMemory() {
         ? `Bearer ${items.access_token}`
         : `Token ${items.apiKey}`;
       
-      const userId = items.userId || "chrome-extension-user";
+      const userId = items.userId || items.user_id || "chrome-extension-user";
       
       // Get recent messages for context (if available)
       const messages = getLastMessages(2);
       messages.push({ role: "user", content: message });
       
+      const optionalParams = {}
+
+      if(items.selected_org) {
+        optionalParams.org_id = items.selected_org;
+      }
+      if(items.selected_project) {
+        optionalParams.project_id = items.selected_project;
+      }
+
       // Send memory to mem0 API asynchronously without waiting for response
       fetch("https://api.mem0.ai/v1/memories/", {
         method: "POST",
@@ -2502,6 +2521,7 @@ async function captureAndStoreMemory() {
           metadata: {
             provider: "Claude",
           },
+          ...optionalParams,
         }),
       }).catch((error) => {
         console.error("Error saving memory:", error);
@@ -2749,14 +2769,22 @@ async function sendMemoriesToMem0(memories) {
   try {
     // Get user credentials from storage
     const data = await new Promise(resolve => {
-      chrome.storage.sync.get(["access_token", "userId"], resolve);
+      chrome.storage.sync.get(["access_token", "userId", "selected_org", "selected_project", "user_id"], resolve);
     });
 
     if (!data.access_token) {
       return { success: false, message: "Not authenticated" };
     }
 
-    const userId = data.userId || "chrome-extension-user";
+    const userId = data.userId || data.user_id || "chrome-extension-user";
+
+    const optionalParams = {}
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
+    }
     
     // Send all memories in one batch
     const response = await fetch("https://api.mem0.ai/memories/batch", {
@@ -2768,6 +2796,7 @@ async function sendMemoriesToMem0(memories) {
       body: JSON.stringify({
         userId: userId,
         memories: memories,
+        ...optionalParams,
       }),
     });
 

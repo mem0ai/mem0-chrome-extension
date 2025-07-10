@@ -290,7 +290,7 @@
     `;
     
     // Load saved settings
-    chrome.storage.sync.get(["memory_enabled", "user_id", "selected_org", "selected_project", "auto_inject_enabled", "similarity_threshold"], function (result) {
+    chrome.storage.sync.get(["memory_enabled", "user_id", "selected_org", "selected_project", "auto_inject_enabled", "similarity_threshold", "top_k"], function (result) {
       const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
       toggleCheckbox.checked = result.memory_enabled !== false;
       
@@ -311,12 +311,17 @@
       const threshold = result.similarity_threshold !== undefined ? result.similarity_threshold : 0.3;
       thresholdSlider.value = threshold;
       thresholdValue.textContent = threshold.toFixed(1);
+      
+      // Load top k setting (default: 10)
+      const topKInput = topKSection.querySelector("#topKInput");
+      const topK = result.top_k !== undefined ? result.top_k : 10;
+      topKInput.value = topK;
     });
     
     sidebarContainer.appendChild(footerToggle);
 
     // Add event listeners
-    setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, saveSection, memoryCountContainer, footerToggle);
+    setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle);
 
     document.body.appendChild(sidebarContainer);
 
@@ -338,7 +343,7 @@
     fetchMemoriesAndCount();
   }
 
-  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection) {
+  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection) {
     // Show loading state
     saveBtn.disabled = true;
     saveText.style.display = "none";
@@ -352,6 +357,7 @@
     const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
     const autoInjectCheckbox = autoInjectSection.querySelector("#autoInjectToggle");
     const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
+    const topKInput = topKSection.querySelector("#topKInput");
     
     const userId = userIdInput.value.trim();
     const selectedOrgId = orgSelect.value;
@@ -361,6 +367,7 @@
     const memoryEnabled = toggleCheckbox.checked;
     const autoInjectEnabled = autoInjectCheckbox.checked;
     const similarityThreshold = parseFloat(thresholdSlider.value);
+    const topK = parseInt(topKInput.value, 10);
     
     // Prepare settings object
     const settings = {
@@ -371,7 +378,8 @@
       selected_project_name: selectedProjectName || undefined,
       memory_enabled: memoryEnabled,
       auto_inject_enabled: autoInjectEnabled,
-      similarity_threshold: similarityThreshold
+      similarity_threshold: similarityThreshold,
+      top_k: topK
     };
     
     // Remove undefined values
@@ -424,7 +432,7 @@
     });
   }
 
-  function setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, saveSection, memoryCountContainer, footerToggle) {
+  function setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle) {
     // Close button
     const closeBtn = sidebarContainer.querySelector("#closeBtn");
     closeBtn.addEventListener("click", toggleSidebar);
@@ -493,6 +501,17 @@
       thresholdValue.textContent = parseFloat(this.value).toFixed(1);
     });
 
+    // Top K input validation
+    const topKInput = topKSection.querySelector("#topKInput");
+    topKInput.addEventListener("input", function() {
+      const value = parseInt(this.value, 10);
+      if (value < 1) {
+        this.value = 1;
+      } else if (value > 50) {
+        this.value = 50;
+      }
+    });
+
     // Save button
     const saveBtn = saveSection.querySelector("#saveSettingsBtn");
     const saveText = saveSection.querySelector(".save-text");
@@ -500,7 +519,7 @@
     const saveMessage = saveSection.querySelector("#saveMessage");
     
     saveBtn.addEventListener("click", function() {
-      saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection);
+      saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection);
     });
   }
 
@@ -1335,6 +1354,16 @@
           font-size: 12px;
           color: var(--text-gray);
           margin-top: 4px;
+        }
+        
+        .settings-input[type="number"] {
+          -moz-appearance: textfield;
+        }
+        
+        .settings-input[type="number"]::-webkit-outer-spin-button,
+        .settings-input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
         }
     `;
     document.head.appendChild(style);

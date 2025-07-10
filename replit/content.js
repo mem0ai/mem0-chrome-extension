@@ -511,7 +511,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           },
           rerank: false,
           threshold: threshold,
-          limit: topK,
+          top_k: topK,
           filter_memories: true,
           ...optionalParams,
         }),

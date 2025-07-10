@@ -1989,7 +1989,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
           },
           rerank: false,
           threshold: threshold,
-          limit: topK,
+          top_k: topK,
           filter_memories: true,
           ...optionalParams,
         }),

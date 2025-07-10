@@ -574,7 +574,7 @@ async function searchMemories(query) {
         },
         rerank: false,
         threshold: threshold,
-        limit: topK,
+        top_k: topK,
         filter_memories: true,
         ...optionalParams,
       });

@@ -1604,7 +1604,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
           },
           rerank: false,
           threshold: threshold,
-          limit: topK,
+          top_k: topK,
           filter_memories: true,
           ...optionalParams,
         }),

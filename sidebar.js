@@ -229,7 +229,8 @@
       </div>
       <p class="section-description">Automatically inject relevant memories into conversations</p>
     `;
-    settingsTabContent.appendChild(autoInjectSection);
+    // Disabling it for now as auto-inject is not working
+    // settingsTabContent.appendChild(autoInjectSection);
     
     // Add threshold slider section
     const thresholdSection = document.createElement("div");

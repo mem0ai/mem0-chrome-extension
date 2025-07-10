@@ -462,7 +462,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"],
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
         function (items) {
           resolve(items);
         }
@@ -472,6 +472,8 @@ async function handleMem0Modal(sourceButtonId = null) {
     const apiKey = data.apiKey;
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
+    const topK = data.top_k !== undefined ? data.top_k : 10;
 
     const optionalParams = {}
 
@@ -508,8 +510,8 @@ async function handleMem0Modal(sourceButtonId = null) {
             user_id: userId,
           },
           rerank: false,
-          threshold: 0.3,
-          limit: 10,
+          threshold: threshold,
+          limit: topK,
           filter_memories: true,
           ...optionalParams,
         }),

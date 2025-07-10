@@ -540,8 +540,10 @@ const MEM0_API_BASE_URL = "https://api.mem0.ai";
 
 async function searchMemories(query) {
     try {
-      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id"]);
+      const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"]);
       const userId = items.userId || items.user_id || "chrome-extension-user"; 
+      const threshold = items.similarity_threshold !== undefined ? items.similarity_threshold : 0.3;
+      const topK = items.top_k !== undefined ? items.top_k : 10;
 
       if (!items.access_token && !items.apiKey) {
         return reject(new Error("Authentication details missing"));
@@ -571,8 +573,8 @@ async function searchMemories(query) {
           user_id: userId,
         },
         rerank: false,
-        threshold: 0.3,
-        limit: 10,
+        threshold: threshold,
+        limit: topK,
         filter_memories: true,
         ...optionalParams,
       });

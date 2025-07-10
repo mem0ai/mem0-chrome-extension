@@ -1540,7 +1540,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
+        ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
         function (items) {
           resolve(items);
         }
@@ -1551,6 +1551,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const memoryEnabled = data.memory_enabled !== false; // Default to true if not set
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
+    const topK = data.top_k !== undefined ? data.top_k : 10;
     
     const optionalParams = {}
     if(data.selected_org) {
@@ -1601,8 +1603,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
             user_id: userId,
           },
           rerank: false,
-          threshold: 0.3,
-          limit: 10,
+          threshold: threshold,
+          limit: topK,
           filter_memories: true,
           ...optionalParams,
         }),

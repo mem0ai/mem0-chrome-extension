@@ -851,6 +851,12 @@ function updateInputWithMemories() {
 
 // Function to show a small popup message near the button
 function showButtonPopup(button, message) {
+  // Hide the hover pop-up so it doesn't interfere
+  const hoverPopover = document.querySelector('.mem0-button-popover');
+  if (hoverPopover) {
+    hoverPopover.style.display = 'none';
+  }
+
   // Remove any existing popups
   const existingPopup = document.querySelector('.mem0-button-popup');
   if (existingPopup) {
@@ -872,7 +878,7 @@ function showButtonPopup(button, message) {
     border-radius: 6px;
     font-size: 12px;
     white-space: nowrap;
-    z-index: 10001;
+    z-index: 10002; /* Higher z-index */
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     font-family: 'Google Sans', Roboto, sans-serif;
   `;
@@ -906,10 +912,13 @@ function showButtonPopup(button, message) {
     button.appendChild(popup);
   }
   
-  // Auto-remove after 3 seconds
+  // Auto-remove after 3 seconds and restore hover pop-up
   setTimeout(() => {
     if (popup && popup.parentElement) {
       popup.remove();
+    }
+    if (hoverPopover) {
+      hoverPopover.style.display = 'block';
     }
   }, 3000);
 }
@@ -1935,12 +1944,12 @@ async function handleMem0Modal(sourceButtonId = null) {
   }
 
   const textarea = getTextarea();
-  let message = textarea ? (textarea.textContent || textarea.innerText || "") : "";
+  let message = textarea ? (textarea.textContent || textarea.innerText || "").trim() : "";
   
   // If no message, show a popup and return
-  if (!message || message.trim() === '') {
+  if (!message) {
     // Show message that requires input
-    const mem0Button = document.querySelector('#mem0-icon-button');
+    const mem0Button = document.querySelector('button[aria-label="Mem0"]');
     if (mem0Button) {
       showButtonPopup(mem0Button, 'Please enter some text first');
     }

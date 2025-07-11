@@ -895,9 +895,16 @@ function showButtonPopup(button, message) {
   
   popup.appendChild(arrow);
   
-  // Position relative to button
-  button.style.position = 'relative';
-  button.appendChild(popup);
+  // Position relative to button's parent container for better stability
+  const buttonContainer = button.parentElement;
+  if (buttonContainer) {
+    buttonContainer.style.position = 'relative';
+    buttonContainer.appendChild(popup);
+  } else {
+    // Fallback if container is not found
+    button.style.position = 'relative';
+    button.appendChild(popup);
+  }
   
   // Auto-remove after 3 seconds
   setTimeout(() => {
@@ -1928,12 +1935,12 @@ async function handleMem0Modal(sourceButtonId = null) {
   }
 
   const textarea = getTextarea();
-  let message = textarea ? (textarea.textContent || textarea.innerText || "").trim() : "";
+  let message = textarea ? (textarea.textContent || textarea.innerText || "") : "";
   
   // If no message, show a popup and return
-  if (!message) {
+  if (!message || message.trim() === '') {
     // Show message that requires input
-    const mem0Button = document.querySelector('button[aria-label="Mem0"]');
+    const mem0Button = document.querySelector('#mem0-icon-button');
     if (mem0Button) {
       showButtonPopup(mem0Button, 'Please enter some text first');
     }

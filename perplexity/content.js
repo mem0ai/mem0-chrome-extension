@@ -18,8 +18,10 @@ let dragOffset = { x: 0, y: 0 };
 
 function getTextarea() {
   return (
-    document.querySelector('div[contenteditable="true"][id="ask-input"]') ||
-    document.querySelector('div[contenteditable="true"][aria-placeholder="Ask anything…"]') ||
+    document.querySelector('textarea[id="ask-input"]') || // Follow-up screen textarea
+    document.querySelector('textarea[placeholder="Ask a follow-up…"]') || // Follow-up screen textarea
+    document.querySelector('div[contenteditable="true"][id="ask-input"]') || // Main screen Lexical editor
+    document.querySelector('div[contenteditable="true"][aria-placeholder="Ask anything…"]') || // Main screen Lexical editor
     document.querySelector('textarea[placeholder="Ask anything…"]') // Fallback for older versions
   );
 }

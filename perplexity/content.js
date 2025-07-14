@@ -18,8 +18,266 @@ let dragOffset = { x: 0, y: 0 };
 
 function getTextarea() {
   return (
-    document.querySelector('textarea[placeholder="Ask anything…"]')
+    document.querySelector('textarea[id="ask-input"]') || // Follow-up screen textarea
+    document.querySelector('textarea[placeholder="Ask a follow-up…"]') || // Follow-up screen textarea
+    document.querySelector('div[contenteditable="true"][id="ask-input"]') || // Main screen Lexical editor
+    document.querySelector('div[contenteditable="true"][aria-placeholder="Ask anything…"]') || // Main screen Lexical editor
+    document.querySelector('textarea[placeholder="Ask anything…"]') // Fallback for older versions
   );
+}
+
+// Helper function to get text content from either textarea or contenteditable div
+function getInputText(inputElement) {
+  if (!inputElement) return '';
+  
+  if (inputElement.tagName === 'TEXTAREA') {
+    return inputElement.value || '';
+  } else if (inputElement.contentEditable === 'true') {
+    // For Lexical editor, properly handle the structure
+    const paragraph = inputElement.querySelector('p[dir="ltr"]');
+    if (paragraph) {
+      let text = '';
+      const childNodes = paragraph.childNodes;
+      
+      for (let i = 0; i < childNodes.length; i++) {
+        const node = childNodes[i];
+        if (node.nodeType === Node.TEXT_NODE) {
+          text += node.textContent;
+        } else if (node.tagName === 'SPAN' && node.getAttribute('data-lexical-text') === 'true') {
+          text += node.textContent;
+        } else if (node.tagName === 'BR') {
+          text += '\n';
+        }
+      }
+      
+      return text;
+    }
+    
+    // Fallback to textContent if structure is different
+    return inputElement.textContent || '';
+  }
+  
+  return '';
+}
+
+// Helper function to set text content for either textarea or contenteditable div
+function setInputText(inputElement, text) {
+  console.log('setInputText called with text:', text);
+  console.log('inputElement:', inputElement);
+  
+  if (!inputElement) {
+    console.log('No input element, returning');
+    return;
+  }
+  
+  if (inputElement.tagName === 'TEXTAREA') {
+    console.log('Using textarea approach');
+    inputElement.value = text;
+    inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+  } else if (inputElement.contentEditable === 'true') {
+    console.log('Using contenteditable approach for Lexical editor');
+    
+    // New approach: Use clipboard with actual paste event
+    console.log('Attempting clipboard-based approach');
+    
+    // Focus the input first
+    inputElement.focus();
+    
+    // Select all existing content
+    document.execCommand('selectAll', false, null);
+    
+    // Try to write to clipboard and then trigger paste
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      console.log('Using modern Clipboard API');
+      navigator.clipboard.writeText(text).then(() => {
+        console.log('Text written to clipboard successfully');
+        
+        // Wait a bit then trigger paste
+        setTimeout(() => {
+          // Create and dispatch a paste event
+          const pasteEvent = new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: new DataTransfer()
+          });
+          
+          // Add the text to clipboard data
+          pasteEvent.clipboardData.setData('text/plain', text);
+          
+          console.log('Dispatching paste event');
+          const pasteResult = inputElement.dispatchEvent(pasteEvent);
+          console.log('Paste event result:', pasteResult);
+          
+          // Check if it worked
+          setTimeout(() => {
+            console.log('Content after paste event:', getInputText(inputElement));
+            
+            // If paste event didn't work, try execCommand paste
+            if (!getInputText(inputElement).includes(text.substring(0, 10))) {
+              console.log('Paste event failed, trying execCommand paste');
+              const execPasteResult = document.execCommand('paste');
+              console.log('execCommand paste result:', execPasteResult);
+              
+              setTimeout(() => {
+                console.log('Content after execCommand paste:', getInputText(inputElement));
+                
+                // If still not working, try the typing simulation
+                if (!getInputText(inputElement).includes(text.substring(0, 10))) {
+                  console.log('All clipboard approaches failed, trying typing simulation');
+                  simulateTyping(inputElement, text);
+                }
+              }, 100);
+            }
+          }, 100);
+        }, 100);
+      }).catch((error) => {
+        console.log('Clipboard write failed:', error);
+        // Fallback to typing simulation
+        simulateTyping(inputElement, text);
+      });
+    } else {
+      console.log('Clipboard API not available, falling back to typing simulation');
+      simulateTyping(inputElement, text);
+    }
+  }
+}
+
+// Helper function to simulate typing using Selection API
+function simulateTyping(inputElement, text) {
+  console.log('simulateTyping called with text:', text);
+  console.log('inputElement:', inputElement);
+  
+  inputElement.focus();
+  console.log('Input element focused');
+  
+  // Try using Selection API with Range to insert text
+  const selection = window.getSelection();
+  
+  // Clear existing content by selecting all
+  selection.selectAllChildren(inputElement);
+  console.log('Selected all children');
+  
+  // Try to delete existing content first
+  selection.deleteFromDocument();
+  console.log('Deleted existing content');
+  
+  // Now try to insert the new text using different methods
+  
+  // Method 1: Try using insertText with Selection API
+  console.log('Attempting Method 1: Selection API insertText');
+  try {
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(document.createTextNode(text));
+    console.log('Method 1 succeeded - inserted text node');
+    console.log('Content after Method 1:', getInputText(inputElement));
+    
+    // If this worked, we're done
+    if (getInputText(inputElement).includes(text.substring(0, 10))) {
+      console.log('Method 1 worked! Content updated successfully');
+      return;
+    }
+  } catch (error) {
+    console.log('Method 1 failed:', error);
+  }
+  
+  // Method 2: Try using execCommand with composition events
+  console.log('Attempting Method 2: execCommand with composition');
+  try {
+    // Start composition
+    const compositionStart = new CompositionEvent('compositionstart', {
+      bubbles: true,
+      cancelable: true,
+      data: ''
+    });
+    inputElement.dispatchEvent(compositionStart);
+    
+    // Update composition
+    const compositionUpdate = new CompositionEvent('compositionupdate', {
+      bubbles: true,
+      cancelable: true,
+      data: text
+    });
+    inputElement.dispatchEvent(compositionUpdate);
+    
+    // End composition
+    const compositionEnd = new CompositionEvent('compositionend', {
+      bubbles: true,
+      cancelable: true,
+      data: text
+    });
+    inputElement.dispatchEvent(compositionEnd);
+    
+    console.log('Method 2 composition events dispatched');
+    console.log('Content after Method 2:', getInputText(inputElement));
+    
+    // If this worked, we're done
+    if (getInputText(inputElement).includes(text.substring(0, 10))) {
+      console.log('Method 2 worked! Content updated successfully');
+      return;
+    }
+  } catch (error) {
+    console.log('Method 2 failed:', error);
+  }
+  
+  // Method 3: Try direct DOM manipulation with mutation observer disabled
+  console.log('Attempting Method 3: Direct DOM manipulation');
+  try {
+    // Find or create the paragraph structure
+    let paragraph = inputElement.querySelector('p[dir="ltr"]');
+    if (!paragraph) {
+      paragraph = document.createElement('p');
+      paragraph.setAttribute('dir', 'ltr');
+      inputElement.appendChild(paragraph);
+    }
+    
+    // Create a span with the text
+    const span = document.createElement('span');
+    span.setAttribute('data-lexical-text', 'true');
+    span.textContent = text;
+    
+    // Clear existing content and add new span
+    paragraph.innerHTML = '';
+    paragraph.appendChild(span);
+    
+    console.log('Method 3 DOM manipulation completed');
+    console.log('Content after Method 3:', getInputText(inputElement));
+    
+    // Dispatch events to notify Lexical
+    inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+    inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    // If this worked, we're done
+    if (getInputText(inputElement).includes(text.substring(0, 10))) {
+      console.log('Method 3 worked! Content updated successfully');
+      return;
+    }
+  } catch (error) {
+    console.log('Method 3 failed:', error);
+  }
+  
+  // Method 4: Try using keyboard simulation
+  console.log('Attempting Method 4: Keyboard simulation');
+  try {
+    // Clear content with Ctrl+A and Delete
+    inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
+    inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    
+    // Type each character with keyboard events
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charAt(i);
+      inputElement.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+      inputElement.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
+      inputElement.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+    }
+    
+    console.log('Method 4 keyboard simulation completed');
+    console.log('Content after Method 4:', getInputText(inputElement));
+  } catch (error) {
+    console.log('Method 4 failed:', error);
+  }
+  
+  console.log('All methods attempted. Final content:', getInputText(inputElement));
 }
 
 // Function to add the mem0 button to the UI
@@ -183,9 +441,9 @@ async function addMem0Button() {
     // Get the current input text
     const textarea = getTextarea();
     
-    if (textarea && textarea.value.trim()) {
+    if (textarea && getInputText(textarea).trim()) {
       // If there's text in the input, process memories
-      handleMem0Processing(textarea.value.trim(), false, 'mem0-icon-button');
+      handleMem0Processing(getInputText(textarea).trim(), false, 'mem0-icon-button');
     } else {
       // If no text, check login status first
       chrome.storage.sync.get(
@@ -232,7 +490,7 @@ function updateNotificationDot() {
   
   // Function to check if input has text
   const checkForText = () => {
-    const inputText = textarea.value || '';
+    const inputText = getInputText(textarea);
     const hasText = inputText.trim() !== '';
     
     if (hasText) {
@@ -1294,7 +1552,7 @@ function updateInputWithMemories() {
   }
   
   // First, remove any existing memory content from the input
-  let currentContent = inputElement.value;
+  let currentContent = getInputText(inputElement);
   const memoryMarker = "\n\nHere is some of my memories to help answer better";
   
   if (currentContent.includes(memoryMarker)) {
@@ -1332,7 +1590,7 @@ function captureAndStoreMemory() {
   if (!textarea) return;
 
   // Get raw content from the input element
-  let message = textarea.value;
+  let message = getInputText(textarea);
 
   if (!message || message.trim() === '') return;
   
@@ -1495,7 +1753,7 @@ function setupInputObserver() {
   inputObserver = new MutationObserver((mutations) => {
     for (let mutation of mutations) {
       if (mutation.type === "characterData" || mutation.type === "childList") {
-        lastInputValue = textarea.value;
+        lastInputValue = getInputText(textarea);
       }
     }
   });
@@ -1507,7 +1765,7 @@ function setupInputObserver() {
   });
 
   textarea.addEventListener("input", function () {
-    lastInputValue = this.value;
+    lastInputValue = getInputText(this);
   });
 
   // Remove Enter key event listeners
@@ -1520,7 +1778,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
     return;
   }
   
-  let message = capturedText || textarea.value.trim();
+  let message = capturedText || getInputText(textarea).trim();
   
   // Store the original message to preserve it
   const originalMessage = message;
@@ -1540,7 +1798,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
   try {
     const data = await new Promise((resolve) => {
       chrome.storage.sync.get(
-        ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
+        ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
         function (items) {
           resolve(items);
         }
@@ -1551,6 +1809,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const memoryEnabled = data.memory_enabled !== false; // Default to true if not set
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
+    const topK = data.top_k !== undefined ? data.top_k : 10;
     
     const optionalParams = {}
     if(data.selected_org) {
@@ -1601,8 +1861,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
             user_id: userId,
           },
           rerank: false,
-          threshold: 0.3,
-          limit: 10,
+          threshold: threshold,
+          top_k: topK,
           filter_memories: true,
           ...optionalParams,
         }),
@@ -1686,9 +1946,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
 
 function setInputValue(inputElement, value) {
   if (inputElement) {
-    inputElement.value = value;
+    setInputText(inputElement, value);
     lastInputValue = value;
-    inputElement.dispatchEvent(new Event("input", { bubbles: true }));
   }
 }
 
@@ -1752,8 +2011,8 @@ function initializeMem0Integration() {
       if (event.ctrlKey && event.key === "m") {
         event.preventDefault();
         const textarea = getTextarea();
-        if (textarea && textarea.value.trim()) {
-          handleMem0Processing(textarea.value.trim(), false, 'mem0-icon-button');
+        if (textarea && getInputText(textarea).trim()) {
+          handleMem0Processing(getInputText(textarea).trim(), false, 'mem0-icon-button');
         }
       }
     });

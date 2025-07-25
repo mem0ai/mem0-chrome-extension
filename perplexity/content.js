@@ -1640,6 +1640,7 @@ function captureAndStoreMemory() {
           metadata: {
             provider: "Perplexity",
           },
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams
         }),
       }).catch((error) => {
@@ -1864,6 +1865,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -1916,6 +1918,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
         messages: messages,
         user_id: userId,
         infer: true,
+        source: "OPENMEMORY_CHROME_EXTENSION",
         metadata: {
           provider: "Perplexity",
         },

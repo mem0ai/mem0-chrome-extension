@@ -346,6 +346,7 @@ function addSendButtonListener() {
             metadata: {
               provider: "Gemini",
             },
+            source: "OPENMEMORY_CHROME_EXTENSION",
             ...optionalParams,
           }),
         }).catch((error) => {
@@ -469,6 +470,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -515,6 +517,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
         metadata: {
           provider: "Gemini",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     })
@@ -2013,6 +2016,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -2052,6 +2056,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "Gemini",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     }).catch((error) => {

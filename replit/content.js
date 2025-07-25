@@ -318,6 +318,7 @@ function addSendButtonListener() {
             metadata: {
               provider: "Replit",
             },
+            source: "OPENMEMORY_CHROME_EXTENSION",
             ...optionalParams,
           }),
         })
@@ -513,6 +514,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -553,6 +555,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "Replit",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     }).catch((error) => {

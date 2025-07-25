@@ -1157,6 +1157,7 @@ function captureAndStoreMemory() {
           metadata: {
             provider: "ChatGPT",
           },
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }).catch((error) => {
@@ -1496,6 +1497,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -1534,6 +1536,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "ChatGPT",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     }).catch((error) => {
@@ -1876,6 +1879,7 @@ function sendMemoriesToMem0(memories) {
               metadata: {
                 provider: "ChatGPT",
               },
+              source: "OPENMEMORY_CHROME_EXTENSION",
               ...optionalParams,
             }),
           })
@@ -1982,6 +1986,7 @@ function sendMemoryToMem0(memory, infer = true) {
               metadata: {
                 provider: "ChatGPT",
               },
+              source: "OPENMEMORY_CHROME_EXTENSION",
               ...optionalParams,
             }),
           })

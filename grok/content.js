@@ -132,6 +132,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
           filters: {
             user_id: userId,
           },
+          source: "OPENMEMORY_CHROME_EXTENSION",
           rerank: false,
           threshold: threshold,
           top_k: topK,
@@ -182,6 +183,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
         metadata: {
           provider: "Grok",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     })
@@ -288,6 +290,7 @@ function addSendButtonListener() {
             metadata: {
               provider: "Grok",
             },
+            source: "OPENMEMORY_CHROME_EXTENSION",
             ...optionalParams,
           }),
         }).catch((error) => {
@@ -1669,6 +1672,7 @@ async function handleMem0Modal(sourceButtonId = null) {
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -1708,6 +1712,7 @@ async function handleMem0Modal(sourceButtonId = null) {
         metadata: {
           provider: "Grok",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     }).catch((error) => {

@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", function () {
       chrome.storage.sync.get(["userLoggedIn"], function (data) {
         if (data.userLoggedIn) {
           chrome.tabs.create(
-            { url: "https://app.mem0.ai/extension" },
+            { url: "https://app.mem0.ai/extension?source=chrome-extension" },
             function (tab) {
               window.close();
             }

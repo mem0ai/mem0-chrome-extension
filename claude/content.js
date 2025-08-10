@@ -1991,6 +1991,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
           threshold: threshold,
           top_k: topK,
           filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }
@@ -2030,6 +2031,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
         metadata: {
           provider: "Claude",
         },
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     })
@@ -2523,6 +2525,7 @@ async function captureAndStoreMemory() {
           metadata: {
             provider: "Claude",
           },
+          source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
       }).catch((error) => {
@@ -2798,6 +2801,7 @@ async function sendMemoriesToMem0(memories) {
       body: JSON.stringify({
         userId: userId,
         memories: memories,
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       }),
     });

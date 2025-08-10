@@ -576,6 +576,7 @@ async function searchMemories(query) {
         threshold: threshold,
         top_k: topK,
         filter_memories: true,
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       });
 
@@ -645,6 +646,7 @@ function addMemory(memoryText) {
           }
         ],
         user_id: userId,
+        source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       });
 

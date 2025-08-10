@@ -856,6 +856,12 @@ function updateInputWithMemories() {
 
 // Function to show a small popup message near the button
 function showButtonPopup(button, message) {
+  // Hide the hover pop-up so it doesn't interfere
+  const hoverPopover = document.querySelector('.mem0-button-popover');
+  if (hoverPopover) {
+    hoverPopover.style.display = 'none';
+  }
+
   // Remove any existing popups
   const existingPopup = document.querySelector('.mem0-button-popup');
   if (existingPopup) {
@@ -877,7 +883,7 @@ function showButtonPopup(button, message) {
     border-radius: 6px;
     font-size: 12px;
     white-space: nowrap;
-    z-index: 10001;
+    z-index: 10002; /* Higher z-index */
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     font-family: 'Google Sans', Roboto, sans-serif;
   `;
@@ -900,14 +906,24 @@ function showButtonPopup(button, message) {
   
   popup.appendChild(arrow);
   
-  // Position relative to button
-  button.style.position = 'relative';
-  button.appendChild(popup);
+  // Position relative to button's parent container for better stability
+  const buttonContainer = button.parentElement;
+  if (buttonContainer) {
+    buttonContainer.style.position = 'relative';
+    buttonContainer.appendChild(popup);
+  } else {
+    // Fallback if container is not found
+    button.style.position = 'relative';
+    button.appendChild(popup);
+  }
   
-  // Auto-remove after 3 seconds
+  // Auto-remove after 3 seconds and restore hover pop-up
   setTimeout(() => {
     if (popup && popup.parentElement) {
       popup.remove();
+    }
+    if (hoverPopover) {
+      hoverPopover.style.display = 'block';
     }
   }, 3000);
 }

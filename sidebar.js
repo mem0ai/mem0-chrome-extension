@@ -172,6 +172,21 @@
     `;
     settingsTabContent.appendChild(memoryToggleSection);
     
+    // Track searches toggle section
+    const trackSearchSection = document.createElement("div");
+    trackSearchSection.className = "section";
+    trackSearchSection.innerHTML = `
+      <div class="section-header">
+        <h2 class="section-title">Track searches</h2>
+        <label class="switch">
+          <input type="checkbox" id="trackSearchesToggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="section-description">Save searches and typed URLs as memories</p>
+    `;
+    settingsTabContent.appendChild(trackSearchSection);
+    
     // Add user ID input section
     const userIdSection = document.createElement("div");
     userIdSection.className = "section";
@@ -291,9 +306,13 @@
     `;
     
     // Load saved settings
-    chrome.storage.sync.get(["memory_enabled", "user_id", "selected_org", "selected_project", "auto_inject_enabled", "similarity_threshold", "top_k"], function (result) {
+    chrome.storage.sync.get(["memory_enabled", "user_id", "selected_org", "selected_project", "auto_inject_enabled", "similarity_threshold", "top_k", "track_searches"], function (result) {
       const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
       toggleCheckbox.checked = result.memory_enabled !== false;
+      
+      // Load track searches (default: enabled)
+      const trackSearchesCheckbox = trackSearchSection.querySelector("#trackSearchesToggle");
+      trackSearchesCheckbox.checked = result.track_searches !== false;
       
       const userIdInput = userIdSection.querySelector("#userIdInput");
       // Set saved value or keep default value
@@ -322,7 +341,7 @@
     sidebarContainer.appendChild(footerToggle);
 
     // Add event listeners
-    setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle);
+    setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle, trackSearchSection);
 
     document.body.appendChild(sidebarContainer);
 
@@ -344,7 +363,7 @@
     fetchMemoriesAndCount();
   }
 
-  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection) {
+  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection) {
     // Show loading state
     saveBtn.disabled = true;
     saveText.style.display = "none";
@@ -359,6 +378,7 @@
     const autoInjectCheckbox = autoInjectSection.querySelector("#autoInjectToggle");
     const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
     const topKInput = topKSection.querySelector("#topKInput");
+    const trackSearchesCheckbox = trackSearchSection.querySelector("#trackSearchesToggle");
     
     const userId = userIdInput.value.trim();
     const selectedOrgId = orgSelect.value;
@@ -380,7 +400,8 @@
       memory_enabled: memoryEnabled,
       auto_inject_enabled: autoInjectEnabled,
       similarity_threshold: similarityThreshold,
-      top_k: topK
+      top_k: topK,
+      track_searches: trackSearchesCheckbox.checked
     };
     
     // Remove undefined values
@@ -433,7 +454,7 @@
     });
   }
 
-  function setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle) {
+  function setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle, trackSearchSection) {
     // Close button
     const closeBtn = sidebarContainer.querySelector("#closeBtn");
     closeBtn.addEventListener("click", toggleSidebar);
@@ -520,7 +541,7 @@
     const saveMessage = saveSection.querySelector("#saveMessage");
     
     saveBtn.addEventListener("click", function() {
-      saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection);
+      saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection);
     });
   }
 

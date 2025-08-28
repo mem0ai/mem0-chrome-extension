@@ -1,3 +1,6 @@
+import { initContextMenuMemory } from './context-menu-memory.js';
+import { initDirectUrlTracking } from './direct-url-tracker.js';
+
 chrome.action.onClicked.addListener((tab) => {
   // Check auth status and open popup or toggle sidebar
   chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
@@ -17,10 +20,13 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-
 // Keep the existing message listener for opening dashboard
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "openDashboard") {
     chrome.tabs.create({ url: request.url });
   }
 });
+
+// Initialize features
+initContextMenuMemory();
+initDirectUrlTracking();

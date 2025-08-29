@@ -1987,10 +1987,10 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
           filters: {
             user_id: userId,
           },
-          rerank: false,
+          rerank: true,
           threshold: threshold,
           top_k: topK,
-          filter_memories: true,
+          filter_memories: false,
           source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),

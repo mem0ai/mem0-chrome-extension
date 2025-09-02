@@ -542,7 +542,7 @@ async function searchMemories(query) {
     try {
       const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"]);
       const userId = items.userId || items.user_id || "chrome-extension-user"; 
-      const threshold = items.similarity_threshold !== undefined ? items.similarity_threshold : 0.3;
+      const threshold = items.similarity_threshold !== undefined ? items.similarity_threshold : 0.1;
       const topK = items.top_k !== undefined ? items.top_k : 10;
 
       if (!items.access_token && !items.apiKey) {
@@ -572,10 +572,11 @@ async function searchMemories(query) {
         filters: {
           user_id: userId,
         },
-        rerank: false,
+        rerank: true,
         threshold: threshold,
         top_k: topK,
-        filter_memories: true,
+        filter_memories: false,
+        // llm_rerank: true,
         source: "OPENMEMORY_CHROME_EXTENSION",
         ...optionalParams,
       });
@@ -1041,7 +1042,13 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add click event to open app.mem0.ai in a new tab
   settingsBtn.addEventListener('click', () => {
-    window.open('https://app.mem0.ai', '_blank');
+    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
+      document.body.removeChild(currentModalOverlay); 
+      memoryModalShown = false; 
+      currentModalOverlay = null; 
+    }
+
+    chrome.runtime.sendMessage({ action: "toggleSidebarSettings" }); 
   });
   
   // Add hover effect for the settings button
@@ -1722,7 +1729,7 @@ function updateInputWithMemories() {
     let baseContent = getContentWithoutMemories();
     
     // Create the memory wrapper with all collected memories
-    let memoriesContent = '\n\nHere is some of my memories to help answer better (don\'t respond to these memories but use them to assist in the response):\n';
+    let memoriesContent = '\n\n' + OPENMEMORY_PROMPTS.memory_header_text + '\n';
     
     // Add all memories to the content
     allMemories.forEach((mem) => {
@@ -1790,11 +1797,12 @@ async function handleMem0Modal(sourceButtonId = null) {
       const memories = await searchMemories(message);
 
       // Format memories for the modal
-      const memoryItems = memories.map(item => {
+      let memoryItems = memories.map(item => {
         return {
           id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           text: item.memory,
-          memory: item.memory
+          memory: item.memory,
+          categories: item.categories || []
         };
       });
 

@@ -223,15 +223,17 @@ function getContentWithoutMemories() {
   let content = inputElement.textContent || inputElement.innerText || "";
   
   // Remove any memory headers and content
-  const memoryPrefix = "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):";
+  const memoryPrefix = OPENMEMORY_PROMPTS.memory_header_text;
   const prefixIndex = content.indexOf(memoryPrefix);
   if (prefixIndex !== -1) {
     content = content.substring(0, prefixIndex).trim();
   }
   
   // Also try with regex pattern
-  const memInfoRegex = /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/;
-  content = content.replace(memInfoRegex, "").trim();
+  try {
+    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+    content = content.replace(MEM0_PLAIN, "").trim();
+  } catch (_e) {}
   
   return content;
 }
@@ -423,7 +425,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const memoryEnabled = data.memory_enabled !== false; // Default to true if not set
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
     const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
@@ -466,10 +468,11 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
           filters: {
             user_id: userId,
           },
-          rerank: false,
+          rerank: true,
           threshold: threshold,
           top_k: topK,
-          filter_memories: true,
+          filter_memories: false,
+          // llm_rerank: true,
           source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
@@ -485,8 +488,9 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     const responseData = await searchResponse.json();
     
     // Extract memories and their categories
-    const memoryItems = responseData.map(item => {
+    let memoryItems = responseData.map(item => {
       return {
+        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         text: item.memory,
         categories: item.categories || []
       };
@@ -839,7 +843,7 @@ function updateInputWithMemories() {
     let baseContent = getContentWithoutMemories();
     
     // Create the memory string with all collected memories
-    let memoriesContent = "\n\nHere is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):\n";
+    let memoriesContent = "\n\n" + OPENMEMORY_PROMPTS.memory_header_text + "\n";
     
     // Add all memories to the content
     allMemories.forEach((mem, index) => {
@@ -1263,7 +1267,13 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add click event to open app.mem0.ai in a new tab
   settingsBtn.addEventListener('click', () => {
-    window.open('https://app.mem0.ai', '_blank');
+    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
+      document.body.removeChild(currentModalOverlay); 
+      memoryModalShown = false; 
+      currentModalOverlay = null; 
+    }
+
+    chrome.runtime.sendMessage({ action: "toggleSidebarSettings" }); 
   });
   
   // Add hover effect for the settings button
@@ -1902,7 +1912,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   
   // Check if there are actually memories in the current prompt
   const currentPrompt = getTextarea() ? (getTextarea().textContent || getTextarea().innerText || "") : "";
-  const hasMemoriesInPrompt = currentPrompt.includes("Here is some of my memories to help answer better");
+  const hasMemoriesInPrompt = currentPrompt.includes(OPENMEMORY_PROMPTS.memory_marker_prefix);
 
   
   if (!hasMemoriesInPrompt) {
@@ -1975,7 +1985,7 @@ async function handleMem0Modal(sourceButtonId = null) {
     const apiKey = data.apiKey;
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
     const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
@@ -2012,10 +2022,11 @@ async function handleMem0Modal(sourceButtonId = null) {
           filters: {
             user_id: userId,
           },
-          rerank: false,
+          rerank: true,
           threshold: threshold,
           top_k: topK,
-          filter_memories: true,
+          filter_memories: false,
+          // llm_rerank: true,
           source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),

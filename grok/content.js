@@ -88,7 +88,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const memoryEnabled = data.memory_enabled !== false; // Default to true if not set
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
     const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
@@ -119,23 +119,6 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     }
 
     // Existing search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      ...optionalParams,
-    };
-    
-    // Debug logging
-    console.log('[OpenMemory] Grok Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -144,7 +127,18 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify(searchPayload),
+        body: JSON.stringify({
+          query: message,
+          filters: {
+            user_id: userId,
+          },
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          rerank: false,
+          threshold: threshold,
+          top_k: topK,
+          filter_memories: true,
+          ...optionalParams,
+        }),
       }
     );
 
@@ -156,21 +150,9 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
 
     const responseData = await searchResponse.json();
     
-    // Debug logging
-    console.log('[OpenMemory] Grok Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
-    
     // Extract memories and their categories
-    let memoryItems = responseData.map(item => {
+    const memoryItems = responseData.map(item => {
       return {
-        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         text: item.memory,
         categories: item.categories || []
       };
@@ -295,26 +277,22 @@ function addSendButtonListener() {
         }
 
         // Send memory to mem0 API asynchronously without waiting for response
-        const storagePayload = {
-          messages: [{ role: "user", content: cleanMessage }],
-          user_id: userId,
-          infer: true,
-          metadata: {
-            provider: "Grok",
-          },
-          source: "OPENMEMORY_CHROME_EXTENSION",
-          ...optionalParams,
-        };
-        
-        console.log('[OpenMemory] Grok Storage Payload:', JSON.stringify(storagePayload, null, 2));
-        
         fetch("https://api.mem0.ai/v1/memories/", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: authHeader,
           },
-          body: JSON.stringify(storagePayload),
+          body: JSON.stringify({
+            messages: [{ role: "user", content: cleanMessage }],
+            user_id: userId,
+            infer: true,
+            metadata: {
+              provider: "Grok",
+            },
+            source: "OPENMEMORY_CHROME_EXTENSION",
+            ...optionalParams,
+          }),
         }).catch((error) => {
           console.error("Error saving memory:", error);
         });
@@ -372,9 +350,9 @@ function initializeMem0Integration() {
       updateNotificationDot();
     } else {
       // Remove the button if memory is disabled
-      const existingContainer = document.querySelector('#mem0-button-container');
-      if (existingContainer) {
-        existingContainer.remove();
+      const existingButton = document.querySelector('button[aria-label="Mem0"]');
+      if (existingButton && existingButton.parentElement) {
+        existingButton.parentElement.remove();
       }
     }
   });
@@ -397,11 +375,11 @@ function initializeMem0Integration() {
   setInterval(async () => {
     const memoryEnabled = await getMemoryEnabledState();
     if (!memoryEnabled) {
-      const existingContainer = document.querySelector('#mem0-button-container');
-      if (existingContainer) {
-        existingContainer.remove();
+      const existingButton = document.querySelector('button[aria-label="Mem0"]');
+      if (existingButton && existingButton.parentElement) {
+        existingButton.parentElement.remove();
       }
-    } else if (!document.querySelector('#mem0-button-container')) {
+    } else if (!document.querySelector('button[aria-label="Mem0"]')) {
       injectMem0Button();
     }
   }, 5000);
@@ -415,51 +393,27 @@ function injectMem0Button() {
     
     // Remove existing button if memory is disabled
     if (!memoryEnabled) {
-      const existingContainer = document.querySelector('#mem0-button-container');
-      if (existingContainer) {
-        existingContainer.remove();
+      const existingButton = document.querySelector('button[aria-label="Mem0"]');
+      if (existingButton && existingButton.parentElement) {
+        existingButton.parentElement.remove();
       }
       // Check again after some time in case the state changes
       setTimeout(tryAddButton, 5000);
       return;
     }
     
-    // Check if our button already exists
-    if (document.querySelector('button[aria-label="OpenMemory"]') || document.querySelector('#mem0-button-container')) {
-      return;
-    }
-    
-    // Look specifically for the Auto button to position next to it
-    let referenceButton = null;
-    const textarea = getTextarea();
-    
-    if (textarea) {
-      // Find the Auto button by looking in the immediate parent container of the textarea
-      // This is more specific and should avoid finding multiple buttons
-      let container = textarea.parentElement;
-      while (container && !referenceButton) {
-        const buttons = container.querySelectorAll('button');
-        for (const btn of buttons) {
-          // Check if this button contains "Auto" text and is visible
-          if (btn.textContent && btn.textContent.trim() === 'Auto' && btn.offsetParent !== null) {
-            referenceButton = btn;
-            break;
-          }
-        }
-        // Move to parent if we haven't found the Auto button yet
-        container = container.parentElement;
-        // Don't go too far up the DOM tree
-        if (container === document.body) break;
-      }
-    }
-    
-    if (!referenceButton) {
-      // If we can't find the Auto button, wait and try again
+    const thinkButton = document.querySelector('button[aria-label="Think"]');
+    if (!thinkButton) {
       setTimeout(tryAddButton, 1000);
       return;
     }
     
-    const parentDiv = referenceButton.parentElement;
+    // Check if our button already exists
+    if (document.querySelector('button[aria-label="Mem0"]')) {
+      return;
+    }
+    
+    const parentDiv = thinkButton.parentElement;
     if (!parentDiv) {
       setTimeout(tryAddButton, 1000);
       return;
@@ -467,45 +421,31 @@ function injectMem0Button() {
     
     // Create mem0 button container
     const mem0ButtonContainer = document.createElement('div');
-    mem0ButtonContainer.id = 'mem0-button-container';
     mem0ButtonContainer.style.position = 'relative'; // For positioning popover
-    mem0ButtonContainer.style.marginLeft = '4px'; // Smaller margin to be closer to Auto button
-    mem0ButtonContainer.style.display = 'flex';
-    mem0ButtonContainer.style.alignItems = 'center'; // Ensure vertical alignment
+    mem0ButtonContainer.style.marginLeft = '8px';
     
     // Create mem0 button
     const mem0Button = document.createElement('button');
-    mem0Button.className = referenceButton.className;
+    mem0Button.className = thinkButton.className;
     mem0Button.setAttribute('type', 'button');
     mem0Button.setAttribute('tabindex', '0');
     mem0Button.setAttribute('aria-pressed', 'false');
-    mem0Button.setAttribute('aria-label', 'OpenMemory');
+    mem0Button.setAttribute('aria-label', 'Mem0');
     mem0Button.setAttribute('data-state', 'closed');
     mem0Button.id = 'mem0-icon-button';
-    
-    // Add additional styling to match the Auto button better
-    mem0Button.style.minWidth = 'auto';
-    mem0Button.style.padding = '0';
-    mem0Button.style.width = '32px';
-    mem0Button.style.height = '32px';
-    mem0Button.style.display = 'flex';
-    mem0Button.style.alignItems = 'center';
-    mem0Button.style.justifyContent = 'center';
-    mem0Button.style.flexShrink = '0'; // Prevent shrinking
-    mem0Button.style.margin = '0'; // Reset any inherited margins
     
     // Create notification dot
     const notificationDot = document.createElement('div');
     notificationDot.id = 'mem0-notification-dot';
     notificationDot.style.cssText = `
       position: absolute;
-      top: -2px;
-      right: -2px;
-      width: 8px;
-      height: 8px;
+      top: 0px;
+      right: 0px;
+      width: 10px;
+      height: 10px;
       background-color:rgb(128, 221, 162);
       border-radius: 50%;
-      border: 1px solid #1C1C1E;
+      border: 2px solid #1C1C1E;
       display: none;
       z-index: 1001;
       pointer-events: none;
@@ -530,10 +470,11 @@ function injectMem0Button() {
       document.head.appendChild(style);
     }
     
-    // Create button content - icon only, similar to Claude style
+    // Create button content similar to Think button
     mem0Button.innerHTML = `
       <img src="${chrome.runtime.getURL('icons/mem0-claude-icon-p.png')}" 
-           width="18" height="18" style="display: block;">
+           width="18" height="18" style="margin-right: 4px;">
+      <span>Mem0</span>
     `;
     
     // Create popover element (hidden by default)
@@ -602,8 +543,8 @@ function injectMem0Button() {
     mem0ButtonContainer.appendChild(notificationDot);
     mem0ButtonContainer.appendChild(popover);
     
-    // Insert after the Auto button (or reference button if Auto not found)
-    parentDiv.insertBefore(mem0ButtonContainer, referenceButton.nextSibling);
+    // Insert after the Think button
+    parentDiv.insertBefore(mem0ButtonContainer, thinkButton.nextSibling);
     
     // Update notification dot based on input content
     updateNotificationDot();
@@ -617,7 +558,7 @@ function injectMem0Button() {
   
   // Also observe DOM changes to add button when needed
   const observer = new MutationObserver(() => {
-    if (!document.querySelector('#mem0-button-container')) {
+    if (!document.querySelector('button[aria-label="Mem0"]')) {
       tryAddButton();
     }
     
@@ -699,8 +640,8 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     leftPosition = modalPosition.x;
     topPosition = modalPosition.y;
   } else {
-    // Position relative to the OpenMemory button
-    const mem0Button = document.querySelector('button[aria-label="OpenMemory"]');
+    // Position relative to the Mem0 button
+    const mem0Button = document.querySelector('button[aria-label="Mem0"]');
     
     if (mem0Button) {
       const buttonRect = mem0Button.getBoundingClientRect();
@@ -925,13 +866,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add click event to open app.mem0.ai in a new tab
   settingsBtn.addEventListener('click', () => {
-    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
-      document.body.removeChild(currentModalOverlay); 
-      memoryModalShown = false; 
-      currentModalOverlay = null; 
-    }
-
-    chrome.runtime.sendMessage({ action: "toggleSidebarSettings" }); 
+    window.open('https://app.mem0.ai', '_blank');
   });
   
   // Add hover effect for the settings button
@@ -1598,7 +1533,7 @@ function updateInputWithMemories() {
     let baseContent = getContentWithoutMemories();
     
     // Create the memory string with all collected memories
-    let memoriesContent = "\n\n" + OPENMEMORY_PROMPTS.memory_header_text + "\n";
+    let memoriesContent = "\n\nHere is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):\n";
     
     // Add all memories to the content
     allMemories.forEach((mem, index) => {
@@ -1622,17 +1557,15 @@ function getContentWithoutMemories() {
   let content = inputElement.value;
   
   // Remove any memory headers and content
-  const memoryPrefix = OPENMEMORY_PROMPTS.memory_header_text;
+  const memoryPrefix = "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):";
   const prefixIndex = content.indexOf(memoryPrefix);
   if (prefixIndex !== -1) {
     content = content.substring(0, prefixIndex).trim();
   }
   
   // Also try with regex pattern
-  try {
-    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-    content = content.replace(MEM0_PLAIN, "").trim();
-  } catch (_e) {}
+  const memInfoRegex = /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/;
+  content = content.replace(memInfoRegex, "").trim();
   
   return content;
 }
@@ -1675,7 +1608,7 @@ async function handleMem0Modal(sourceButtonId = null) {
   // If no message, show a popup and return
   if (!message) {
     // Show message that requires input
-    const mem0Button = document.querySelector('button[aria-label="OpenMemory"]');
+    const mem0Button = document.querySelector('button[aria-label="Mem0"]');
     if (mem0Button) {
       showButtonPopup(mem0Button, 'Please enter some text first');
     }
@@ -1707,7 +1640,7 @@ async function handleMem0Modal(sourceButtonId = null) {
     const apiKey = data.apiKey;
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
     const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
@@ -1721,32 +1654,7 @@ async function handleMem0Modal(sourceButtonId = null) {
 
     const messages = [{ role: "user", content: message }];
 
-    const optionalParams = {}
-    if(data.selected_org) {
-      optionalParams.org_id = data.selected_org;
-    }
-    if(data.selected_project) {
-      optionalParams.project_id = data.selected_project;
-    }
-
     // Existing search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-    
-    // Debug logging
-    console.log('[OpenMemory] Grok handleMem0Modal Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -1755,7 +1663,18 @@ async function handleMem0Modal(sourceButtonId = null) {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify(searchPayload),
+        body: JSON.stringify({
+          query: message,
+          filters: {
+            user_id: userId,
+          },
+          rerank: false,
+          threshold: threshold,
+          top_k: topK,
+          filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          ...optionalParams,
+        }),
       }
     );
 
@@ -1766,20 +1685,9 @@ async function handleMem0Modal(sourceButtonId = null) {
     }
 
     const responseData = await searchResponse.json();
-    
-    // Debug logging
-    console.log('[OpenMemory] Grok handleMem0Modal Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
 
     // Extract memories and their categories
-    let memoryItems = responseData.map(item => {
+    const memoryItems = responseData.map(item => {
       return {
         id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         text: item.memory,

@@ -12,10 +12,7 @@
   "host_permissions": [
     "https://api.mem0.ai/*", 
     "https://app.mem0.ai/*",
-    "https://claude.ai/*",
-    "https://api.anthropic.com/*",
-    "https://api.openai.com/*",
-    "https://api.groq.com/*"
+    "https://claude.ai/*"
   ],
   "action": {
     "default_popup": "popup.html",

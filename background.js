@@ -27,6 +27,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "toggleSidebarSettings") {
+    chrome.tabs.sendMessage(sender.tab.id, { action: "toggleSidebarSettings" }); 
+  } 
+}); 
+
 // Initialize features
 initContextMenuMemory();
 initDirectUrlTracking();

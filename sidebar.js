@@ -13,6 +13,21 @@
           }
         });
       }
+
+      if (request.action === "toggleSidebarSettings") {
+        chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
+          if (data.apiKey || data.access_token) {
+            toggleSidebar(); 
+
+            setTimeout(() => {
+              const settingsTabButton = document.querySelector('.tab-button[data-tab="settings"]'); 
+              if (settingsTabButton) {
+                settingsTabButton.click(); 
+              }
+            }, 200); 
+          }
+        }); 
+      }
     });
   }
 
@@ -325,10 +340,10 @@
       const autoInjectCheckbox = autoInjectSection.querySelector("#autoInjectToggle");
       autoInjectCheckbox.checked = result.auto_inject_enabled !== false;
       
-      // Load threshold setting (default: 0.3)
+      // Load threshold setting (default: 0.1)
       const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
       const thresholdValue = thresholdSection.querySelector(".threshold-value");
-      const threshold = result.similarity_threshold !== undefined ? result.similarity_threshold : 0.3;
+      const threshold = result.similarity_threshold !== undefined ? result.similarity_threshold : 0.1;
       thresholdSlider.value = threshold;
       thresholdValue.textContent = threshold.toFixed(1);
       

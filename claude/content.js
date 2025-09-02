@@ -3,101 +3,6 @@ let allMemories = [];
 let memoryModalShown = false;
 let isProcessingMem0 = false;
 let memoryEnabled = true;
-// Cache of the latest typed text to avoid race when the editor is cleared
-let lastTyped = "";
-// Timestamp of when a send was initiated (to prevent duplicate fallback posts)
-let lastSendInitiatedAt = 0;
-
-// Sliding window for conversation context
-let conversationHistory = [];
-const MAX_CONVERSATION_HISTORY = 12; // Keep last 12 messages (6 pairs of user/assistant)
-
-// Function to add message to conversation history with sliding window
-function addToConversationHistory(role, content) {
-  if (!content || !content.trim()) return;
-  
-  const trimmedContent = content.trim();
-  
-  // Check for duplicate - don't add if the last message is identical
-  if (conversationHistory.length > 0) {
-    const lastMessage = conversationHistory[conversationHistory.length - 1];
-    if (lastMessage.role === role && lastMessage.content === trimmedContent) {
-      return;
-    }
-  }
-  
-  const message = {
-    role: role,
-    content: trimmedContent,
-    timestamp: Date.now()
-  };
-  
-  // Add to history
-  conversationHistory.push(message);
-  
-  // Maintain sliding window - remove oldest messages if we exceed limit
-  if (conversationHistory.length > MAX_CONVERSATION_HISTORY) {
-    const removed = conversationHistory.splice(0, conversationHistory.length - MAX_CONVERSATION_HISTORY);
-  }
-}
-
-// Function to get conversation context for memory creation
-function getConversationContext(includeCurrent = true) {
-  if (conversationHistory.length === 0) {
-    return [];
-  }
-  
-  // Get the last 6 messages for context (excluding current if requested)
-  const contextSize = 6;
-  let contextMessages = [...conversationHistory];
-  
-  if (!includeCurrent && contextMessages.length > 0) {
-    // Remove the last message if it's the current user message
-    contextMessages = contextMessages.slice(0, -1);
-  }
-  
-  // Get last N messages
-  const context = contextMessages.slice(-contextSize).map(msg => ({
-    role: msg.role,
-    content: msg.content
-  }));
-  
-  return context;
-}
-
-// Function to initialize conversation history from existing messages on page
-function initializeConversationHistoryFromDOM() {
-  const messageContainer = document.querySelector(
-    ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full"
-  );
-  
-  if (!messageContainer) {
-    return;
-  }
-
-  const messageElements = Array.from(messageContainer.children);
-  let foundMessages = 0;
-  
-  // Process existing messages in chronological order
-  messageElements.forEach(element => {
-    const userElement = element.querySelector(".font-user-message");
-    const assistantElement = element.querySelector(".font-claude-message");
-
-    if (userElement) {
-      const content = userElement.textContent.trim();
-      if (content) {
-        addToConversationHistory('user', content);
-        foundMessages++;
-      }
-    } else if (assistantElement) {
-      const content = assistantElement.textContent.trim();
-      if (content) {
-        addToConversationHistory('assistant', content);
-        foundMessages++;
-      }
-    }
-  });
-}
 
 // Initialize the MutationObserver variable
 let observer;
@@ -108,7 +13,8 @@ let allMemoriesById = new Set();
 // Reference to the modal overlay for updates
 let currentModalOverlay = null;
 
-
+// Added variable to track sync button status
+let isSyncing = false;
 
 // Variables to track modal position for draggable functionality
 let modalPosition = null;
@@ -118,24 +24,9 @@ let dragOffset = { x: 0, y: 0 };
 // Function to get memory enabled state from storage
 async function getMemoryEnabledState() {
   return new Promise((resolve) => {
-        // Check if extension context is valid
-    if (!chrome || !chrome.storage || !chrome.storage.sync) {
-      resolve(true); // Default to enabled if we can't check
-      return;
-    }
-    
-    try {
     chrome.storage.sync.get("memory_enabled", function (data) {
-        // Check for chrome.runtime.lastError
-        if (chrome.runtime.lastError) {
-          resolve(true); // Default to enabled if error
-          return;
-        }
       resolve(data.memory_enabled);
     });
-    } catch (error) {
-      resolve(true); // Default to enabled if exception
-    }
   });
 }
 
@@ -575,7 +466,27 @@ function addMem0Button() {
       updateNotificationDot();
     }
 
-    // Send button listeners are now handled in initializeMem0Integration for better reliability
+    // Add send button listener to capture memory and clear memories after sending
+    const allSendButtons = [
+      document.querySelector('button[aria-label="Send Message"]'),
+      document.querySelector('button[aria-label="Send message"]')
+    ].filter(Boolean);
+    
+    allSendButtons.forEach(sendBtn => {
+      if (sendBtn && !sendBtn.dataset.mem0Listener) {
+        sendBtn.dataset.mem0Listener = 'true';
+        sendBtn.addEventListener('click', function() {
+          // Capture and save memory asynchronously
+          captureAndStoreMemory();
+          
+          // Clear all memories after sending
+          setTimeout(() => {
+            allMemories = [];
+            allMemoriesById.clear();
+          }, 100);
+        });
+      }
+    });
       
     // Also handle Enter key press for sending messages
     const inputElement = document.querySelector('div[contenteditable="true"]') || 
@@ -590,14 +501,8 @@ function addMem0Button() {
         if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
           // Don't process for textarea which may want newlines
           if (inputElement.tagName.toLowerCase() !== 'textarea') {
-            // Snapshot before send
-            const current = getInputValue();
-            if (current && current.trim() !== '') {
-              lastTyped = current;
-            }
-            lastSendInitiatedAt = Date.now();
             // Capture and save memory asynchronously
-            captureAndStoreMemory(lastTyped);
+            captureAndStoreMemory();
             
             // Clear all memories after sending
             setTimeout(() => {
@@ -607,18 +512,6 @@ function addMem0Button() {
           }
         }
       });
-      // Keep a live cache during typing to improve reliability
-      if (!inputElement.dataset.mem0CacheListener) {
-        inputElement.dataset.mem0CacheListener = 'true';
-        const updateCache = () => {
-          const val = getInputValue();
-          if (val && val.trim() !== '') {
-            lastTyped = val;
-          }
-        };
-        inputElement.addEventListener('input', updateCache, true);
-        inputElement.addEventListener('compositionend', updateCache, true);
-      }
     }
 
     // Update notification dot state
@@ -731,6 +624,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
                          document.querySelector('p[data-placeholder="Reply to Claude..."]');
     
     if (!inputElement) {
+      console.error("Input element not found");
       return;
     }
     
@@ -903,13 +797,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add click event to open app.mem0.ai in a new tab
   settingsBtn.addEventListener('click', () => {
-    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
-      document.body.removeChild(currentModalOverlay); 
-      memoryModalShown = false; 
-      currentModalOverlay = null; 
-    }
-
-    chrome.runtime.sendMessage({ action: "toggleSidebarSettings" }); 
+    window.open('https://app.mem0.ai', '_blank');
   });
   
   // Add hover effect for the settings button
@@ -1672,7 +1560,7 @@ function updateInputWithMemories() {
 
   if (inputElement && allMemories.length > 0) {
     // Define the header text
-    const headerText = OPENMEMORY_PROMPTS.memory_header_text;
+    const headerText = "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):";
     
     // Check if ProseMirror editor
     if (inputElement.classList.contains('ProseMirror')) {
@@ -1923,7 +1811,7 @@ function updateInputWithMemories() {
 }
 
 // Function to get the content without any memory wrappers
-function getContentWithoutMemories(providedMessage) {
+function getContentWithoutMemories() {
   // Find the input element (prioritizing the ProseMirror div with contenteditable="true")
   let inputElement = document.querySelector('div[contenteditable="true"].ProseMirror');
   
@@ -1935,39 +1823,36 @@ function getContentWithoutMemories(providedMessage) {
                   document.querySelector('p[data-placeholder="Reply to Claude..."]');
   }
     
-  // If a message is provided, operate on it; otherwise read from DOM
+  if (!inputElement) return "";
+  
   let content = "";
-  if (typeof providedMessage === 'string') {
-    content = providedMessage;
+  
+  if (inputElement.classList.contains('ProseMirror')) {
+    // For ProseMirror, get the innerHTML for proper structure handling
+    content = inputElement.innerHTML;
+  } else if (inputElement.tagName.toLowerCase() === "div") {
+    // For normal contenteditable divs
+    content = inputElement.innerHTML;
+  } else if (inputElement.tagName.toLowerCase() === "p" && 
+            (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+            inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')) {
+    // For p element placeholders
+    content = inputElement.innerHTML || inputElement.textContent || '';
   } else {
-    if (!inputElement) return "";
-    if (inputElement.classList.contains('ProseMirror')) {
-      // For ProseMirror, get the innerHTML for proper structure handling
-      content = inputElement.innerHTML;
-    } else if (inputElement.tagName.toLowerCase() === "div") {
-      // For normal contenteditable divs
-      content = inputElement.innerHTML;
-    } else if (inputElement.tagName.toLowerCase() === "p" && 
-              (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
-              inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')) {
-      // For p element placeholders
-      content = inputElement.innerHTML || inputElement.textContent || '';
-    } else {
-      // For textarea
-      content = inputElement.value;
-    }
+    // For textarea
+    content = inputElement.value;
   }
   
   // Remove any memory headers and content
   // Match both HTML and plain text variants
   
   // HTML variant
-  try {
-    const MEM0_HTML = OPENMEMORY_PROMPTS.memory_header_html_regex;
-    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-    content = content.replace(MEM0_HTML, "");
-    content = content.replace(MEM0_PLAIN, "");
-  } catch (_e) {}
+  const htmlMemInfoRegex = /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/;
+  content = content.replace(htmlMemInfoRegex, "");
+  
+  // Plain text variant
+  const plainMemInfoRegex = /Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*?$/;
+  content = content.replace(plainMemInfoRegex, "");
   
   // Also clean up any empty paragraphs at the end
   content = content.replace(/<p><br><\/p>$/g, "");
@@ -2012,7 +1897,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     const apiKey = data.apiKey;
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
     const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
@@ -2034,6 +1919,7 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     let message = getInputValue();
     
     if (!message || message.trim() === '') {
+      console.error("No input message found");
       if (popup) {
         // Hide any existing tooltip first
         const tooltip = document.querySelector("#mem0-tooltip");
@@ -2054,18 +1940,12 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
 
     // Clean the message by removing any existing memory wrappers
     message = getContentWithoutMemories();
-    
-    // Strip HTML tags to ensure clean text for search (fix for <p> tag issue)
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = message;
-    message = tempDiv.textContent || tempDiv.innerText || message;
-    message = message.trim();
 
     const authHeader = accessToken
       ? `Bearer ${accessToken}`
       : `Token ${apiKey}`;
 
-    const messages = getConversationContext(false); // Use sliding window context
+    const messages = getLastMessages(2);
     messages.push({ role: "user", content: message });
 
     // If clickSendButton is true, click the send button
@@ -2080,6 +1960,8 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
         setTimeout(() => {
           sendButton.click();
         }, 100);
+      } else {
+        console.error("Send button not found");
       }
     }
 
@@ -2092,23 +1974,6 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     }
 
     // Search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-    
-    // Debug logging
-    console.log('[OpenMemory] Claude Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -2117,7 +1982,18 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify(searchPayload),
+        body: JSON.stringify({
+          query: message,
+          filters: {
+            user_id: userId,
+          },
+          rerank: false,
+          threshold: threshold,
+          top_k: topK,
+          filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          ...optionalParams,
+        }),
       }
     );
 
@@ -2128,22 +2004,11 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     }
 
     const responseData = await searchResponse.json();
-    
-    // Debug logging
-    console.log('[OpenMemory] Claude Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
 
     // Extract memories and their categories
-    let memoryItems = responseData.map((item, index) => {
+    const memoryItems = responseData.map((item, index) => {
       return {
-        id: item.id || `memory-${Date.now()}-${index}`,
+        id: `memory-${Date.now()}-${index}`,
         text: item.memory,
         categories: item.categories || []
       };
@@ -2172,13 +2037,14 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
     })
       .then((response) => {
         if (!response.ok) {
-          // Silent failure for background memory addition
+          console.error("Failed to add memory:", response.status);
         }
       })
       .catch((error) => {
-        // Silent failure for background memory addition
+        console.error("Error adding memory:", error);
       });
   } catch (error) {
+    console.error("Error:", error);
     if (popup) showPopup(popup, "Failed to send message to Mem0");
   } finally {
     isProcessingMem0 = false;
@@ -2190,6 +2056,33 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
 async function handleMem0Click(popup, clickSendButton = false) {
   // Call the new modal handling function
   await handleMem0Modal(popup, clickSendButton);
+}
+
+function getLastMessages(count) {
+  const messageContainer = document.querySelector(
+    ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full"
+  );
+  if (!messageContainer) return [];
+
+  const messageElements = Array.from(messageContainer.children).reverse();
+  const messages = [];
+
+  for (const element of messageElements) {
+    if (messages.length >= count) break;
+
+    const userElement = element.querySelector(".font-user-message");
+    const assistantElement = element.querySelector(".font-claude-message");
+
+    if (userElement) {
+      const content = userElement.textContent.trim();
+      messages.unshift({ role: "user", content });
+    } else if (assistantElement) {
+      const content = assistantElement.textContent.trim();
+      messages.unshift({ role: "assistant", content });
+    }
+  }
+
+  return messages;
 }
 
 function setButtonLoadingState(isLoading) {
@@ -2258,8 +2151,6 @@ function getInputValue() {
   return inputElement.textContent || inputElement.value;
 }
 
-// Auto-inject support: simple debounce and config
-
 async function updateMemoryEnabled() {
   memoryEnabled = await getMemoryEnabledState();
   
@@ -2275,76 +2166,6 @@ async function updateMemoryEnabled() {
 function initializeMem0Integration() {
   updateMemoryEnabled();
   addMem0Button();
-
-  // Prime the cache so the very first send is captured
-  const _initVal = getInputValue();
-  if (_initVal && _initVal.trim()) {
-    lastTyped = _initVal;
-  }
-  
-  // Ensure send button listeners are attached early and repeatedly
-  const ensureSendButtonListeners = () => {
-    const allSendButtons = [
-      document.querySelector('button[aria-label="Send Message"]'),
-      document.querySelector('button[aria-label="Send message"]')
-    ].filter(Boolean);
-    
-    allSendButtons.forEach(sendBtn => {
-      if (sendBtn && !sendBtn.dataset.mem0Listener) {
-        sendBtn.dataset.mem0Listener = 'true';
-
-        // Snapshot current input as early as possible (before Claude clears it)
-        sendBtn.addEventListener('pointerdown', function() {
-          const current = getInputValue();
-          if (current && current.trim() !== '') {
-            lastTyped = current;
-          }
-          lastSendInitiatedAt = Date.now();
-        }, true);
-
-        // Use capture-phase click so we run before Claude's handler
-        sendBtn.addEventListener('click', function() {
-          // Capture and save memory with snapshot fallback
-          captureAndStoreMemory(lastTyped);
-          
-          // Clear all memories after sending
-          setTimeout(() => {
-            allMemories = [];
-            allMemoriesById.clear();
-          }, 100);
-        }, true);
-      }
-    });
-  };
-  
-  // Attach listeners immediately
-  ensureSendButtonListeners();
-  
-  // Also attach them repeatedly during early page load
-  const earlyAttachInterval = setInterval(() => {
-    ensureSendButtonListeners();
-  }, 100);
-  
-  // Stop the aggressive checking after page is more stable
-  setTimeout(() => {
-    clearInterval(earlyAttachInterval);
-  }, 5000);
-
-  // Refresh cache whenever the editor gains focus
-  if (!document.__mem0FocusPrimed) {
-    document.__mem0FocusPrimed = true;
-    document.addEventListener('focusin', (e) => {
-      const el = e.target && e.target.closest && e.target.closest(
-        'div[contenteditable="true"], textarea, p[data-placeholder="How can I help you today?"], p[data-placeholder="Reply to Claude..."]'
-      );
-      if (el) {
-        const v = getInputValue();
-        if (v && v.trim()) {
-          lastTyped = v;
-        }
-      }
-    }, true);
-  }
 
   document.addEventListener("keydown", function (event) {
     if (event.ctrlKey && event.key === "m") {
@@ -2364,33 +2185,6 @@ function initializeMem0Integration() {
       }
     }
   });
-
-  // Global early keydown capture for Enter to snapshot the very first send
-  if (!document.__mem0EnterCapture) {
-    document.__mem0EnterCapture = true;
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        const v = getInputValue();
-        if (v && v.trim()) {
-          lastTyped = v;
-          lastSendInitiatedAt = Date.now();
-        }
-      }
-    }, true);
-  }
-
-  // Global submit capture to catch earliest send even if buttons/forms change
-  if (!document.__mem0SubmitCapture) {
-    document.__mem0SubmitCapture = true;
-    document.addEventListener('submit', (e) => {
-      const v = getInputValue();
-      if (v && v.trim()) {
-        lastTyped = v;
-      }
-      lastSendInitiatedAt = Date.now();
-      captureAndStoreMemory(lastTyped);
-    }, true);
-  }
 
   // Observer for main structure changes
   observer = new MutationObserver((mutations) => {
@@ -2480,77 +2274,6 @@ function initializeMem0Integration() {
       }
     });
   }, 5000);
-
-  // Fallback: observe chat thread for newly added user bubbles and post if we missed send
-  const ensureThreadObserver = () => {
-    const thread = document.querySelector('.flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full');
-    if (!thread) {
-      setTimeout(ensureThreadObserver, 1000);
-      return;
-    }
-    if (thread.__mem0Observed) return;
-    thread.__mem0Observed = true;
-    
-    // Track processed messages to avoid duplicates
-    const processedMessages = new Set();
-    
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        for (const n of m.addedNodes) {
-          const node = n.nodeType === 1 ? n : null;
-          if (!node) continue;
-          const userEl = node.matches?.('.font-user-message') ? node : node.querySelector?.('.font-user-message');
-          if (userEl) {
-            const text = userEl.textContent?.trim();
-            if (text) {
-              // Create a simple hash of the message to avoid duplicates
-              const messageHash = text.length + '_' + text.substring(0, 50);
-              
-              // Skip if we've already processed this exact message recently
-              if (processedMessages.has(messageHash)) {
-                return;
-              }
-              
-              // Add to processed set and clean up old entries periodically
-              processedMessages.add(messageHash);
-              if (processedMessages.size > 10) {
-                const entries = Array.from(processedMessages);
-                processedMessages.clear();
-                // Keep the last 5 entries
-                entries.slice(-5).forEach(entry => processedMessages.add(entry));
-              }
-              
-              // If we just initiated a send, give primary handlers a brief head start
-              const justInitiated = Date.now() - lastSendInitiatedAt < 500; // Reduced from 1200ms to 500ms
-              
-              if (justInitiated) {
-                // For very recent sends, delay slightly to let primary handlers run first
-                setTimeout(() => {
-                  // Double-check if we still need to process this message
-                  if (!processedMessages.has(messageHash + '_processed')) {
-                    processedMessages.add(messageHash + '_processed');
-              captureAndStoreMemory(text);
-                  }
-                }, 200);
-              } else {
-                // For older messages or when no recent send detected, process immediately
-                processedMessages.add(messageHash + '_processed');
-                captureAndStoreMemory(text);
-              }
-              
-              // Update lastSendInitiatedAt to help coordinate with other handlers
-              lastSendInitiatedAt = Date.now();
-              return;
-            }
-          }
-        }
-      }
-    });
-    observer.observe(thread, { childList: true, subtree: true });
-  };
-  ensureThreadObserver();
-
-
 }
 
 // Function to show login popup
@@ -2712,26 +2435,13 @@ function showLoginPopup() {
 }
 
 // Function to capture and store memory asynchronously
-async function captureAndStoreMemory(snapshot) {
-  // Check if extension context is valid
-  if (!chrome || !chrome.storage) {
-    return;
-  }
-  
-    try {
+async function captureAndStoreMemory() {
   // Check if memory is enabled
   const memoryEnabled = await getMemoryEnabledState();
   if (memoryEnabled === false) {
     return; // Don't process memories if disabled
-    }
-  } catch (error) {
-    return;
   }
 
-  // Use the provided snapshot directly if available, otherwise try to get from input
-  let message = (typeof snapshot === 'string' && snapshot.trim() !== '') ? snapshot : '';
-  
-  if (!message) {
   // Find the input element (prioritizing the ProseMirror div with contenteditable="true")
   let inputElement = document.querySelector('div[contenteditable="true"].ProseMirror');
   
@@ -2743,52 +2453,40 @@ async function captureAndStoreMemory(snapshot) {
                   document.querySelector('p[data-placeholder="Reply to Claude..."]');
   }
   
-    if (!inputElement) {
-      return;
-    }
+  if (!inputElement) return;
 
-    if (inputElement.classList.contains('ProseMirror')) {
-      // For ProseMirror, get the textContent for plain text
-      message = inputElement.textContent || '';
-    } else if (inputElement.tagName.toLowerCase() === "div") {
-      message = inputElement.textContent || '';
-    } else if (inputElement.tagName.toLowerCase() === "p") {
-      message = inputElement.textContent || '';
-    } else {
-      message = inputElement.value || '';
-    }
+  // Get raw content from the input element
+  let message = '';
+  if (inputElement.classList.contains('ProseMirror')) {
+    // For ProseMirror, get the textContent for plain text
+    message = inputElement.textContent || '';
+  } else if (inputElement.tagName.toLowerCase() === "div") {
+    message = inputElement.textContent || '';
+  } else if (inputElement.tagName.toLowerCase() === "p") {
+    message = inputElement.textContent || '';
+  } else {
+    message = inputElement.value || '';
   }
 
-  if (!message || message.trim() === '') {
-    return;
+  if (!message || message.trim() === '') return;
+  
+  // Clean the message of any memory wrapper content
+  message = getContentWithoutMemories();
+  
+  // For ProseMirror, the getContentWithoutMemories returns HTML, so we need to extract text
+  if (inputElement.classList.contains('ProseMirror')) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = message;
+    message = tempDiv.textContent || '';
   }
   
-    // Clean the message of any memory wrapper content (only needed if message came from input, not snapshot)
-  if (typeof snapshot !== 'string' || !snapshot.trim()) {
-  message = getContentWithoutMemories(message);
-  }
-  
-  // Skip if message is empty after processing
-  if (!message || message.trim() === '') {
-    return;
-  }
+  // Skip if message is empty after cleaning
+  if (!message || message.trim() === '') return;
   
   // Asynchronously store the memory
-  
-  try {
-    // Check extension context again before storage access
-    if (!chrome || !chrome.storage || !chrome.storage.sync) {
-      return;
-    }
-    
   chrome.storage.sync.get(
     ["apiKey", "userId", "access_token", "memory_enabled", "selected_org", "selected_project", "user_id"],
     function (items) {
-        // Check for chrome.runtime.lastError which indicates extension context issues
-        if (chrome.runtime.lastError) {
-          return;
-        }
-        
       // Skip if memory is disabled or no credentials
       if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
         return;
@@ -2800,9 +2498,9 @@ async function captureAndStoreMemory(snapshot) {
       
       const userId = items.userId || items.user_id || "chrome-extension-user";
       
-      // Get recent messages for context using sliding window
-      const contextMessages = getConversationContext(false); // Don't include current message yet
-      contextMessages.push({ role: "user", content: message }); // Add current message
+      // Get recent messages for context (if available)
+      const messages = getLastMessages(2);
+      messages.push({ role: "user", content: message });
       
       const optionalParams = {}
 
@@ -2821,7 +2519,7 @@ async function captureAndStoreMemory(snapshot) {
           Authorization: authHeader,
         },
         body: JSON.stringify({
-          messages: contextMessages,
+          messages: messages,
           user_id: userId,
           infer: true,
           metadata: {
@@ -2830,18 +2528,11 @@ async function captureAndStoreMemory(snapshot) {
           source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
-      }).then(response => {
-        if (!response.ok) {
-          // Silent failure for background memory addition
-        }
       }).catch((error) => {
-        // Silent failure for background memory addition
+        console.error("Error saving memory:", error);
       });
     }
   );
-  } catch (storageError) {
-    // Silent failure for background memory addition
-  }
 }
 
 // Function to update the notification dot
@@ -2922,247 +2613,214 @@ function updateNotificationDot() {
 }
 
 
-// Enhanced DOM-based message detection since CSP blocks network interception
-let domMonitoringActive = false;
+function handleSyncClick() {
+  if (isSyncing) return; // Prevent multiple clicks
+  
+  // First check if memory is enabled
+  getMemoryEnabledState().then(enabled => {
+    if (enabled === false) {
+      return; // Don't show login popup if memory is disabled
+    }
+    
+    // Get the sync button element
+    const syncButton = document.querySelector("#sync-button");
+    if (!syncButton) return;
 
-function setupEnhancedDOMMonitoring() {
-  if (domMonitoringActive) {
+    // Check if user is logged in
+    chrome.storage.sync.get(["userLoggedIn", "access_token"], (data) => {
+      if (!data.userLoggedIn || !data.access_token) {
+        showLoginPopup();
         return;
       }
 
-  domMonitoringActive = true;
-  
-  // Enhanced real-time message monitoring with multiple strategies
-  function setupRealTimeMessageMonitoring() {
-    const threadSelector = '.flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full';
-    
-    // Strategy 1: Monitor for new user message elements
-    const messageObserver = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === 1) {
-            // Look for user messages
-            const userMessage = node.querySelector('.font-user-message');
-            if (userMessage) {
-              const text = userMessage.textContent.trim();
-              if (text) {
-                // Add to conversation history
-                addToConversationHistory('user', text);
-                
-                setTimeout(() => {
-                  captureAndStoreMemory(text);
-                  setTimeout(() => {
-                    allMemories = [];
-                    allMemoriesById.clear();
-                  }, 100);
-                }, 50);
+      // Show loading state and sync
+      setSyncButtonLoadingState(true);
+      
+      // Get all messages for this conversation
+      const messages = getLastMessages(999); // Get a large number to get all messages
+      
+      // Process messages and sync
+      if (messages && messages.length > 0) {
+        const memoriesToSync = [];
+        
+        // Process each message to extract memory content
+        messages.forEach(message => {
+          if (message.role === 'user' && message.content.trim()) {
+            memoriesToSync.push({
+              content: message.content,
+              source: "Claude",
+              timestamp: new Date().toISOString()
+            });
+          }
+        });
+        
+        if (memoriesToSync.length > 0) {
+          // Send memories to Mem0
+          sendMemoriesToMem0(memoriesToSync)
+            .then(result => {
+              setSyncButtonLoadingState(false);
+              if (result.success) {
+                showSyncPopup(syncButton, `${memoriesToSync.length} memories synced`);
+              } else {
+                showSyncPopup(syncButton, "Sync failed");
               }
-            }
-            
-            // Also check if the node itself is a user message
-            if (node.classList && node.classList.contains('font-user-message')) {
-              const text = node.textContent.trim();
-              if (text) {
-                // Add to conversation history
-                addToConversationHistory('user', text);
-                
-                setTimeout(() => {
-                  captureAndStoreMemory(text);
-                  setTimeout(() => {
-                    allMemories = [];
-                    allMemoriesById.clear();
-                  }, 100);
-                }, 50);
-              }
-            }
-            
-            // Also look for Claude's assistant messages
-            const assistantMessage = node.querySelector('.font-claude-message');
-            if (assistantMessage) {
-              const text = assistantMessage.textContent.trim();
-              if (text) {
-                // Add to conversation history
-                addToConversationHistory('assistant', text);
-              }
-            }
-            
-            // Check if the node itself is an assistant message
-            if (node.classList && node.classList.contains('font-claude-message')) {
-              const text = node.textContent.trim();
-              if (text) {
-                // Add to conversation history
-                addToConversationHistory('assistant', text);
-              }
-            }
+            })
+            .catch(error => {
+              console.error("Error syncing memories:", error);
+              setSyncButtonLoadingState(false);
+              showSyncPopup(syncButton, "Sync failed");
+            });
+        } else {
+          setSyncButtonLoadingState(false);
+          showSyncPopup(syncButton, "No memories to sync");
+        }
+      } else {
+        setSyncButtonLoadingState(false);
+        showSyncPopup(syncButton, "No messages found");
       }
     });
   });
-    });
-    
-        // Find and observe the thread
-    const thread = document.querySelector(threadSelector);
-    if (thread) {
-      messageObserver.observe(thread, { 
-        childList: true, 
-        subtree: true,
-        attributes: false,
-        characterData: false
-      });
-    } else {
-      // Retry finding the thread
-      setTimeout(setupRealTimeMessageMonitoring, 1000);
-    }
-  }
+}
+
+function setSyncButtonLoadingState(isLoading) {
+  isSyncing = isLoading;
+  const syncButton = document.querySelector("#sync-button");
+  const syncButtonContent = document.querySelector("#sync-button-content");
   
-  // Strategy 2: Monitor input clearing as a signal that message was sent
-  function setupInputClearingMonitor() {
-    const inputSelectors = [
-      'div[contenteditable="true"].ProseMirror',
-      'div[contenteditable="true"]',
-      'textarea',
-      'p[data-placeholder="How can I help you today?"]',
-      'p[data-placeholder="Reply to Claude..."]'
-    ];
+  if (!syncButton || !syncButtonContent) return;
+  
+  if (isLoading) {
+    syncButton.style.opacity = "0.7";
+    syncButton.style.cursor = "default";
+    syncButtonContent.innerHTML = `
+      <div class="sync-loading-spinner"></div>
+      <span style="margin-left: 8px;">Syncing...</span>
+    `;
     
-    let lastInputValue = '';
-    let inputClearingObserver;
-    
-    function findAndObserveInput() {
-      for (const selector of inputSelectors) {
-        const input = document.querySelector(selector);
-        if (input) {
-          // Disconnect any existing observer
-          if (inputClearingObserver) {
-            inputClearingObserver.disconnect();
-          }
-          
-          inputClearingObserver = new MutationObserver(() => {
-            const currentValue = getInputValue() || '';
-            
-            // Check if input was cleared (had content, now empty)
-            if (lastInputValue.trim() && !currentValue.trim()) {
-              // Add to conversation history
-              addToConversationHistory('user', lastInputValue);
-              
-  setTimeout(() => {
-                captureAndStoreMemory(lastInputValue);
-    setTimeout(() => {
-                  allMemories = [];
-                  allMemoriesById.clear();
-                }, 100);
-              }, 50);
-            }
-            
-            lastInputValue = currentValue;
-          });
-          
-          inputClearingObserver.observe(input, {
-            childList: true,
-            subtree: true,
-            characterData: true,
-            attributes: true
-          });
-          
-          // Also listen for input events
-          input.addEventListener('input', () => {
-            lastInputValue = getInputValue() || '';
-          });
-          
-          break;
+    // Add the spinner animation styles if they don't exist
+    if (!document.getElementById('sync-spinner-styles')) {
+      const spinnerStyles = document.createElement('style');
+      spinnerStyles.id = 'sync-spinner-styles';
+      spinnerStyles.innerHTML = `
+        .sync-loading-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(128, 221, 162, 0.3);
+          border-radius: 50%;
+          border-top-color: rgb(128, 221, 162);
+          animation: sync-spinner 0.8s linear infinite;
         }
-      }
+        
+        @keyframes sync-spinner {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `;
+      document.head.appendChild(spinnerStyles);
     }
-    
-    findAndObserveInput();
-    
-    // Re-find input periodically in case DOM changes
-    setInterval(findAndObserveInput, 5000);
+  } else {
+    syncButton.style.opacity = "1";
+    syncButton.style.cursor = "pointer";
+    syncButtonContent.innerHTML = "Sync";
+  }
+}
+
+function showSyncPopup(button, message) {
+  // Create popup if it doesn't exist
+  let popup = document.getElementById("sync-status-popup");
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "sync-status-popup";
+    popup.style.cssText = `
+      position: fixed;
+      background-color: #21201C;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      z-index: 10000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      display: none;
+      transition: opacity 0.2s;
+    `;
+    document.body.appendChild(popup);
   }
   
-  // Start all monitoring strategies
-  setupRealTimeMessageMonitoring();
-  setupInputClearingMonitor();
+  // Position the popup above the button
+  const buttonRect = button.getBoundingClientRect();
+  popup.style.left = `${buttonRect.left + buttonRect.width/2 - 75}px`; // 75px is half of estimated popup width
+  popup.style.top = `${buttonRect.top - 40}px`;
+  
+  // Set message and show
+  popup.textContent = message;
+  popup.style.display = "block";
+  popup.style.opacity = "1";
+  
+  // Hide after delay
+  setTimeout(() => {
+    popup.style.opacity = "0";
+    setTimeout(() => {
+      popup.style.display = "none";
+    }, 200);
+  }, 2000);
 }
 
-// CSP blocks script injection, so focus on content script level approaches
-
-// Add extension context monitoring
-let extensionContextValid = true;
-let currentUrl = window.location.href;
-
-function checkExtensionContext() {
-  const isValid = !!(chrome && chrome.runtime && !chrome.runtime.lastError);
-  if (extensionContextValid && !isValid) {
-    extensionContextValid = false;
+async function sendMemoriesToMem0(memories) {
+  if (!memories || memories.length === 0) {
+    return { success: false, message: "No memories to send" };
   }
-  return isValid;
-}
 
-// Function to detect URL changes (SPA navigation)
-function detectNavigation() {
-  const newUrl = window.location.href;
-  if (newUrl !== currentUrl) {
-    const wasNewChat = currentUrl.includes('/new') || currentUrl.includes('/chat/new');
-    const isNewChat = newUrl.includes('/new') || newUrl.includes('/chat/new');
-    const isDifferentChat = currentUrl.includes('/chat/') && newUrl.includes('/chat/') && currentUrl !== newUrl;
-    
-    // Clear conversation history when navigating to a new chat or different chat
-    if (isNewChat || isDifferentChat || wasNewChat) {
-      conversationHistory = [];
+  try {
+    // Get user credentials from storage
+    const data = await new Promise(resolve => {
+      chrome.storage.sync.get(["access_token", "userId", "selected_org", "selected_project", "user_id"], resolve);
+    });
+
+    if (!data.access_token) {
+      return { success: false, message: "Not authenticated" };
+    }
+
+    const userId = data.userId || data.user_id || "chrome-extension-user";
+
+    const optionalParams = {}
+    if(data.selected_org) {
+      optionalParams.org_id = data.selected_org;
+    }
+    if(data.selected_project) {
+      optionalParams.project_id = data.selected_project;
     }
     
-    // Reset DOM monitoring flag so it can be re-setup for new page
-    domMonitoringActive = false;
-    
-    currentUrl = newUrl;
-    
-    // Re-initialize everything after navigation
-    setTimeout(() => {
-      // Re-initialize conversation history from new DOM
-      initializeConversationHistoryFromDOM();
-      
-      // Re-add buttons and listeners
-      addMem0Button();
-      
-      // Re-setup enhanced DOM monitoring for new page
-      setupEnhancedDOMMonitoring();
-      
-      // Update notification dot
-      updateNotificationDot();
-    }, 500); // Small delay to let DOM update
+    // Send all memories in one batch
+    const response = await fetch("https://api.mem0.ai/memories/batch", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${data.access_token}`,
+      },
+      body: JSON.stringify({
+        userId: userId,
+        memories: memories,
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        ...optionalParams,
+      }),
+    });
+
+    if (response.ok) {
+      return { success: true, message: "Memories synced successfully" };
+    } else {
+      return { 
+        success: false, 
+        message: `Error: ${response.status} ${response.statusText}` 
+      };
+    }
+  } catch (error) {
+    console.error("Error sending memories to Mem0:", error);
+    return { 
+      success: false, 
+      message: `Error: ${error.message}` 
+    };
   }
 }
 
-// Check for navigation every 1 second (more frequent than context check)
-setInterval(() => {
-  checkExtensionContext();
-  detectNavigation();
-}, 1000);
-
-// Also listen for browser navigation events for faster detection
-window.addEventListener('popstate', () => {
-  setTimeout(detectNavigation, 100);
-});
-
-// Override pushState to catch programmatic navigation
-const originalPushState = history.pushState;
-history.pushState = function() {
-  originalPushState.apply(history, arguments);
-  setTimeout(detectNavigation, 100);
-};
-
-// Override replaceState to catch programmatic navigation
-const originalReplaceState = history.replaceState;
-history.replaceState = function() {
-  originalReplaceState.apply(history, arguments);
-  setTimeout(detectNavigation, 100);
-};
-
-// Initialize conversation history from existing messages
-initializeConversationHistoryFromDOM();
-
-// Set up enhanced DOM monitoring
-setupEnhancedDOMMonitoring();
-
-// Main initialization
 initializeMem0Integration();

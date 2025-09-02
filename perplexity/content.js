@@ -798,13 +798,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add click event to open app.mem0.ai in a new tab
   settingsBtn.addEventListener('click', () => {
-    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
-      document.body.removeChild(currentModalOverlay); 
-      memoryModalShown = false; 
-      currentModalOverlay = null; 
-    }
-
-    chrome.runtime.sendMessage({ action: "toggleSidebarSettings" }); 
+    window.open('https://app.mem0.ai', '_blank');
   });
   
   // Add hover effect for the settings button
@@ -1559,14 +1553,14 @@ function updateInputWithMemories() {
   
   // First, remove any existing memory content from the input
   let currentContent = getInputText(inputElement);
-  const memoryMarker = "\n\n" + OPENMEMORY_PROMPTS.memory_marker_prefix;
+  const memoryMarker = "\n\nHere is some of my memories to help answer better";
   
   if (currentContent.includes(memoryMarker)) {
     currentContent = currentContent.substring(0, currentContent.indexOf(memoryMarker)).trim();
   }
   
   // Create the memory content string
-  let memoriesContent = "\n\n" + OPENMEMORY_PROMPTS.memory_header_text + "\n";
+  let memoriesContent = "\n\nHere is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):\n";
   
   // Add all memories to the content
   allMemories.forEach((mem, index) => {
@@ -1816,7 +1810,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
     const memoryEnabled = data.memory_enabled !== false; // Default to true if not set
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
     const topK = data.top_k !== undefined ? data.top_k : 10;
     
     const optionalParams = {}
@@ -1867,11 +1861,10 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
           filters: {
             user_id: userId,
           },
-          rerank: true,
+          rerank: false,
           threshold: threshold,
           top_k: topK,
-          filter_memories: false,
-          // llm_rerank: true,
+          filter_memories: true,
           source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         }),
@@ -1887,14 +1880,15 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
     const responseData = await searchResponse.json();
     
     // Extract memories with their categories for the modal
-    let memoryItems = responseData.map(item => {
+    const memoryItems = responseData.map(item => {
       return {
-        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         text: item.memory,
-        categories: item.categories || []
+        categories: item.categories || [],
+        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       };
     });
 
+      // Update the memory modal with real data (not loading anymore)
       // Don't reset position when transitioning from loading to loaded
       if (currentModalOverlay) {
         document.body.removeChild(currentModalOverlay);

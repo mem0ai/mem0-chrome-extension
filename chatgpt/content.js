@@ -259,8 +259,6 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 `;
   addToPromptBtn.appendChild(arrowIcon);
 
-  // (Removed) LLM button – auto-rerank is now handled on modal open
-
   // Create settings button
   const settingsBtn = document.createElement('button');
   settingsBtn.style.cssText = `
@@ -278,13 +276,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
 
   // Add click event to open app.mem0.ai in a new tab
   settingsBtn.addEventListener('click', () => {
-    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
-      document.body.removeChild(currentModalOverlay); 
-      memoryModalShown = false; 
-      currentModalOverlay = null; 
-    }
-
-    chrome.runtime.sendMessage({ action: "toggleSidebarSettings" }); 
+    window.open('https://app.mem0.ai', '_blank');
   });
   
   // Add hover effect for the settings button
@@ -897,7 +889,6 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   headerLeft.appendChild(title);
   headerRight.appendChild(addToPromptBtn);
   headerRight.appendChild(settingsBtn);
-  // No LLM button; auto-rerank happens below if enabled
   
   modalHeader.appendChild(headerLeft);
   modalHeader.appendChild(headerRight);
@@ -919,8 +910,6 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   
   // Show initial memories
   showMemories();
-
-
 
   // Function to close the modal
   function closeModal() {
@@ -1002,13 +991,13 @@ function updateInputWithMemories() {
     
     // Create the memory wrapper with all collected memories
     let memoriesContent =
-      '<div id="mem0-wrapper" contenteditable="false" style="background-color: rgb(220, 252, 231); padding: 8px; border-radius: 4px; margin-top: 8px; margin-bottom: 8px;">';
-    memoriesContent += OPENMEMORY_PROMPTS.memory_header_html_strong;
+      '<div id="mem0-wrapper" style="background-color: rgb(220, 252, 231); padding: 8px; border-radius: 4px; margin-top: 8px; margin-bottom: 8px;">';
+    memoriesContent +=
+      "<strong>Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):</strong>";
     
     // Add all memories to the content
-    allMemories.forEach((mem, idx) => {
-      const safe = (mem || '').toString();
-      memoriesContent += `<div data-mem0-idx="${idx}" style="user-select: text;">- ${safe}</div>`;
+    allMemories.forEach((mem) => {
+      memoriesContent += `<div>- ${mem}</div>`;
     });
     memoriesContent += "</div>";
 
@@ -1018,14 +1007,6 @@ function updateInputWithMemories() {
     } else {
       inputElement.value = `${baseContent}\n${memoriesContent}`;
     }
-    // Make only the wrapper non-editable; allow user to select/copy text inside
-    try {
-      const wrapper = document.getElementById('mem0-wrapper');
-      if (wrapper) {
-        wrapper.setAttribute('contenteditable', 'false');
-        wrapper.style.userSelect = 'text';
-      }
-    } catch (_e) {}
     
     inputElement.dispatchEvent(new Event("input", { bubbles: true }));
   }
@@ -1053,13 +1034,8 @@ function getContentWithoutMemories(message) {
   // Remove any memory wrappers
   content = content.replace(/<div id="mem0-wrapper"[\s\S]*?<\/div>/g, "");
   
-  // Remove any memory headers using shared prompts (HTML and plain variants)
-  try {
-    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-    const MEM0_HTML = OPENMEMORY_PROMPTS.memory_header_html_regex;
-    content = content.replace(MEM0_HTML, "");
-    content = content.replace(MEM0_PLAIN, "");
-  } catch (_e) {}
+  // Remove any memory headers
+  content = content.replace(/Here is some of my memories[\s\S]*?(?=<div|$)/g, "");
   
   // Clean up any leftover paragraph markers
   content = content.replace(/<p><br class="ProseMirror-trailingBreak"><\/p><p>$/g, "");
@@ -1079,6 +1055,7 @@ function addSendButtonListener() {
     sendButton.addEventListener('click', function() {
       // Capture and save memory asynchronously
       captureAndStoreMemory();
+      
       // Clear all memories after sending
       setTimeout(() => {
         allMemories = [];
@@ -1095,10 +1072,13 @@ function addSendButtonListener() {
       inputElement.dataset.mem0KeyListener = 'true';
       inputElement.addEventListener('keydown', function(event) {
         // Check if Enter was pressed without Shift (standard send behavior)
+
         inputValueCopy = inputElement.value || inputElement.textContent || inputValueCopy;
+
         if (event.key === 'Enter' && !event.shiftKey) {
           // Capture and save memory asynchronously
           captureAndStoreMemory();
+          
           // Clear all memories after sending
           setTimeout(() => {
             allMemories = [];
@@ -1164,26 +1144,22 @@ function captureAndStoreMemory() {
       }
       
       // Send memory to mem0 API asynchronously without waiting for response
-      const storagePayload = {
-        messages: messages,
-        user_id: userId,
-        infer: true,
-        metadata: {
-          provider: "ChatGPT",
-        },
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      };
-      
-      console.log('[OpenMemory] ChatGPT Storage Payload:', JSON.stringify(storagePayload, null, 2));
-      
       fetch("https://api.mem0.ai/v1/memories/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify(storagePayload),
+        body: JSON.stringify({
+          messages: messages,
+          user_id: userId,
+          infer: true,
+          metadata: {
+            provider: "ChatGPT",
+          },
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          ...optionalParams,
+        }),
       }).catch((error) => {
         console.error("Error saving memory:", error);
       });
@@ -1201,243 +1177,26 @@ async function addMem0IconButton() {
     if (existingButton && existingButton.parentNode) {
       existingButton.parentNode.remove();
     }
-    // Also remove floating container if it exists
-    const floatingContainer = document.querySelector('#mem0-floating-container');
-    if (floatingContainer) {
-      floatingContainer.remove();
-    }
     return;
   }
 
-  // Strategy 1: Look specifically for the microphone button area
-  let buttonContainer = null;
-  let referenceButton = null;
-  let microphoneButton = null;
+  // Fix the selector to find the mic container
+  const micContainer = document.querySelector('div[data-testid="composer-trailing-actions"] div.ms-auto');
   
-  // First, find the microphone button specifically
-  microphoneButton = document.querySelector('button[aria-label="Dictate button"]') ||
-    document.querySelector('button[aria-label*="voice"], button[aria-label*="Voice"], button[aria-label*="Dictate"], button[aria-label*="mic"], button[aria-label*="Mic"]') ||
-    Array.from(document.querySelectorAll('button')).find(btn => {
-      // Check if this button has the microphone icon structure
-      const rect = btn.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return false; // Skip invisible buttons
-      
-      const svg = btn.querySelector('svg');
-      if (svg) {
-        const paths = svg.querySelectorAll('path');
-        // Look for microphone-like SVG paths (common patterns)
-        for (const path of paths) {
-          const d = path.getAttribute('d');
-          if (d && (
-            d.includes('M12 1a') || 
-            d.includes('m12 2a') || 
-            d.includes('M12 14c') || 
-            d.includes('microphone') ||
-            d.includes('M8 3a3') || // Common mic path pattern
-            d.includes('M12 1c') ||
-            d.toLowerCase().includes('mic')
-          )) {
-            return true;
-          }
-        }
-        
-        // Also check for microphone-related viewBox or class names
-        if (svg.getAttribute('viewBox') && btn.className.includes('mic')) {
-          return true;
-        }
-      }
-      
-      // Check the button's position - microphone is usually on the right side
-      const inputElement = document.querySelector('#prompt-textarea') ||
-        document.querySelector('div[contenteditable="true"]') ||
-        document.querySelector("textarea");
-      if (inputElement) {
-        const inputRect = inputElement.getBoundingClientRect();
-        // Microphone button should be to the right of the input
-        return rect.left > inputRect.right - 200 && rect.left < inputRect.right + 50;
-      }
-      
-      return false;
-    });
-  
-  if (microphoneButton) {
-    // Look for the proper container - the Dictate button is nested within spans
-    let container = microphoneButton.parentElement;
-    
-    // Walk up the DOM to find the flex container that holds all the buttons
-    while (container && container !== document.body) {
-      // Look for the container with gap classes that holds multiple buttons
-      if (container.className && (
-        container.className.includes('gap-1.5') || 
-        container.className.includes('gap-2') ||
-        container.className.includes('items-center') && container.className.includes('flex')
-      )) {
-        // Check if this container has multiple button-like elements
-        const buttonElements = container.querySelectorAll('button, [role="button"]');
-        if (buttonElements.length > 0 || container.children.length > 1) {
-          buttonContainer = container;
-          referenceButton = microphoneButton;
-          break;
-        }
-      }
-      container = container.parentElement;
-    }
-    
-    // Fallback to immediate parent if no suitable container found
-    if (!buttonContainer) {
-      buttonContainer = microphoneButton.parentElement;
-      referenceButton = microphoneButton;
-    }
-  }
-  
-  // Fallback: Look for composer trailing actions if microphone not found
-  if (!buttonContainer) {
-    const composerTrailing = document.querySelector('div[data-testid="composer-trailing-actions"]');
-    if (composerTrailing) {
-      // Look for button containers within composer trailing actions
-      const containers = composerTrailing.querySelectorAll('div');
-      for (const container of containers) {
-        const buttons = container.querySelectorAll('button');
-        if (buttons.length > 0) {
-          buttonContainer = container;
-          referenceButton = buttons[buttons.length - 1]; // Use last button as reference
-          break;
-        }
-      }
-    }
-  }
-  
-  // Strategy 2: Look for buttons near the input element  
-  if (!buttonContainer) {
-    const inputElement = document.querySelector('#prompt-textarea') ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-    
-    if (inputElement) {
-      // Search up the DOM tree for button containers
-      let parent = inputElement.parentElement;
-      let level = 0;
-      while (parent && level < 5 && !buttonContainer) {
-        const buttons = parent.querySelectorAll('button');
-        if (buttons.length > 0) {
-          // Look for buttons that might be action buttons (not just text buttons)
-          for (const btn of buttons) {
-            const rect = btn.getBoundingClientRect();
-            // Check if button is visible and reasonable size
-            if (rect.width > 0 && rect.height > 0 && rect.width < 100) {
-              buttonContainer = parent;
-              referenceButton = btn;
-              break;
-            }
-          }
-        }
-        parent = parent.parentElement;
-        level++;
-      }
-    }
-  }
-  
-  // Strategy 3: Fallback - create our own container
-  if (!buttonContainer && inputElement) {
-    // Find the closest form or container element
-    let formContainer = inputElement.closest('form') || 
-                       inputElement.closest('div[role="group"]') ||
-                       inputElement.parentElement;
-    
-    if (formContainer) {
-      buttonContainer = formContainer;
-      // Try to find any existing button as reference
-      referenceButton = formContainer.querySelector('button');
-    }
-  }
-  
-  // Final fallback: Create a floating button if no container found
-  if (!buttonContainer) {
-    const inputElement = document.querySelector('#prompt-textarea') ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-      
-    if (inputElement) {
-      // Create a custom floating container
-      buttonContainer = document.createElement('div');
-      buttonContainer.id = 'mem0-floating-container';
-      buttonContainer.style.cssText = `
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-        display: flex;
-        gap: 4px;
-      `;
-      document.body.appendChild(buttonContainer);
-    }
-  }
-  
-  if (buttonContainer && !document.querySelector('#mem0-icon-button')) {
-    // Use microphone button styles if available, otherwise use reference button styles
-    let buttonStyles = 'btn relative btn-primary btn-small flex items-center justify-center rounded-full border border-token-border-default p-1 text-token-text-secondary focus-visible:outline-black dark:text-token-text-secondary dark:focus-visible:outline-white bg-transparent dark:bg-transparent can-hover:hover:bg-token-main-surface-secondary dark:hover:bg-transparent dark:hover:opacity-100 h-9 min-h-9 w-9';
-    
-    if (microphoneButton) {
-      buttonStyles = microphoneButton.className;
-    } else if (referenceButton) {
-      buttonStyles = referenceButton.className;
-    }
-    
-    if (true) { // Always execute the button creation now that we have a container
+  if (micContainer && !document.querySelector('#mem0-icon-button')) {
+    // Clone the mic button structure
+    const micButton = micContainer.querySelector('button[aria-label="Dictate button"]');
+    if (micButton) {
       const mem0ButtonContainer = document.createElement('span');
       mem0ButtonContainer.className = '';
       mem0ButtonContainer.dataset.state = 'closed';
       mem0ButtonContainer.style.position = 'relative'; // Add position relative for popover positioning
       
-      // Match the structure of the Dictate button if we found it
-      if (microphoneButton && microphoneButton.getAttribute('aria-label') === 'Dictate button') {
-        // Copy the exact class structure from the Dictate button's container
-        const dictateContainer = microphoneButton.closest('span[data-state="closed"]');
-        if (dictateContainer && dictateContainer.className) {
-          mem0ButtonContainer.className = dictateContainer.className;
-        }
-      }
-      
-      // Additional styling only if we haven't already copied from Dictate button container
-      if (!mem0ButtonContainer.className && microphoneButton && microphoneButton.parentElement) {
-        const micContainer = microphoneButton.parentElement;
-        if (micContainer.className) {
-          // Only copy safe styling classes, avoid layout-affecting ones
-          const safeClasses = micContainer.className.split(' ').filter(cls => 
-            !cls.includes('flex') && 
-            !cls.includes('grid') && 
-            !cls.includes('absolute') && 
-            !cls.includes('relative') &&
-            !cls.includes('fixed') &&
-            !cls.includes('w-') &&
-            !cls.includes('h-') &&
-            !cls.includes('m-') &&
-            !cls.includes('p-')
-          );
-          if (safeClasses.length > 0) {
-            mem0ButtonContainer.className = safeClasses.join(' ');
-          }
-        }
-      }
-      
       const mem0Button = document.createElement('button');
       mem0Button.id = 'mem0-icon-button';
-      mem0Button.className = buttonStyles;
-      mem0Button.setAttribute('aria-label', 'OpenMemory button');
+      mem0Button.className = 'btn relative btn-primary btn-small flex items-center justify-center rounded-full border border-token-border-default p-1 text-token-text-secondary focus-visible:outline-black dark:text-token-text-secondary dark:focus-visible:outline-white bg-transparent dark:bg-transparent can-hover:hover:bg-token-main-surface-secondary dark:hover:bg-transparent dark:hover:opacity-100 h-9 min-h-9 w-9';
+      mem0Button.setAttribute('aria-label', 'Mem0 button');
       mem0Button.type = 'button';
-      
-      // Ensure consistent button styling regardless of inherited classes
-      mem0Button.style.cssText = `
-        ${mem0Button.style.cssText}
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        min-width: 32px !important;
-        min-height: 32px !important;
-        border-radius: 50% !important;
-        flex-shrink: 0 !important;
-        position: relative !important;
-      `;
       
       // Create notification dot
       const notificationDot = document.createElement('div');
@@ -1526,51 +1285,8 @@ async function addMem0IconButton() {
       mem0Button.appendChild(notificationDot);
       mem0ButtonContainer.appendChild(mem0Button);
       
-      // Insert the button container with proper positioning and spacing
-      if (microphoneButton && buttonContainer.contains(microphoneButton)) {
-        // For Dictate button, we need to find the right insertion point
-        // The button is nested: container > span[data-state] > button
-        let insertionTarget = microphoneButton;
-        let insertionParent = buttonContainer;
-        
-        // If the microphone button is nested in spans, find the top-level span in our container
-        let currentElement = microphoneButton.parentElement;
-        while (currentElement && currentElement !== buttonContainer && currentElement.parentElement === buttonContainer) {
-          insertionTarget = currentElement;
-          break;
-        }
-        while (currentElement && currentElement !== buttonContainer) {
-          if (currentElement.parentElement === buttonContainer) {
-            insertionTarget = currentElement;
-            break;
-          }
-          currentElement = currentElement.parentElement;
-        }
-        
-        // Insert BEFORE the target element (to the left of the microphone)
-        insertionParent.insertBefore(mem0ButtonContainer, insertionTarget);
-        
-        // Add proper spacing to match other elements in the container
-        mem0ButtonContainer.style.marginRight = '0px'; // Let the container handle spacing
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      } else if (referenceButton && buttonContainer.contains(referenceButton)) {
-        // Insert next to the reference button  
-        if (referenceButton.nextSibling) {
-          buttonContainer.insertBefore(mem0ButtonContainer, referenceButton.nextSibling);
-        } else {
-          buttonContainer.appendChild(mem0ButtonContainer);
-        }
-        mem0ButtonContainer.style.marginLeft = '4px';
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      } else {
-        // Insert at the end of the button container with fallback styling
-        buttonContainer.appendChild(mem0ButtonContainer);
-        mem0ButtonContainer.style.marginLeft = '4px';
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      }
+      // Insert before the mic button
+      micContainer.insertBefore(mem0ButtonContainer, micContainer.firstChild);
       
       // Add hover event for popover
       mem0ButtonContainer.addEventListener('mouseenter', () => {
@@ -1710,10 +1426,9 @@ async function handleMem0Modal(sourceButtonId = null) {
     return;
   }
 
-  try {
-    const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-    message = message.replace(MEM0_PLAIN, "").trim();
-  } catch (_e) {}
+  const memInfoRegex =
+    /\s*Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):[\s\S]*$/;
+  message = message.replace(memInfoRegex, "").trim();
   const endIndex = message.indexOf("</p>");
   if (endIndex !== -1) {
     message = message.slice(0, endIndex + 4);
@@ -1741,7 +1456,7 @@ async function handleMem0Modal(sourceButtonId = null) {
     const apiKey = data.apiKey;
     const userId = data.userId || data.user_id || "chrome-extension-user";
     const accessToken = data.access_token;
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.3;
     const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
@@ -1765,23 +1480,6 @@ async function handleMem0Modal(sourceButtonId = null) {
     }
 
     // Existing search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-    
-    // Debug logging
-    console.log('[OpenMemory] ChatGPT Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -1790,7 +1488,18 @@ async function handleMem0Modal(sourceButtonId = null) {
           "Content-Type": "application/json",
           Authorization: authHeader,
         },
-        body: JSON.stringify(searchPayload),
+        body: JSON.stringify({
+          query: message,
+          filters: {
+            user_id: userId,
+          },
+          rerank: false,
+          threshold: threshold,
+          top_k: topK,
+          filter_memories: true,
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          ...optionalParams,
+        }),
       }
     );
 
@@ -1801,24 +1510,14 @@ async function handleMem0Modal(sourceButtonId = null) {
     }
 
     const responseData = await searchResponse.json();
-    
-    // Debug logging
-    console.log('[OpenMemory] ChatGPT Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
 
-    // Initial items from search (keep same structure used by modal)
-    const memoryItems = (responseData || []).map(item => ({
-      id: item.id,
-      text: item.memory,
-      categories: item.categories || []
-    }));
+    // Extract memories and their categories
+    const memoryItems = responseData.map(item => {
+      return {
+        text: item.memory,
+        categories: item.categories || []
+      };
+    });
 
     // Update the modal with real data and the source button ID
     createMemoryModal(memoryItems, false, sourceButtonId);
@@ -1917,15 +1616,6 @@ function showButtonPopup(button, message) {
   }, 3000);
 }
 
-// Safe no-op to prevent ReferenceError if auto-inject prefetch isn't defined elsewhere
-function setupAutoInjectPrefetch() {
-  try {
-    // Intentionally left blank; legacy callers expect this to exist.
-    // Inline hint handles lightweight suggestion awareness.
-  } catch (_e) {}
-}
-
-
 function getLastMessages(count) {
   const messageContainer = document.querySelector(
     ".flex.flex-col.text-sm.md\\:pb-9"
@@ -1957,8 +1647,6 @@ function getLastMessages(count) {
       messages.unshift({ role: "assistant", content });
     }
   }
-
-  console.log(messages); 
 
   return messages;
 }
@@ -2327,9 +2015,6 @@ function getMemoryEnabledState() {
   });
 }
 
-// Returns whether auto-inject is enabled (default: false if not present)
-// (auto-inject helpers removed)
-
 // Update the initialization function to add the Mem0 icon button but not intercept Enter key
 function initializeMem0Integration() {
   document.addEventListener("DOMContentLoaded", () => {
@@ -2337,7 +2022,6 @@ function initializeMem0Integration() {
     (async () => await addMem0IconButton())();
     addSendButtonListener();
     (async () => await updateNotificationDot())();
-    setupAutoInjectPrefetch();
   });
 
   document.addEventListener("keydown", function (event) {
@@ -2349,14 +2033,11 @@ function initializeMem0Integration() {
     }
   });
 
-  // Remove global Enter interception previously added for auto-inject
-
   observer = new MutationObserver(() => {
     addSyncButton();
     (async () => await addMem0IconButton())();
     addSendButtonListener();
     (async () => await updateNotificationDot())();
-    setupAutoInjectPrefetch();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
@@ -2366,7 +2047,6 @@ function initializeMem0Integration() {
     (async () => await addMem0IconButton())();
     addSendButtonListener();
     (async () => await updateNotificationDot())();
-    setupAutoInjectPrefetch();
   });
 
   observerForUI.observe(document.body, {
@@ -2374,8 +2054,6 @@ function initializeMem0Integration() {
     subtree: true,
   });
 }
-
-// (global auto-inject interceptors removed)
 
 // Function to show login popup
 function showLoginPopup() {
@@ -2536,57 +2214,3 @@ function showLoginPopup() {
 }
 
 initializeMem0Integration();
-// --- SPA navigation handling and extension context guard (mirrors Claude) ---
-let chatgptExtensionContextValid = true;
-let chatgptCurrentUrl = window.location.href;
-
-function chatgptCheckExtensionContext() {
-  try {
-    // chrome.runtime may throw if context invalidated
-    // Using optional chaining to avoid ReferenceError
-    const isValid = !!(chrome && chrome.runtime && !chrome.runtime.lastError);
-    if (chatgptExtensionContextValid && !isValid) {
-      chatgptExtensionContextValid = false;
-    }
-    return isValid;
-  } catch (_e) {
-    chatgptExtensionContextValid = false;
-    return false;
-  }
-}
-
-function chatgptDetectNavigation() {
-  const newUrl = window.location.href;
-  if (newUrl !== chatgptCurrentUrl) {
-    chatgptCurrentUrl = newUrl;
-
-    // Re-initialize UI after small delay for DOM to settle
-    setTimeout(() => {
-      try {
-        addSyncButton();
-        (async () => await addMem0IconButton())();
-        addSendButtonListener();
-        (async () => await updateNotificationDot())();
-      } catch (_e) {}
-    }, 300);
-  }
-}
-
-// Poll for SPA navigations and context validity
-setInterval(() => {
-  chatgptCheckExtensionContext();
-  chatgptDetectNavigation();
-}, 1000);
-
-// Hook browser history navigation
-window.addEventListener('popstate', () => setTimeout(chatgptDetectNavigation, 100));
-const chatgptOriginalPushState = history.pushState;
-history.pushState = function() {
-  chatgptOriginalPushState.apply(history, arguments);
-  setTimeout(chatgptDetectNavigation, 100);
-};
-const chatgptOriginalReplaceState = history.replaceState;
-history.replaceState = function() {
-  chatgptOriginalReplaceState.apply(history, arguments);
-  setTimeout(chatgptDetectNavigation, 100);
-};

@@ -8,15 +8,8 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation", "webRequest"],
-  "host_permissions": [
-    "https://api.mem0.ai/*", 
-    "https://app.mem0.ai/*",
-    "https://claude.ai/*",
-    "https://api.anthropic.com/*",
-    "https://api.openai.com/*",
-    "https://api.groq.com/*"
-  ],
+  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation"],
+  "host_permissions": ["https://api.mem0.ai/*", "https://app.mem0.ai/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -32,15 +25,15 @@
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["utils/llm_prompts.js", "claude/content.js"]
+      "js": ["claude/content.js"]
     },
     {
       "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
-      "js": ["utils/llm_prompts.js", "chatgpt/content.js"]
+      "js": ["chatgpt/content.js"]
     },
     {
       "matches": ["https://www.perplexity.ai/*"],
-      "js": ["utils/llm_prompts.js", "perplexity/content.js"]
+      "js": ["perplexity/content.js"]
     },
     {
       "matches": ["https://app.mem0.ai/*"],
@@ -48,19 +41,19 @@
     },
     {
       "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
-      "js": ["utils/llm_prompts.js", "grok/content.js"]
+      "js": ["grok/content.js"]
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["utils/llm_prompts.js", "deepseek/content.js"]
+      "js": ["deepseek/content.js"]
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["utils/llm_prompts.js", "gemini/content.js"]
+      "js": ["gemini/content.js"]
     },
     {
       "matches": ["https://replit.com/*"],
-      "js": ["utils/llm_prompts.js", "replit/content.js"]
+      "js": ["replit/content.js"]
     },
     {
       "matches": ["<all_urls>"],

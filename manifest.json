@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
   "name": "OpenMemory",
-  "version": "1.3.16",
+  "version": "1.3.17",
   "description": "🧠 OpenMemory keeps your conversations in sync. 🔄 No more repeating yourself—just seamless AI collaboration! ✨",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation"],
-  "host_permissions": ["https://api.mem0.ai/*", "https://app.mem0.ai/*"],
+  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation", "webRequest"],
+  "host_permissions": [
+    "https://api.mem0.ai/*", 
+    "https://app.mem0.ai/*",
+    "https://claude.ai/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -25,15 +29,15 @@
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["claude/content.js"]
+      "js": ["utils/llm_prompts.js", "claude/content.js"]
     },
     {
       "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
-      "js": ["chatgpt/content.js"]
+      "js": ["utils/llm_prompts.js", "chatgpt/content.js"]
     },
     {
       "matches": ["https://www.perplexity.ai/*"],
-      "js": ["perplexity/content.js"]
+      "js": ["utils/llm_prompts.js", "perplexity/content.js"]
     },
     {
       "matches": ["https://app.mem0.ai/*"],
@@ -41,19 +45,19 @@
     },
     {
       "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
-      "js": ["grok/content.js"]
+      "js": ["utils/llm_prompts.js", "grok/content.js"]
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["deepseek/content.js"]
+      "js": ["utils/llm_prompts.js", "deepseek/content.js"]
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["gemini/content.js"]
+      "js": ["utils/llm_prompts.js", "gemini/content.js"]
     },
     {
       "matches": ["https://replit.com/*"],
-      "js": ["replit/content.js"]
+      "js": ["utils/llm_prompts.js", "replit/content.js"]
     },
     {
       "matches": ["<all_urls>"],

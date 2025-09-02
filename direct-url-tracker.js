@@ -93,7 +93,7 @@ export function initDirectUrlTracking() {
         if (!allow) return;
         const hostname = (() => { try { return new URL(url).hostname; } catch { return ""; } })();
         const ts = formatTimestamp();
-        const content = `User visited ${url}${hostname ? ` (${hostname})` : ""} on ${ts.date} at ${ts.time}`;
+        const content = `Typed URL: ${url}${hostname ? ` (${hostname})` : ""} on ${ts.date} at ${ts.time}`;
         await addMemory(content, settings, url);
       } catch {
         // no-op

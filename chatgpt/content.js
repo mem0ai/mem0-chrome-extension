@@ -1175,8 +1175,6 @@ function captureAndStoreMemory() {
         ...optionalParams,
       };
       
-      console.log('[OpenMemory] ChatGPT Storage Payload:', JSON.stringify(storagePayload, null, 2));
-      
       fetch("https://api.mem0.ai/v1/memories/", {
         method: "POST",
         headers: {
@@ -1779,9 +1777,6 @@ async function handleMem0Modal(sourceButtonId = null) {
       ...optionalParams,
     };
     
-    // Debug logging
-    console.log('[OpenMemory] ChatGPT Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -1801,17 +1796,6 @@ async function handleMem0Modal(sourceButtonId = null) {
     }
 
     const responseData = await searchResponse.json();
-    
-    // Debug logging
-    console.log('[OpenMemory] ChatGPT Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
 
     // Initial items from search (keep same structure used by modal)
     const memoryItems = (responseData || []).map(item => ({
@@ -1957,8 +1941,6 @@ function getLastMessages(count) {
       messages.unshift({ role: "assistant", content });
     }
   }
-
-  console.log(messages); 
 
   return messages;
 }

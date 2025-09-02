@@ -133,9 +133,6 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
       ...optionalParams,
     };
     
-    // Debug logging
-    console.log('[OpenMemory] Grok Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -155,17 +152,6 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
     }
 
     const responseData = await searchResponse.json();
-    
-    // Debug logging
-    console.log('[OpenMemory] Grok Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
     
     // Extract memories and their categories
     let memoryItems = responseData.map(item => {
@@ -305,8 +291,6 @@ function addSendButtonListener() {
           source: "OPENMEMORY_CHROME_EXTENSION",
           ...optionalParams,
         };
-        
-        console.log('[OpenMemory] Grok Storage Payload:', JSON.stringify(storagePayload, null, 2));
         
         fetch("https://api.mem0.ai/v1/memories/", {
           method: "POST",
@@ -1744,9 +1728,6 @@ async function handleMem0Modal(sourceButtonId = null) {
       ...optionalParams,
     };
     
-    // Debug logging
-    console.log('[OpenMemory] Grok handleMem0Modal Search Payload:', JSON.stringify(searchPayload, null, 2));
-    
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
       {
@@ -1766,17 +1747,6 @@ async function handleMem0Modal(sourceButtonId = null) {
     }
 
     const responseData = await searchResponse.json();
-    
-    // Debug logging
-    console.log('[OpenMemory] Grok handleMem0Modal Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
 
     // Extract memories and their categories
     let memoryItems = responseData.map(item => {

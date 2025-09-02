@@ -2106,8 +2106,6 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
       ...optionalParams,
     };
     
-    // Debug logging
-    console.log('[OpenMemory] Claude Search Payload:', JSON.stringify(searchPayload, null, 2));
     
     const searchResponse = await fetch(
       "https://api.mem0.ai/v2/memories/search/",
@@ -2129,17 +2127,6 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
 
     const responseData = await searchResponse.json();
     
-    // Debug logging
-    console.log('[OpenMemory] Claude Search Response:', {
-      count: responseData.length,
-      memories: responseData.map(item => ({
-        id: item.id,
-        memory: item.memory?.substring(0, 50) + '...',
-        metadata: item.metadata,
-        user_id: item.user_id
-      }))
-    });
-
     // Extract memories and their categories
     let memoryItems = responseData.map((item, index) => {
       return {

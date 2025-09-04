@@ -8,14 +8,10 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation", "webRequest"],
-  "host_permissions": [
-    "https://api.mem0.ai/*", 
-    "https://app.mem0.ai/*",
-    "https://claude.ai/*"
-  ],
+  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation"],
+  "host_permissions": ["https://api.mem0.ai/*", "https://app.mem0.ai/*"],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -23,63 +19,63 @@
     }
   },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "src/background.ts",
     "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["utils/llm_prompts.js", "claude/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/claude/content.ts"]
     },
     {
       "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
-      "js": ["utils/llm_prompts.js", "chatgpt/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/chatgpt/content.ts"]
     },
     {
       "matches": ["https://www.perplexity.ai/*"],
-      "js": ["utils/llm_prompts.js", "perplexity/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/perplexity/content.ts"]
     },
     {
       "matches": ["https://app.mem0.ai/*"],
-      "js": ["mem0/content.js"]
+      "js": ["src/mem0/content.ts"]
     },
     {
       "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
-      "js": ["utils/llm_prompts.js", "grok/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/grok/content.ts"]
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["utils/llm_prompts.js", "deepseek/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/deepseek/content.ts"]
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["utils/llm_prompts.js", "gemini/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/gemini/content.ts"]
     },
     {
       "matches": ["https://replit.com/*"],
-      "js": ["utils/llm_prompts.js", "replit/content.js"]
+      "js": ["src/utils/llm_prompts.ts", "src/replit/content.ts"]
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["sidebar.js"],
+      "js": ["src/sidebar.ts"],
       "run_at": "document_end"
     }, 
     {
       "matches": ["<all_urls>"], 
-      "js": ["selection_context.js"], 
+      "js": ["src/selection_context.ts"], 
       "run_at": "document_idle",
       "all_frames": true
     }
     ,
     {
       "matches": ["<all_urls>"],
-      "js": ["search_tracker.js"],
+      "js": ["src/search_tracker.ts"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*"],
+      "resources": ["icons/*", "src/popup.ts"],
       "matches": ["<all_urls>"]
     }
   ]

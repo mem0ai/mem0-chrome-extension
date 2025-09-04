@@ -1,9 +1,12 @@
 import type { MemoryItem, OptionalApiParams } from "../types/memory";
 import type { MemorySearchResponse } from "../types/api";
 import type { StorageItems } from "../types/storage";
-import { MessageRole } from "../types/api";
+import { MessageRole, Source } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { Provider } from "../types/providers";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { API_MEMORIES, API_SEARCH, APP_LOGIN } from "../consts/api";
 
 export {};
 
@@ -144,7 +147,7 @@ async function handleMem0Processing(
       filters: {
         user_id: userId,
       },
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: Source.OPENMEMORY_CHROME_EXTENSION,
       rerank: true,
       threshold: threshold,
       top_k: topK,
@@ -153,7 +156,7 @@ async function handleMem0Processing(
       ...optionalParams,
     };
 
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+    const searchResponse = await fetch(API_SEARCH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -189,7 +192,7 @@ async function handleMem0Processing(
     }
 
     // New add memory API call (non-blocking)
-    fetch("https://api.mem0.ai/v1/memories/", {
+    fetch(API_MEMORIES, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -200,9 +203,9 @@ async function handleMem0Processing(
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "Grok",
+          provider: Provider.Grok,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     })
@@ -315,13 +318,13 @@ function addSendButtonListener(): void {
           user_id: userId,
           infer: true,
           metadata: {
-            provider: "Grok",
+            provider: Provider.Grok,
           },
-          source: "OPENMEMORY_CHROME_EXTENSION",
+          source: Source.OPENMEMORY_CHROME_EXTENSION,
           ...optionalParams,
         };
 
-        fetch("https://api.mem0.ai/v1/memories/", {
+        fetch(API_MEMORIES, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1591,30 +1594,6 @@ function createMemoryModal(
   }
 }
 
-// Add a function to apply just the current memory to the input
-function applyMemoryToInput(memoryText: string) {
-  // Add the new memory to our global collection
-  if (!allMemories.includes(memoryText)) {
-    allMemories.push(memoryText);
-  }
-
-  // Update the input field with all memories
-  updateInputWithMemories();
-}
-
-// Function to apply multiple memories to the input field
-function applyMemoriesToInput(memories: string[]) {
-  // Add all new memories to our global collection
-  memories.forEach((mem: string) => {
-    if (!allMemories.includes(mem)) {
-      allMemories.push(mem);
-    }
-  });
-
-  // Update the input field with all memories
-  updateInputWithMemories();
-}
-
 // Shared function to update the input field with all collected memories
 function updateInputWithMemories() {
   const inputElement = getTextarea();
@@ -1674,7 +1653,7 @@ function getMemoryEnabledState(): Promise<boolean> {
 }
 
 // Handler for the modal approach
-async function handleMem0Modal(sourceButtonId: string | null = null) {
+async function handleMem0Modal(sourceButtonId: string | null = null): Promise<void> {
   const memoryEnabled = await getMemoryEnabledState();
   if (!memoryEnabled) {
     return;
@@ -1777,11 +1756,11 @@ async function handleMem0Modal(sourceButtonId: string | null = null) {
       top_k: topK,
       filter_memories: false,
       // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: Source.OPENMEMORY_CHROME_EXTENSION,
       ...optionalParams,
     };
 
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+    const searchResponse = await fetch(API_SEARCH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1809,7 +1788,7 @@ async function handleMem0Modal(sourceButtonId: string | null = null) {
     createMemoryModal(memoryItems, false, sourceButtonId);
 
     // Proceed with adding memory asynchronously without awaiting
-    fetch("https://api.mem0.ai/v1/memories/", {
+    fetch(API_MEMORIES, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1820,9 +1799,9 @@ async function handleMem0Modal(sourceButtonId: string | null = null) {
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "Grok",
+          provider: Provider.Grok,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     }).catch(error => {
@@ -2029,7 +2008,7 @@ function showLoginPopup(): void {
 
   // Open sign-in page when clicked
   signInButton.addEventListener("click", () => {
-    window.open("https://app.mem0.ai/login", "_blank");
+    window.open(APP_LOGIN, "_blank");
     document.body.removeChild(popupOverlay);
   });
 

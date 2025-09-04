@@ -2,9 +2,13 @@ import type { MemoryItem, OptionalApiParams, HistoryStateData } from "../types/m
 import type { MemorySearchResponse } from "../types/api";
 import type { StorageData } from "../types/storage";
 import type { ExtendedHTMLElement, ExtendedDocument, ExtendedElement } from "../types/dom";
-import { MessageRole } from "../types/api";
+import { MessageRole, Source } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { Provider } from "../types/providers";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { API_MEMORIES, API_SEARCH, APP_LOGIN } from "../consts/api";
+import "../types/chrome";
 
 export {};
 
@@ -24,7 +28,7 @@ let conversationHistory: Array<{ role: MessageRole; content: string; timestamp: 
 const MAX_CONVERSATION_HISTORY = 12; // Keep last 12 messages (6 pairs of user/assistant)
 
 // Function to add message to conversation history with sliding window
-function addToConversationHistory(role: MessageRole, content: string) {
+function addToConversationHistory(role: MessageRole, content: string): void {
   if (!content || !content.trim()) {
     return;
   }
@@ -58,7 +62,9 @@ function addToConversationHistory(role: MessageRole, content: string) {
 }
 
 // Function to get conversation context for memory creation
-function getConversationContext(includeCurrent: boolean = true) {
+function getConversationContext(
+  includeCurrent: boolean = true
+): Array<{ role: MessageRole; content: string }> {
   if (conversationHistory.length === 0) {
     return [];
   }
@@ -82,7 +88,7 @@ function getConversationContext(includeCurrent: boolean = true) {
 }
 
 // Function to initialize conversation history from existing messages on page
-function initializeConversationHistoryFromDOM() {
+function initializeConversationHistoryFromDOM(): void {
   const messageContainer = document.querySelector(
     ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full"
   );
@@ -134,7 +140,7 @@ let isDragging: boolean = false;
 const dragOffset: { x: number; y: number } = { x: 0, y: 0 };
 
 // Function to get memory enabled state from storage
-async function getMemoryEnabledState() {
+async function getMemoryEnabledState(): Promise<boolean> {
   return new Promise(resolve => {
     // Check if extension context is valid
     if (!chrome || !chrome.storage || !chrome.storage.sync) {
@@ -145,8 +151,7 @@ async function getMemoryEnabledState() {
     try {
       chrome.storage.sync.get(StorageKey.MEMORY_ENABLED, function (data) {
         try {
-          // @ts-ignore
-          if (chrome.runtime && chrome.runtime.lastError) {
+          if (chrome.runtime?.lastError) {
             resolve(true); // Default to enabled if error
             return;
           }
@@ -764,7 +769,7 @@ function createMemoryModal(
   }
 
   // Helper function to position modal relative to input field
-  function positionRelativeToInput() {
+  function positionRelativeToInput(): void {
     const inputElement =
       document.querySelector('div[contenteditable="true"]') ||
       document.querySelector("textarea") ||
@@ -1016,7 +1021,7 @@ function createMemoryModal(
   let currentlyExpandedMemory: HTMLElement | null = null;
 
   // Function to create skeleton loading items
-  function createSkeletonItems() {
+  function createSkeletonItems(): void {
     memoriesContent.innerHTML = "";
 
     for (let i = 0; i < memoriesPerPage; i++) {
@@ -1107,7 +1112,7 @@ function createMemoryModal(
   }
 
   // Function to show memories with adjusted count based on modal position
-  function showMemories() {
+  function showMemories(): void {
     memoriesContent.innerHTML = "";
 
     if (isLoading) {
@@ -1295,7 +1300,7 @@ function createMemoryModal(
       contentWrapper.appendChild(removeButton);
 
       // Function to expand memory
-      function expandMemory() {
+      function expandMemory(): void {
         if (currentlyExpandedMemory && currentlyExpandedMemory !== memoryContainer) {
           currentlyExpandedMemory.dispatchEvent(new Event("collapse"));
         }
@@ -1319,7 +1324,7 @@ function createMemoryModal(
       }
 
       // Function to collapse memory
-      function collapseMemory() {
+      function collapseMemory(): void {
         isExpanded = false;
         memoryText.style.webkitLineClamp = "2";
         memoryText.style.height = "42px";
@@ -1393,7 +1398,7 @@ function createMemoryModal(
   }
 
   // Function to show empty state
-  function showEmptyState() {
+  function showEmptyState(): void {
     memoriesContent.innerHTML = "";
     memoriesCounter.textContent = "No Relevant Memories";
 
@@ -1572,7 +1577,7 @@ function createMemoryModal(
   });
 
   // Add global mouse move and mouse up handlers
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = (e: MouseEvent): void => {
     if (!isDragging) {
       return;
     }
@@ -1594,7 +1599,7 @@ function createMemoryModal(
     modalPosition = { top: constrainedTop, left: constrainedLeft };
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (): void => {
     if (!isDragging) {
       return;
     }
@@ -1691,7 +1696,7 @@ function createMemoryModal(
 }
 
 // Shared function to update the input field with all collected memories
-function updateInputWithMemories() {
+function updateInputWithMemories(): void {
   // Find the input element (prioritizing the ProseMirror div with contenteditable="true")
   let inputElement = document.querySelector('div[contenteditable="true"].ProseMirror');
 
@@ -1961,7 +1966,7 @@ function updateInputWithMemories() {
 }
 
 // Function to get the content without any memory wrappers
-function getContentWithoutMemories(providedMessage: string | undefined) {
+function getContentWithoutMemories(providedMessage: string | undefined): string {
   // Find the input element (prioritizing the ProseMirror div with contenteditable="true")
   let inputElement = document.querySelector('div[contenteditable="true"].ProseMirror');
 
@@ -2084,13 +2089,6 @@ async function handleMem0Modal(
       return;
     }
 
-    // Now that we know the user is logged in, get the input
-    const inputElement =
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
-      document.querySelector('p[data-placeholder="How can I help you today?"]') ||
-      document.querySelector('p[data-placeholder="Reply to Claude..."]');
-
     let message = getInputValue();
 
     if (!message || message.trim() === "") {
@@ -2157,11 +2155,11 @@ async function handleMem0Modal(
       top_k: topK,
       filter_memories: false,
       // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: Source.OPENMEMORY_CHROME_EXTENSION,
       ...optionalParams,
     };
 
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+    const searchResponse = await fetch(API_SEARCH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2191,7 +2189,7 @@ async function handleMem0Modal(
     createMemoryModal(memoryItems, false, sourceButtonId);
 
     // New add memory API call (non-blocking)
-    fetch("https://api.mem0.ai/v1/memories/", {
+    fetch(API_MEMORIES, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2202,9 +2200,9 @@ async function handleMem0Modal(
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "Claude",
+          provider: Provider.Claude,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     })
@@ -2306,7 +2304,7 @@ function getInputValue(): string | null {
 }
 
 // Auto-inject support: simple debounce and config
-async function updateMemoryEnabled() {
+async function updateMemoryEnabled(): Promise<void> {
   memoryEnabled = Boolean(await getMemoryEnabledState());
 
   // If memory is disabled, remove the button completely
@@ -2329,7 +2327,7 @@ function initializeMem0Integration(): void {
   }
 
   // Ensure send button listeners are attached early and repeatedly
-  const ensureSendButtonListeners = () => {
+  const ensureSendButtonListeners = (): void => {
     const allSendButtons = [
       document.querySelector('button[aria-label="Send Message"]'),
       document.querySelector('button[aria-label="Send message"]'),
@@ -2502,7 +2500,7 @@ function initializeMem0Integration(): void {
   });
 
   // Find the input element and observe it
-  function observeInput() {
+  function observeInput(): void {
     const inputElement =
       document.querySelector('div[contenteditable="true"]') ||
       document.querySelector("textarea") ||
@@ -2554,7 +2552,7 @@ function initializeMem0Integration(): void {
     });
   }, 5000);
   // Fallback: observe chat thread for newly added user bubbles and post if we missed send
-  const ensureThreadObserver = () => {
+  const ensureThreadObserver = (): void => {
     const thread = document.querySelector(
       ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full"
     );
@@ -2635,7 +2633,7 @@ function initializeMem0Integration(): void {
 }
 
 // Function to show login popup
-function showLoginPopup() {
+function showLoginPopup(): void {
   // First remove any existing popups
   const existingPopup = document.querySelector("#mem0-login-popup");
   if (existingPopup) {
@@ -2770,7 +2768,7 @@ function showLoginPopup() {
 
   // Open sign-in page when clicked
   signInButton.addEventListener("click", () => {
-    window.open("https://app.mem0.ai/login", "_blank");
+    window.open(APP_LOGIN, "_blank");
     document.body.removeChild(popupOverlay);
   });
 
@@ -2794,7 +2792,7 @@ function showLoginPopup() {
 }
 
 // Function to capture and store memory asynchronously
-async function captureAndStoreMemory(snapshot: string) {
+async function captureAndStoreMemory(snapshot: string): Promise<void> {
   // Check if extension context is valid
   if (!chrome || !chrome.storage) {
     return;
@@ -2876,8 +2874,7 @@ async function captureAndStoreMemory(snapshot: string) {
       function (items) {
         // Check for chrome.runtime.lastError which indicates extension context issues
         try {
-          // @ts-ignore
-          if (chrome.runtime && chrome.runtime.lastError) {
+          if (chrome.runtime?.lastError) {
             return;
           }
         } catch (_e) {}
@@ -2906,7 +2903,7 @@ async function captureAndStoreMemory(snapshot: string) {
         }
 
         // Send memory to mem0 API asynchronously without waiting for response
-        fetch("https://api.mem0.ai/v1/memories/", {
+        fetch(API_MEMORIES, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -2917,9 +2914,9 @@ async function captureAndStoreMemory(snapshot: string) {
             user_id: userId,
             infer: true,
             metadata: {
-              provider: "Claude",
+              provider: Provider.Claude,
             },
-            source: "OPENMEMORY_CHROME_EXTENSION",
+            source: Source.OPENMEMORY_CHROME_EXTENSION,
             ...optionalParams,
           }),
         })
@@ -2939,7 +2936,7 @@ async function captureAndStoreMemory(snapshot: string) {
 }
 
 // Function to update the notification dot
-function updateNotificationDot() {
+function updateNotificationDot(): void {
   // Find all Mem0 notification dots
   const notificationDots = document.querySelectorAll("#mem0-notification-dot");
   if (!notificationDots.length) {
@@ -3026,7 +3023,7 @@ function updateNotificationDot() {
 // Enhanced DOM-based message detection since CSP blocks network interception
 let domMonitoringActive = false;
 
-function setupEnhancedDOMMonitoring() {
+function setupEnhancedDOMMonitoring(): void {
   if (domMonitoringActive) {
     return;
   }
@@ -3034,7 +3031,7 @@ function setupEnhancedDOMMonitoring() {
   domMonitoringActive = true;
 
   // Enhanced real-time message monitoring with multiple strategies
-  function setupRealTimeMessageMonitoring() {
+  function setupRealTimeMessageMonitoring(): void {
     const threadSelector = ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full";
 
     // Strategy 1: Monitor for new user message elements
@@ -3123,7 +3120,7 @@ function setupEnhancedDOMMonitoring() {
   }
 
   // Strategy 2: Monitor input clearing as a signal that message was sent
-  function setupInputClearingMonitor() {
+  function setupInputClearingMonitor(): void {
     const inputSelectors = [
       'div[contenteditable="true"].ProseMirror',
       'div[contenteditable="true"]',
@@ -3135,7 +3132,7 @@ function setupEnhancedDOMMonitoring() {
     let lastInputValue = "";
     let inputClearingObserver: MutationObserver | undefined;
 
-    function findAndObserveInput() {
+    function findAndObserveInput(): void {
       for (const selector of inputSelectors) {
         const input = document.querySelector(selector);
         if (input) {
@@ -3198,8 +3195,7 @@ function setupEnhancedDOMMonitoring() {
 let extensionContextValid = true;
 let currentUrl = window.location.href;
 
-function checkExtensionContext() {
-  // @ts-ignore
+function checkExtensionContext(): boolean {
   const isValid = !!(chrome && chrome.runtime);
   if (extensionContextValid && !isValid) {
     extensionContextValid = false;
@@ -3208,7 +3204,7 @@ function checkExtensionContext() {
 }
 
 // Function to detect URL changes (SPA navigation)
-function detectNavigation() {
+function detectNavigation(): void {
   const newUrl = window.location.href;
   if (newUrl !== currentUrl) {
     const wasNewChat = currentUrl.includes("/new") || currentUrl.includes("/chat/new");

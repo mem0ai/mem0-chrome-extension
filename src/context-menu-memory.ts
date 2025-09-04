@@ -2,10 +2,11 @@ import type { Settings } from "./types/settings";
 import { StorageKey } from "./types/storage";
 import { Provider, Category } from "./types/providers";
 import { MessageRole } from "./types/api";
-import { SOURCE, DEFAULT_USER_ID } from "./types/api";
+import { Source, DEFAULT_USER_ID } from "./types/api";
 import type { ToastMessage, SelectionContextResponse } from "./types/messages";
 import type { ApiMemoryRequest } from "./types/api";
 import { MessageType, ToastVariant } from "./types/messages";
+import { API_MEMORIES } from "./consts/api";
 
 export function initContextMenuMemory(): void {
   try {
@@ -183,7 +184,7 @@ async function addMemory(content: string, settings: Settings): Promise<boolean> 
       provider: Provider.ContextMenu,
       category: Category.BOOKMARK,
     },
-    source: SOURCE,
+    source: Source.OPENMEMORY_CHROME_EXTENSION,
   };
   if (settings.orgId) {
     body.org_id = settings.orgId;
@@ -195,7 +196,7 @@ async function addMemory(content: string, settings: Settings): Promise<boolean> 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch("https://api.mem0.ai/v1/memories/", {
+    const res = await fetch(API_MEMORIES, {
       method: "POST",
       headers,
       body: JSON.stringify(body),

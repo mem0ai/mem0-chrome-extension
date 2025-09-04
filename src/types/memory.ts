@@ -22,7 +22,10 @@ export type MemoriesResponse = {
 
 // Prompts
 export type OpenMemoryPrompts = {
+  rerank_system_prompt: string;
+  memory_header_text: string;
   memory_header_html_strong: string;
+  memory_marker_prefix: string;
   memory_header_plain_regex: RegExp;
   memory_header_html_regex: RegExp;
 };

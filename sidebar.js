@@ -32,6 +32,15 @@
   }
 
   function toggleSidebar() {
+    // Track extension usage when sidebar is toggled
+    if (typeof sendExtensionEvent === 'function') {
+      sendExtensionEvent("extension_browser_icon_clicked", {
+        browser: getBrowser(),
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        tab_url: window.location.href
+      });
+    }
+    
     let sidebar = document.getElementById("mem0-sidebar");
     if (sidebar) {
       // If sidebar exists, toggle its visibility

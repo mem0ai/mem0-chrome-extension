@@ -1485,6 +1485,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       // Add click handler for add button
       addButton.addEventListener('click', (e) => {
         e.stopPropagation();
+
+        sendExtensionEvent("memory_injection", {
+          provider: "deepseek",
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          browser: getBrowser(),
+          injected_all: false,
+          memory_id: memory.id
+        });
         
         // Add this memory
         allMemoriesById.add(memory.id);
@@ -1631,6 +1639,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         allMemoriesById.add(memory.id);
         return memory.memory || memory.text;
       });
+
+    sendExtensionEvent("memory_injection", {
+      provider: "deepseek",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser(),
+      injected_all: true,
+      memory_count: newMemories.length
+    });
     
     // Add all new memories to allMemories
     allMemories.push(...newMemories);
@@ -1792,6 +1808,12 @@ async function handleMem0Modal(sourceButtonId = null) {
         showLoginModal();
         return;
       }
+
+      sendExtensionEvent("modal_clicked", {
+        provider: "deepseek",
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        browser: getBrowser()
+      });
 
       // Search for memories
       const memories = await searchMemories(message);

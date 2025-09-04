@@ -1,38 +1,52 @@
+import type { SidebarActionMessage } from "./types/messages";
+import { SidebarAction } from "./types/messages";
+import type { SidebarSettings } from "./types/settings";
+import { StorageKey } from "./types/storage";
+import type { Organization, Project } from "./types/organizations";
+import { DEFAULT_USER_ID } from "./types/api";
+import type { Memory, MemoriesResponse } from "./types/memory";
+
 (function () {
   let sidebarVisible = false;
 
-  function initializeMem0Sidebar() {
+  function initializeMem0Sidebar(): void {
     // Listen for messages from the extension
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === "toggleSidebar") {
-        chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-          if (data.apiKey || data.access_token) {
-            toggleSidebar();
-          } else {
-            chrome.runtime.sendMessage({ action: "openPopup" });
-          }
-        });
-      }
+    chrome.runtime.onMessage.addListener(
+      (
+        request: SidebarActionMessage | { action: SidebarAction.SIDEBAR_SETTINGS },
+        _sender,
+        _sendResponse: () => void
+      ) => {
+        if (request.action === SidebarAction.TOGGLE_SIDEBAR) {
+          chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
+            if (data.apiKey || data.access_token) {
+              toggleSidebar();
+            } else {
+              chrome.runtime.sendMessage({ action: SidebarAction.OPEN_POPUP });
+            }
+          });
+        }
+        if (request.action === SidebarAction.SIDEBAR_SETTINGS) {
+          chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
+            if (data[StorageKey.API_KEY] || data[StorageKey.ACCESS_TOKEN]) {
+              toggleSidebar();
 
-      if (request.action === "toggleSidebarSettings") {
-        chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
-          if (data.apiKey || data.access_token) {
-            toggleSidebar(); 
-
-            setTimeout(() => {
-              const settingsTabButton = document.querySelector('.tab-button[data-tab="settings"]'); 
-              if (settingsTabButton) {
-                settingsTabButton.click(); 
-              }
-            }, 200); 
-          }
-        }); 
+              setTimeout(() => {
+                const settingsTabButton = document.querySelector<HTMLButtonElement>(
+                  '.tab-button[data-tab="settings"]'
+                );
+                settingsTabButton?.click();
+              }, 200);
+            }
+          });
+        }
+        return undefined;
       }
-    });
+    );
   }
 
-  function toggleSidebar() {
-    let sidebar = document.getElementById("mem0-sidebar");
+  function toggleSidebar(): void {
+    const sidebar = document.getElementById("mem0-sidebar");
     if (sidebar) {
       // If sidebar exists, toggle its visibility
       sidebarVisible = !sidebarVisible;
@@ -56,7 +70,7 @@
     }
   }
 
-  function handleEscapeKey(event) {
+  function handleEscapeKey(event: KeyboardEvent): void {
     if (event.key === "Escape") {
       const searchInput = document.querySelector(".search-memory");
 
@@ -68,18 +82,18 @@
     }
   }
 
-  function handleOutsideClick(event) {
-    let sidebar = document.getElementById("mem0-sidebar");
+  function handleOutsideClick(event: MouseEvent): void {
+    const sidebar = document.getElementById("mem0-sidebar");
     if (
       sidebar &&
-      !sidebar.contains(event.target) &&
-      !event.target.closest(".mem0-toggle-btn")
+      !sidebar.contains(event.target as Node) &&
+      !(event.target as HTMLElement)?.closest?.(".mem0-toggle-btn")
     ) {
       toggleSidebar();
     }
   }
 
-  function createSidebar() {
+  function createSidebar(): void {
     if (document.getElementById("mem0-sidebar")) {
       return;
     }
@@ -128,7 +142,7 @@
     // Create content container
     const contentContainer = document.createElement("div");
     contentContainer.className = "content";
-    
+
     // Create memory count display
     const memoryCountContainer = document.createElement("div");
     memoryCountContainer.className = "total-memories";
@@ -147,13 +161,13 @@
         </button>
       </div>
     `;
-    
+
     // Create memories tab content
     const memoriesTabContent = document.createElement("div");
     memoriesTabContent.className = "tab-content active";
     memoriesTabContent.id = "memories-tab";
     memoriesTabContent.appendChild(memoryCountContainer);
-    
+
     // Add memories section
     const memoriesSection = document.createElement("div");
     memoriesSection.className = "section";
@@ -166,12 +180,12 @@
       </div>
     `;
     memoriesTabContent.appendChild(memoriesSection);
-    
+
     // Create settings tab content
     const settingsTabContent = document.createElement("div");
     settingsTabContent.className = "tab-content";
     settingsTabContent.id = "settings-tab";
-    
+
     // Move memory suggestions to settings tab
     const memoryToggleSection = document.createElement("div");
     memoryToggleSection.className = "section";
@@ -186,7 +200,7 @@
       <p class="section-description">Get relevant memories suggested while interacting with AI Agents</p>
     `;
     settingsTabContent.appendChild(memoryToggleSection);
-    
+
     // Track searches toggle section
     const trackSearchSection = document.createElement("div");
     trackSearchSection.className = "section";
@@ -201,7 +215,7 @@
       <p class="section-description">Save searches and typed URLs as memories</p>
     `;
     settingsTabContent.appendChild(trackSearchSection);
-    
+
     // Add user ID input section
     const userIdSection = document.createElement("div");
     userIdSection.className = "section";
@@ -219,7 +233,7 @@
       <input type="text" id="userIdInput" class="settings-input" placeholder="Enter your user ID" value="chrome-extension-user">
     `;
     settingsTabContent.appendChild(userIdSection);
-    
+
     // Add organization select section
     const orgSection = document.createElement("div");
     orgSection.className = "section";
@@ -232,7 +246,7 @@
       </select>
     `;
     settingsTabContent.appendChild(orgSection);
-    
+
     // Add project select section
     const projectSection = document.createElement("div");
     projectSection.className = "section";
@@ -245,7 +259,7 @@
       </select>
     `;
     settingsTabContent.appendChild(projectSection);
-    
+
     // Add Auto-Inject toggle section
     const autoInjectSection = document.createElement("div");
     autoInjectSection.className = "section";
@@ -261,7 +275,7 @@
     `;
     // Disabling it for now as auto-inject is not working
     // settingsTabContent.appendChild(autoInjectSection);
-    
+
     // Add threshold slider section
     const thresholdSection = document.createElement("div");
     thresholdSection.className = "section";
@@ -281,7 +295,7 @@
       </div>
     `;
     settingsTabContent.appendChild(thresholdSection);
-    
+
     // Add top k section
     const topKSection = document.createElement("div");
     topKSection.className = "section";
@@ -293,7 +307,7 @@
       <input type="number" id="topKInput" class="settings-input" min="1" max="50" value="10">
     `;
     settingsTabContent.appendChild(topKSection);
-    
+
     // Add save button section
     const saveSection = document.createElement("div");
     saveSection.className = "section";
@@ -307,7 +321,7 @@
       <div id="saveMessage" class="save-message" style="display: none;"></div>
     `;
     settingsTabContent.appendChild(saveSection);
-    
+
     contentContainer.appendChild(memoriesTabContent);
     contentContainer.appendChild(settingsTabContent);
     sidebarContainer.appendChild(contentContainer);
@@ -319,44 +333,90 @@
       <div class="shortcut">Shortcut : ^ + M</div>
       <button id="logoutBtn" class="logout-button"><span>Logout</span></button>
     `;
-    
+
     // Load saved settings
-    chrome.storage.sync.get(["memory_enabled", "user_id", "selected_org", "selected_project", "auto_inject_enabled", "similarity_threshold", "top_k", "track_searches"], function (result) {
-      const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
-      toggleCheckbox.checked = result.memory_enabled !== false;
-      
-      // Load track searches (default: enabled)
-      const trackSearchesCheckbox = trackSearchSection.querySelector("#trackSearchesToggle");
-      trackSearchesCheckbox.checked = result.track_searches !== false;
-      
-      const userIdInput = userIdSection.querySelector("#userIdInput");
-      // Set saved value or keep default value
-      if (result.user_id) {
-        userIdInput.value = result.user_id;
+    chrome.storage.sync.get(
+      [
+        StorageKey.MEMORY_ENABLED,
+        StorageKey.USER_ID,
+        StorageKey.SELECTED_ORG,
+        StorageKey.SELECTED_PROJECT,
+        StorageKey.AUTO_INJECT_ENABLED,
+        StorageKey.SIMILARITY_THRESHOLD,
+        StorageKey.TOP_K,
+        StorageKey.TRACK_SEARCHES,
+      ],
+      function (result) {
+        const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle") as HTMLInputElement;
+        if (toggleCheckbox) {
+          toggleCheckbox.checked = result[StorageKey.MEMORY_ENABLED] !== false;
+        }
+
+        // Load track searches (default: enabled)
+        const trackSearchesCheckbox = trackSearchSection.querySelector(
+          "#trackSearchesToggle"
+        ) as HTMLInputElement;
+        if (trackSearchesCheckbox) {
+          trackSearchesCheckbox.checked = result[StorageKey.TRACK_SEARCHES] !== false;
+        }
+
+        const userIdInput = userIdSection.querySelector("#userIdInput") as HTMLInputElement;
+        // Set saved value or keep default value
+        if (result[StorageKey.USER_ID] && userIdInput) {
+          userIdInput.value = result[StorageKey.USER_ID];
+        }
+        // If no saved value, default is already set in HTML
+
+        // Load auto-inject setting (default: enabled)
+        const autoInjectCheckbox = autoInjectSection.querySelector(
+          "#autoInjectToggle"
+        ) as HTMLInputElement;
+        if (autoInjectCheckbox) {
+          autoInjectCheckbox.checked = result[StorageKey.AUTO_INJECT_ENABLED] !== false;
+        }
+
+        // Load threshold setting (default: 0.1)
+        const thresholdSlider = thresholdSection.querySelector(
+          "#thresholdSlider"
+        ) as HTMLInputElement;
+        const thresholdValue = thresholdSection.querySelector(".threshold-value") as HTMLElement;
+        const threshold =
+          result[StorageKey.SIMILARITY_THRESHOLD] !== undefined
+            ? result[StorageKey.SIMILARITY_THRESHOLD]
+            : 0.1;
+        if (thresholdSlider) {
+          thresholdSlider.value = String(threshold);
+        }
+        if (thresholdValue) {
+          thresholdValue.textContent = Number(threshold).toFixed(1);
+        }
+
+        // Load top k setting (default: 10)
+        const topKInput = topKSection.querySelector("#topKInput") as HTMLInputElement;
+        const topK = result[StorageKey.TOP_K] !== undefined ? result[StorageKey.TOP_K] : 10;
+        if (topKInput) {
+          topKInput.value = String(topK);
+        }
       }
-      // If no saved value, default is already set in HTML
-      
-      // Load auto-inject setting (default: enabled)
-      const autoInjectCheckbox = autoInjectSection.querySelector("#autoInjectToggle");
-      autoInjectCheckbox.checked = result.auto_inject_enabled !== false;
-      
-      // Load threshold setting (default: 0.1)
-      const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
-      const thresholdValue = thresholdSection.querySelector(".threshold-value");
-      const threshold = result.similarity_threshold !== undefined ? result.similarity_threshold : 0.1;
-      thresholdSlider.value = threshold;
-      thresholdValue.textContent = threshold.toFixed(1);
-      
-      // Load top k setting (default: 10)
-      const topKInput = topKSection.querySelector("#topKInput");
-      const topK = result.top_k !== undefined ? result.top_k : 10;
-      topKInput.value = topK;
-    });
-    
+    );
+
     sidebarContainer.appendChild(footerToggle);
 
     // Add event listeners
-    setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle, trackSearchSection);
+    setupEventListeners(
+      sidebarContainer,
+      memoryToggleSection,
+      userIdSection,
+      orgSection,
+      projectSection,
+      autoInjectSection,
+      thresholdSection,
+      topKSection,
+      saveSection,
+      memoryCountContainer,
+      footerToggle,
+      trackSearchSection
+    );
 
     document.body.appendChild(sidebarContainer);
 
@@ -366,47 +426,64 @@
     }, 0);
 
     // Prevent clicks within the sidebar from closing it
-    sidebarContainer.addEventListener("click", (event) => {
+    sidebarContainer.addEventListener("click", event => {
       event.stopPropagation();
     });
 
     // Add styles
     addStyles();
-    
+
     // Fetch organizations and memories
     fetchOrganizations();
     fetchMemoriesAndCount();
   }
 
-  function saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection) {
+  function saveSettings(
+    saveBtn: HTMLButtonElement,
+    saveText: HTMLElement,
+    saveLoader: HTMLElement,
+    saveMessage: HTMLElement,
+    userIdSection: HTMLElement,
+    orgSection: HTMLElement,
+    projectSection: HTMLElement,
+    memoryToggleSection: HTMLElement,
+    autoInjectSection: HTMLElement,
+    thresholdSection: HTMLElement,
+    topKSection: HTMLElement,
+    trackSearchSection: HTMLElement
+  ): void {
     // Show loading state
     saveBtn.disabled = true;
     saveText.style.display = "none";
     saveLoader.style.display = "flex";
     saveMessage.style.display = "none";
-    
+
     // Get all the values
-    const userIdInput = userIdSection.querySelector("#userIdInput");
-    const orgSelect = orgSection.querySelector("#orgSelect");
-    const projectSelect = projectSection.querySelector("#projectSelect");
-    const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
-    const autoInjectCheckbox = autoInjectSection.querySelector("#autoInjectToggle");
-    const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
-    const topKInput = topKSection.querySelector("#topKInput");
-    const trackSearchesCheckbox = trackSearchSection.querySelector("#trackSearchesToggle");
-    
-    const userId = userIdInput.value.trim();
-    const selectedOrgId = orgSelect.value;
-    const selectedOrgName = orgSelect.options[orgSelect.selectedIndex]?.text || "";
-    const selectedProjectId = projectSelect.value;
-    const selectedProjectName = projectSelect.options[projectSelect.selectedIndex]?.text || "";
-    const memoryEnabled = toggleCheckbox.checked;
-    const autoInjectEnabled = autoInjectCheckbox.checked;
-    const similarityThreshold = parseFloat(thresholdSlider.value);
-    const topK = parseInt(topKInput.value, 10);
-    
+    const userIdInput = userIdSection.querySelector("#userIdInput") as HTMLInputElement;
+    const orgSelect = orgSection.querySelector("#orgSelect") as HTMLSelectElement;
+    const projectSelect = projectSection.querySelector("#projectSelect") as HTMLSelectElement;
+    const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle") as HTMLInputElement;
+    const autoInjectCheckbox = autoInjectSection.querySelector(
+      "#autoInjectToggle"
+    ) as HTMLInputElement;
+    const thresholdSlider = thresholdSection.querySelector("#thresholdSlider") as HTMLInputElement;
+    const topKInput = topKSection.querySelector("#topKInput") as HTMLInputElement;
+    const trackSearchesCheckbox = trackSearchSection.querySelector(
+      "#trackSearchesToggle"
+    ) as HTMLInputElement;
+
+    const userId = (userIdInput?.value || "").trim();
+    const selectedOrgId = orgSelect?.value || "";
+    const selectedOrgName = orgSelect?.options[orgSelect.selectedIndex]?.text || "";
+    const selectedProjectId = projectSelect?.value || "";
+    const selectedProjectName = projectSelect?.options[projectSelect.selectedIndex]?.text || "";
+    const memoryEnabled = Boolean(toggleCheckbox?.checked);
+    const autoInjectEnabled = Boolean(autoInjectCheckbox?.checked);
+    const similarityThreshold = parseFloat(thresholdSlider?.value || "0.3");
+    const topK = parseInt(topKInput?.value || "10", 10);
+
     // Prepare settings object
-    const settings = {
+    const settings: SidebarSettings = {
       user_id: userId || undefined,
       selected_org: selectedOrgId || undefined,
       selected_org_name: selectedOrgName || undefined,
@@ -416,39 +493,39 @@
       auto_inject_enabled: autoInjectEnabled,
       similarity_threshold: similarityThreshold,
       top_k: topK,
-      track_searches: trackSearchesCheckbox.checked
+      track_searches: Boolean(trackSearchesCheckbox?.checked),
     };
-    
+
     // Remove undefined values
-    Object.keys(settings).forEach(key => {
+    (Object.keys(settings) as Array<keyof SidebarSettings>).forEach(key => {
       if (settings[key] === undefined) {
         delete settings[key];
       }
     });
-    
+
     // Save to chrome storage
-    chrome.storage.sync.set(settings, function() {
+    chrome.storage.sync.set(settings, function () {
       // Send toggle event to API
-      chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
+      chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
         const headers = getHeaders(data.apiKey, data.access_token);
         fetch(`https://api.mem0.ai/v1/extension/`, {
           method: "POST",
           headers: headers,
           body: JSON.stringify({
             event_type: "extension_toggle_button",
-            additional_data: { "status": memoryEnabled },
+            additional_data: { status: memoryEnabled },
           }),
         }).catch(error => {
           console.error("Error sending toggle event:", error);
         });
       });
-      
+
       // Send message to runtime
       chrome.runtime.sendMessage({
-        action: "toggleMem0",
+        action: SidebarAction.TOGGLE_MEM0,
         enabled: memoryEnabled,
       });
-      
+
       // Show success message
       setTimeout(() => {
         saveBtn.disabled = false;
@@ -457,220 +534,290 @@
         saveMessage.style.display = "block";
         saveMessage.className = "save-message success";
         saveMessage.textContent = "Settings saved successfully!";
-        
+
         // Hide message after 3 seconds
         setTimeout(() => {
           saveMessage.style.display = "none";
         }, 3000);
-        
+
         // Refresh memories with new settings
         fetchMemoriesAndCount();
       }, 500);
     });
   }
 
-  function setupEventListeners(sidebarContainer, memoryToggleSection, userIdSection, orgSection, projectSection, autoInjectSection, thresholdSection, topKSection, saveSection, memoryCountContainer, footerToggle, trackSearchSection) {
+  function setupEventListeners(
+    sidebarContainer: HTMLElement,
+    memoryToggleSection: HTMLElement,
+    userIdSection: HTMLElement,
+    orgSection: HTMLElement,
+    projectSection: HTMLElement,
+    autoInjectSection: HTMLElement,
+    thresholdSection: HTMLElement,
+    topKSection: HTMLElement,
+    saveSection: HTMLElement,
+    memoryCountContainer: HTMLElement,
+    footerToggle: HTMLElement,
+    trackSearchSection: HTMLElement
+  ): void {
     // Close button
-    const closeBtn = sidebarContainer.querySelector("#closeBtn");
-    closeBtn.addEventListener("click", toggleSidebar);
+    const closeBtn = sidebarContainer.querySelector("#closeBtn") as HTMLButtonElement;
+    closeBtn?.addEventListener("click", toggleSidebar);
 
     // Tab switching
-    const tabButtons = sidebarContainer.querySelectorAll(".tab-button");
-    const tabContents = sidebarContainer.querySelectorAll(".tab-content");
-    
+    const tabButtons = sidebarContainer.querySelectorAll<HTMLButtonElement>(".tab-button");
+    const tabContents = sidebarContainer.querySelectorAll<HTMLElement>(".tab-content");
+
     tabButtons.forEach(button => {
-      button.addEventListener("click", function() {
+      button.addEventListener("click", function (this: HTMLButtonElement) {
         const targetTab = this.getAttribute("data-tab");
-        
+
         // Remove active class from all tabs and contents
         tabButtons.forEach(btn => btn.classList.remove("active"));
         tabContents.forEach(content => content.classList.remove("active"));
-        
+
         // Add active class to clicked tab and corresponding content
         this.classList.add("active");
-        document.getElementById(`${targetTab}-tab`).classList.add("active");
+        document.getElementById(`${targetTab}-tab`)?.classList.add("active");
       });
     });
 
     // Dashboard button
-    const openDashboardBtn = memoryCountContainer.querySelector("#openDashboardBtn");
-    openDashboardBtn.addEventListener("click", openDashboard);
+    const openDashboardBtn = memoryCountContainer.querySelector(
+      "#openDashboardBtn"
+    ) as HTMLButtonElement;
+    openDashboardBtn?.addEventListener("click", openDashboard);
 
     // Logout button
-    const logoutBtn = footerToggle.querySelector("#logoutBtn");
-    logoutBtn.addEventListener("click", logout);
+    const logoutBtn = footerToggle.querySelector("#logoutBtn") as HTMLButtonElement;
+    logoutBtn?.addEventListener("click", logout);
 
     // Memory toggle (no automatic saving, handled by save button)
     const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
     // Toggle functionality is now handled by the save button
 
     // Organization select (for loading projects only)
-    const orgSelect = orgSection.querySelector("#orgSelect");
-    orgSelect.addEventListener("change", function() {
+    const orgSelect = orgSection.querySelector("#orgSelect") as HTMLSelectElement;
+    orgSelect?.addEventListener("change", function (this: HTMLSelectElement) {
       const selectedOrgId = this.value;
-      
+
       // Reset project selection
-      const projectSelect = projectSection.querySelector("#projectSelect");
-      projectSelect.innerHTML = '<option value="">Loading projects...</option>';
-      
+      const projectSelect = projectSection.querySelector("#projectSelect") as HTMLSelectElement;
+      if (projectSelect) {
+        projectSelect.innerHTML = '<option value="">Loading projects...</option>';
+      }
+
       // Fetch projects for selected org
       if (selectedOrgId) {
         fetchProjects(selectedOrgId, projectSelect);
       } else {
-        projectSelect.innerHTML = '<option value="">Select an organization first</option>';
+        if (projectSelect) {
+          projectSelect.innerHTML = '<option value="">Select an organization first</option>';
+        }
       }
     });
 
     // User dashboard link button
-    const userDashboardBtn = userIdSection.querySelector("#userDashboardBtn");
-    userDashboardBtn.addEventListener("click", function() {
+    const userDashboardBtn = userIdSection.querySelector("#userDashboardBtn") as HTMLButtonElement;
+    userDashboardBtn?.addEventListener("click", function () {
       chrome.runtime.sendMessage({
-        action: "openDashboard",
+        action: SidebarAction.OPEN_DASHBOARD,
         url: "https://app.mem0.ai/dashboard/users",
       });
     });
 
     // Threshold slider event listener
-    const thresholdSlider = thresholdSection.querySelector("#thresholdSlider");
-    const thresholdValue = thresholdSection.querySelector(".threshold-value");
-    
-    thresholdSlider.addEventListener("input", function() {
-      thresholdValue.textContent = parseFloat(this.value).toFixed(1);
+    const thresholdSlider = thresholdSection.querySelector("#thresholdSlider") as HTMLInputElement;
+    const thresholdValue = thresholdSection.querySelector(".threshold-value") as HTMLElement;
+
+    thresholdSlider?.addEventListener("input", function (this: HTMLInputElement) {
+      if (thresholdValue) {
+        thresholdValue.textContent = parseFloat(this.value).toFixed(1);
+      }
     });
 
     // Top K input validation
-    const topKInput = topKSection.querySelector("#topKInput");
-    topKInput.addEventListener("input", function() {
+    const topKInput = topKSection.querySelector("#topKInput") as HTMLInputElement;
+    topKInput?.addEventListener("input", function (this: HTMLInputElement) {
       const value = parseInt(this.value, 10);
       if (value < 1) {
-        this.value = 1;
+        this.value = String(1);
       } else if (value > 50) {
-        this.value = 50;
+        this.value = String(50);
       }
     });
 
     // Save button
-    const saveBtn = saveSection.querySelector("#saveSettingsBtn");
-    const saveText = saveSection.querySelector(".save-text");
-    const saveLoader = saveSection.querySelector(".save-loader");
-    const saveMessage = saveSection.querySelector("#saveMessage");
-    
-    saveBtn.addEventListener("click", function() {
-      saveSettings(saveBtn, saveText, saveLoader, saveMessage, userIdSection, orgSection, projectSection, memoryToggleSection, autoInjectSection, thresholdSection, topKSection, trackSearchSection);
+    const saveBtn = saveSection.querySelector("#saveSettingsBtn") as HTMLButtonElement;
+    const saveText = saveSection.querySelector(".save-text") as HTMLElement;
+    const saveLoader = saveSection.querySelector(".save-loader") as HTMLElement;
+    const saveMessage = saveSection.querySelector("#saveMessage") as HTMLElement;
+
+    saveBtn?.addEventListener("click", function () {
+      if (!saveBtn || !saveText || !saveLoader || !saveMessage) {
+        return;
+      }
+      saveSettings(
+        saveBtn,
+        saveText,
+        saveLoader,
+        saveMessage,
+        userIdSection,
+        orgSection,
+        projectSection,
+        memoryToggleSection,
+        autoInjectSection,
+        thresholdSection,
+        topKSection,
+        trackSearchSection
+      );
     });
   }
 
-  function fetchOrganizations() {
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
+  function fetchOrganizations(): void {
+    chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       if (data.apiKey || data.access_token) {
         const headers = getHeaders(data.apiKey, data.access_token);
         fetch("https://api.mem0.ai/api/v1/orgs/organizations/", {
           method: "GET",
           headers: headers,
         })
-          .then((response) => response.json())
-          .then((orgs) => {
-            const orgSelect = document.getElementById("orgSelect");
-            orgSelect.innerHTML = '<option value="">Select an organization</option>';
-            
-            orgs.forEach((org, index) => {
+          .then(response => response.json())
+          .then((orgs: Organization[]) => {
+            const orgSelect = document.getElementById("orgSelect") as HTMLSelectElement;
+            if (orgSelect) {
+              orgSelect.innerHTML = '<option value="">Select an organization</option>';
+            }
+
+            orgs.forEach(org => {
               const option = document.createElement("option");
               option.value = org.org_id;
               option.textContent = org.name;
-              orgSelect.appendChild(option);
+              orgSelect?.appendChild(option);
             });
-            
+
             // Load saved org selection or select first org by default
-            chrome.storage.sync.get(["selected_org"], function (result) {
+            chrome.storage.sync.get([StorageKey.SELECTED_ORG], function (result) {
               if (result.selected_org) {
-                orgSelect.value = result.selected_org;
-                fetchProjects(result.selected_org, document.getElementById("projectSelect"));
+                if (orgSelect) {
+                  orgSelect.value = String(result.selected_org ?? "");
+                }
+                const projectSelectEl = document.getElementById(
+                  "projectSelect"
+                ) as HTMLSelectElement;
+                const orgIdStr =
+                  typeof result.selected_org === "string"
+                    ? result.selected_org
+                    : String(result.selected_org || "");
+                fetchProjects(orgIdStr, projectSelectEl);
               } else if (orgs.length > 0) {
                 // Select first org by default (but don't save until user clicks save)
-                orgSelect.value = orgs[0].org_id;
-                fetchProjects(orgs[0].org_id, document.getElementById("projectSelect"));
+                const firstOrg = orgs[0];
+                if (orgSelect) {
+                  orgSelect.value = String(firstOrg?.org_id ?? "");
+                }
+                const projectSelectEl = document.getElementById(
+                  "projectSelect"
+                ) as HTMLSelectElement;
+                fetchProjects(String(firstOrg?.org_id ?? ""), projectSelectEl);
               }
             });
           })
-          .catch((error) => {
+          .catch(error => {
             console.error("Error fetching organizations:", error);
-            const orgSelect = document.getElementById("orgSelect");
-            orgSelect.innerHTML = '<option value="">Error loading organizations</option>';
+            const orgSelect = document.getElementById("orgSelect") as HTMLSelectElement;
+            if (orgSelect) {
+              orgSelect.innerHTML = '<option value="">Error loading organizations</option>';
+            }
           });
       }
     });
   }
 
-  function fetchProjects(orgId, projectSelect) {
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
+  function fetchProjects(orgId: string, projectSelect: HTMLSelectElement): void {
+    chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       if (data.apiKey || data.access_token) {
         const headers = getHeaders(data.apiKey, data.access_token);
         fetch(`https://api.mem0.ai/api/v1/orgs/organizations/${orgId}/projects/`, {
           method: "GET",
           headers: headers,
         })
-          .then((response) => response.json())
-          .then((projects) => {
+          .then(response => response.json())
+          .then((projects: Project[]) => {
+            if (!projectSelect) {
+              return;
+            }
             projectSelect.innerHTML = '<option value="">Select a project</option>';
-            
-            projects.forEach((project) => {
+
+            projects.forEach(project => {
               const option = document.createElement("option");
               option.value = project.project_id;
               option.textContent = project.name;
               projectSelect.appendChild(option);
             });
-            
+
             // Load saved project selection or select first project by default
-            chrome.storage.sync.get(["selected_project"], function (result) {
+            chrome.storage.sync.get([StorageKey.SELECTED_PROJECT], function (result) {
+              if (!projectSelect) {
+                return;
+              }
               if (result.selected_project) {
-                projectSelect.value = result.selected_project;
+                projectSelect.value = String(result.selected_project ?? "");
               } else if (projects.length > 0) {
                 // Select first project by default (but don't save until user clicks save)
-                projectSelect.value = projects[0].project_id;
+                projectSelect.value = String(projects[0]?.project_id ?? "");
               }
             });
           })
-          .catch((error) => {
+          .catch(error => {
             console.error("Error fetching projects:", error);
-            projectSelect.innerHTML = '<option value="">Error loading projects</option>';
+            if (projectSelect) {
+              projectSelect.innerHTML = '<option value="">Error loading projects</option>';
+            }
           });
       }
     });
   }
 
-  function fetchMemoriesAndCount() {
+  function fetchMemoriesAndCount(): void {
     chrome.storage.sync.get(
-      ["apiKey", "access_token", "user_id", "selected_org", "selected_project"],
+      [
+        StorageKey.API_KEY,
+        StorageKey.ACCESS_TOKEN,
+        StorageKey.USER_ID,
+        StorageKey.SELECTED_ORG,
+        StorageKey.SELECTED_PROJECT,
+      ],
       function (data) {
         if (data.apiKey || data.access_token) {
           const headers = getHeaders(data.apiKey, data.access_token);
-          
+
           // Build query parameters
           const params = new URLSearchParams();
-          const userId = data.user_id || "chrome-extension-user";
+          const userId = data.user_id || DEFAULT_USER_ID;
           params.append("user_id", userId);
           params.append("page", "1");
           params.append("page_size", "20");
-          
+
           if (data.selected_org) {
             params.append("org_id", data.selected_org);
           }
-          
+
           if (data.selected_project) {
             params.append("project_id", data.selected_project);
           }
-          
+
           fetch(`https://api.mem0.ai/v1/memories/?${params.toString()}`, {
             method: "GET",
             headers: headers,
           })
-            .then((response) => response.json())
-            .then((data) => {
+            .then(response => response.json())
+            .then((data: MemoriesResponse) => {
               // Update count and display memories
               updateMemoryCount(data.count || 0);
               displayMemories(data.results || []);
             })
-            .catch((error) => {
+            .catch(error => {
               console.error("Error fetching memories:", error);
               updateMemoryCount("Error");
               displayErrorMessage();
@@ -683,18 +830,17 @@
     );
   }
 
-  function updateMemoryCount(count) {
-    const countDisplay = document.querySelector(".memory-count");
+  function updateMemoryCount(count: number | string): void {
+    const countDisplay = document.querySelector(".memory-count") as HTMLElement;
     if (countDisplay) {
       countDisplay.classList.remove("loading");
-      countDisplay.textContent = typeof count === 'number' ? 
-        new Intl.NumberFormat().format(count) + " Memories" : 
-        count;
+      countDisplay.textContent =
+        typeof count === "number" ? new Intl.NumberFormat().format(count) + " Memories" : count;
     }
   }
 
-  function getHeaders(apiKey, accessToken) {
-    const headers = {
+  function getHeaders(apiKey?: string, accessToken?: string): Record<string, string> {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
     if (apiKey) {
@@ -705,26 +851,24 @@
     return headers;
   }
 
-  function closeSearchInput() {
-    const inputContainer = document.querySelector(".input-container");
-    const existingSearchInput = inputContainer.querySelector(".search-memory");
-    const searchBtn = document.getElementById("searchBtn");
+  function closeSearchInput(): void {
+    const inputContainer = document.querySelector(".input-container") as HTMLElement;
+    const existingSearchInput = inputContainer?.querySelector(".search-memory");
+    const searchBtn = document.getElementById("searchBtn") as HTMLElement;
 
     if (existingSearchInput) {
       existingSearchInput.remove();
-      searchBtn.classList.remove("active");
+      searchBtn?.classList.remove("active");
       // Remove filter when search is closed
       filterMemories("");
     }
   }
 
-  function filterMemories(searchTerm) {
-    const memoryItems = document.querySelectorAll(".memory-item");
+  function filterMemories(searchTerm: string): void {
+    const memoryItems = document.querySelectorAll<HTMLElement>(".memory-item");
 
-    memoryItems.forEach((item) => {
-      const memoryText = item
-        .querySelector(".memory-text")
-        .textContent.toLowerCase();
+    memoryItems.forEach(item => {
+      const memoryText = item.querySelector(".memory-text")?.textContent?.toLowerCase() || "";
       if (memoryText.includes(searchTerm)) {
         item.style.display = "flex";
       } else {
@@ -733,7 +877,10 @@
     });
 
     // Add this line to maintain the width of the sidebar
-    document.getElementById("mem0-sidebar").style.width = "400px";
+    const sb = document.getElementById("mem0-sidebar") as HTMLElement;
+    if (sb) {
+      sb.style.width = "400px";
+    }
   }
 
   function addStyles() {
@@ -1407,20 +1554,20 @@
   }
 
   function logout() {
-    chrome.storage.sync.get(["apiKey", "access_token"], function (data) {
+    chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       const headers = getHeaders(data.apiKey, data.access_token);
       fetch("https://api.mem0.ai/v1/extension/", {
         method: "POST",
         headers: headers,
         body: JSON.stringify({
-          event_type: "extension_logout"
-        })
+          event_type: "extension_logout",
+        }),
       }).catch(error => {
         console.error("Error sending logout event:", error);
       });
     });
     chrome.storage.sync.remove(
-      ["apiKey", "userId", "access_token"],
+      [StorageKey.API_KEY, StorageKey.USER_ID_CAMEL, StorageKey.ACCESS_TOKEN],
       function () {
         const sidebar = document.getElementById("mem0-sidebar");
         if (sidebar) {
@@ -1431,47 +1578,49 @@
   }
 
   function openDashboard() {
-    chrome.storage.sync.get(["user_id"], function (data) {
-      const userId = data.user_id || "chrome-extension-user";
+    chrome.storage.sync.get([StorageKey.USER_ID], function (data) {
+      const userId = data.user_id || DEFAULT_USER_ID;
       chrome.runtime.sendMessage({
-        action: "openDashboard",
+        action: SidebarAction.OPEN_DASHBOARD,
         url: `https://app.mem0.ai/dashboard/requests`,
       });
     });
   }
 
   // Add function to display memories
-  function displayMemories(memories) {
-    const memoryCardsContainer = document.querySelector(".memory-cards");
-    
-    if (!memoryCardsContainer) return;
-    
+  function displayMemories(memories: Memory[]): void {
+    const memoryCardsContainer = document.querySelector(".memory-cards") as HTMLElement;
+
+    if (!memoryCardsContainer) {
+      return;
+    }
+
     // Clear loading indicator
-    memoryCardsContainer.innerHTML = '';
-    
+    memoryCardsContainer.innerHTML = "";
+
     if (!memories || memories.length === 0) {
       memoryCardsContainer.innerHTML = '<p class="no-memories">No memories found</p>';
       return;
     }
-    
+
     // Add memory cards
     memories.forEach(memory => {
       // Extract memory content from the new format
-      const memoryContent = memory.memory || ""; 
-      
+      const memoryContent = memory.memory || "";
+
       // Truncate long text
-      const truncatedContent = memoryContent.length > 120 ? 
-        memoryContent.substring(0, 120) + '...' : 
-        memoryContent;
-      
+      const truncatedContent =
+        memoryContent.length > 120 ? memoryContent.substring(0, 120) + "..." : memoryContent;
+
       // Get categories if available
       const categories = memory.categories || [];
-      const categoryTags = categories.length > 0 
-        ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join('')}</div>` 
-        : '';
-      
-      const memoryCard = document.createElement('div');
-      memoryCard.className = 'memory-card';
+      const categoryTags =
+        categories.length > 0
+          ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join("")}</div>`
+          : "";
+
+      const memoryCard = document.createElement("div");
+      memoryCard.className = "memory-card";
       memoryCard.innerHTML = `
         <div class="memory-content">
           <p class="memory-text">${truncatedContent}</p>
@@ -1481,51 +1630,52 @@
           <button class="memory-action-button copy-button" title="Copy Memory" data-content="${encodeURIComponent(memoryContent)}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
           </button>
-          <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ''}">
+          <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ""}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
       `;
-      
+
       memoryCardsContainer.appendChild(memoryCard);
     });
-    
+
     // Add event listener for the copy button
-    document.querySelectorAll('.copy-button').forEach(button => {
-      button.addEventListener('click', function(e) {
+    document.querySelectorAll<HTMLButtonElement>(".copy-button").forEach(button => {
+      button.addEventListener("click", function (this: HTMLButtonElement, e) {
         e.stopPropagation();
-        const content = decodeURIComponent(this.getAttribute('data-content'));
-        
+        const content = decodeURIComponent(this.getAttribute("data-content") || "");
+
         // Copy to clipboard
-        navigator.clipboard.writeText(content)
+        navigator.clipboard
+          .writeText(content)
           .then(() => {
             // Visual feedback for copy
-            const originalTitle = this.getAttribute('title');
-            this.setAttribute('title', 'Copied!');
-            this.classList.add('copied');
-            
+            const originalTitle = this.getAttribute("title") || "";
+            this.setAttribute("title", "Copied!");
+            this.classList.add("copied");
+
             // Reset after a short delay
             setTimeout(() => {
-              this.setAttribute('title', originalTitle);
-              this.classList.remove('copied');
+              this.setAttribute("title", originalTitle);
+              this.classList.remove("copied");
             }, 2000);
           })
           .catch(err => {
-            console.error('Failed to copy: ', err);
+            console.error("Failed to copy: ", err);
           });
       });
     });
-    
+
     // Add event listener for the view button
-    document.querySelectorAll('.view-button').forEach(button => {
-      button.addEventListener('click', function(e) {
+    document.querySelectorAll<HTMLButtonElement>(".view-button").forEach(button => {
+      button.addEventListener("click", function (this: HTMLButtonElement, e) {
         e.stopPropagation();
-        const memoryId = this.getAttribute('data-id');
+        const memoryId = this.getAttribute("data-id");
         if (memoryId) {
-          chrome.storage.sync.get(["user_id"], function (data) {
+          chrome.storage.sync.get([StorageKey.USER_ID], function (data) {
             const userId = data.user_id || "chrome-extension-user";
             chrome.runtime.sendMessage({
-              action: "openDashboard",
+              action: SidebarAction.OPEN_DASHBOARD,
               url: `https://app.mem0.ai/dashboard/user/${userId}?memoryId=${memoryId}`,
             });
           });
@@ -1537,9 +1687,11 @@
   // Add function to display error message
   function displayErrorMessage(message = "Error loading memories") {
     const memoryCardsContainer = document.querySelector(".memory-cards");
-    
-    if (!memoryCardsContainer) return;
-    
+
+    if (!memoryCardsContainer) {
+      return;
+    }
+
     memoryCardsContainer.innerHTML = `<p class="memory-error">${message}</p>`;
   }
 

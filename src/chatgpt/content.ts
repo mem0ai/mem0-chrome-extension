@@ -1,18 +1,217 @@
-import { StorageKey } from "../types/storage";
-import { DEFAULT_USER_ID } from "../types/api";
-import type { MemoryItem, OptionalApiParams, HistoryStateData } from "../types/memory";
-import type { MemorySearchResponse, LoginData } from "../types/api";
-import { MessageRole } from "../types/api";
-import type { StorageData } from "../types/storage";
-import { SidebarAction } from "../types/messages";
+import { StorageKey, type StorageData } from "../types/storage";
+import type { OptionalApiParams, HistoryStateData } from "../types/memory";
+import {
+  type MemorySearchResponse,
+  type LoginData,
+  MessageRole,
+  DEFAULT_USER_ID,
+  Source,
+} from "../types/api";
+import { detectTheme, Theme, onThemeChange } from "../utils/theme";
+import { Provider } from "../types/providers";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { API_MEMORIES, API_SEARCH, APP_LOGIN } from "../consts/api";
 
 export {};
 
+// Colors for different themes
+const THEME_COLORS = {
+  [Theme.DARK]: {
+    // Main button colors
+    BUTTON_BG: "rgba(255, 255, 255, 0.12)",
+    BUTTON_BG_HOVER: "rgba(255, 255, 255, 0.18)",
+    BUTTON_BG_ACTIVE: "rgba(22, 101, 52, 1)",
+    BUTTON_BG_ACTIVE_HOVER: "rgba(16, 85, 42, 1)",
+
+    // Borders
+    BUTTON_BORDER: "rgba(255, 255, 255, 0.2)",
+
+    // Text
+    TEXT_PRIMARY: "white",
+    TEXT_SECONDARY: "rgba(255, 255, 255, 0.8)",
+
+    // Notifications
+    NOTIFICATION_DOT: "rgb(128, 221, 162)",
+    NOTIFICATION_DOT_BORDER: "#1C1C1E",
+
+    // Spinner
+    SPINNER_BORDER: "rgba(255, 255, 255, 0.3)",
+    SPINNER_ACTIVE: "white",
+
+    // Shortcut
+    SHORTCUT_BG: "rgba(255, 255, 255, 0.11)",
+    SHORTCUT_TEXT: "white",
+
+    // Popup
+    POPUP_BG: "rgba(255, 255, 255, 0.12)",
+    POPUP_BORDER: "rgba(255, 255, 255, 0.2)",
+    POPUP_TEXT: "white",
+    POPUP_SHADOW: "rgba(0, 0, 0, 0.3)",
+  },
+
+  [Theme.LIGHT]: {
+    // Main button colors
+    BUTTON_BG: "rgba(239, 239, 239, 1)",
+    BUTTON_BG_HOVER: "rgba(0, 0, 0, 0.12)",
+    BUTTON_BG_ACTIVE: "rgba(22, 101, 52, 1)",
+    BUTTON_BG_ACTIVE_HOVER: "rgba(16, 85, 42, 1)",
+
+    // Borders
+    BUTTON_BORDER: "rgba(255, 255, 255, 0.2)",
+
+    // Text
+    TEXT_PRIMARY: "#1a1a1a",
+    TEXT_SECONDARY: "rgba(0, 0, 0, 0.7)",
+
+    // Notifications
+    NOTIFICATION_DOT: "rgb(22, 163, 74)",
+    NOTIFICATION_DOT_BORDER: "#ffffff",
+
+    // Spinner
+    SPINNER_BORDER: "rgba(0, 0, 0, 0.2)",
+    SPINNER_ACTIVE: "#1a1a1a",
+
+    // Shortcut
+    SHORTCUT_BG: "rgba(255, 255, 255, 0.11)",
+    SHORTCUT_TEXT: "white",
+
+    // Popup
+    POPUP_BG: "rgba(255, 255, 255, 0.95)",
+    POPUP_BORDER: "rgba(0, 0, 0, 0.1)",
+    POPUP_TEXT: "#1a1a1a",
+    POPUP_SHADOW: "rgba(0, 0, 0, 0.15)",
+  },
+} as const;
+
+// Function to get button styles depending on the theme
+const getButtonStyles = (
+  theme: Theme
+): {
+  BASE: string;
+  NOTIFICATION_DOT: string;
+  TEXT: string;
+  CHECKMARK: string;
+  SHORTCUT: string;
+  SPINNER: string;
+} => {
+  const colors = THEME_COLORS[theme];
+
+  return {
+    BASE: `
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background-color: ${colors.BUTTON_BG} !important;
+      border: 1px solid ${colors.BUTTON_BORDER} !important;
+      border-radius: 1200px !important;
+      padding: 8px 12px !important;
+      margin-left: 8px !important;
+      color: ${colors.TEXT_PRIMARY} !important;
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      transition: background-color 0.2s ease !important;
+      position: relative !important;
+      min-height: 34px !important;
+      height: auto !important;
+      width: auto !important;
+      min-width: auto !important;
+    `,
+    NOTIFICATION_DOT: `
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      width: 10px;
+      height: 10px;
+      background-color: ${colors.NOTIFICATION_DOT};
+      border-radius: 50%;
+      border: 2px solid ${colors.NOTIFICATION_DOT_BORDER};
+      display: none !important;
+      z-index: 1001;
+      pointer-events: none;
+    `,
+    TEXT: `
+      color: ${colors.TEXT_PRIMARY};
+      font-size: 14px;
+      font-weight: 500;
+    `,
+    CHECKMARK: `
+      margin-left: 6px;
+      display: none;
+      font-size: 14px;
+      color: ${colors.TEXT_PRIMARY};
+      font-weight: bold;
+    `,
+    SHORTCUT: `
+      background-color: ${colors.SHORTCUT_BG};
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-left: 8px;
+      display: none;
+      color: ${colors.SHORTCUT_TEXT};
+    `,
+    SPINNER: `
+      width: 16px;
+      height: 16px;
+      border: 2px solid ${colors.SPINNER_BORDER};
+      border-top: 2px solid ${colors.SPINNER_ACTIVE};
+      border-radius: 50%;
+      margin-right: 4px;
+      display: none;
+      animation: spin 1s linear infinite;
+    `,
+  };
+};
+
+// Get current button styles
+let currentTheme = detectTheme();
+let BUTTON_STYLES = getButtonStyles(currentTheme);
+
+// Function to unsubscribe from theme changes
+let unsubscribeThemeChange: (() => void) | null = null;
+
+// Function to update button styles when theme changes
+const updateButtonTheme = (newTheme: Theme): void => {
+  currentTheme = newTheme;
+  BUTTON_STYLES = getButtonStyles(currentTheme);
+
+  // Update the existing button
+  const mem0Button = document.querySelector("#mem0-icon-button") as HTMLElement;
+  if (mem0Button) {
+    // Update the base styles of the button
+    mem0Button.style.cssText = BUTTON_STYLES.BASE;
+
+    // Update the styles of the child elements
+    const elements = {
+      spinner: mem0Button.querySelector("span:nth-child(1)") as HTMLElement,
+      text: mem0Button.querySelector("span:nth-child(2)") as HTMLElement,
+      checkmark: mem0Button.querySelector("span:nth-child(3)") as HTMLElement,
+      shortcut: mem0Button.querySelector("span:nth-child(4)") as HTMLElement,
+      notificationDot: mem0Button.querySelector("div") as HTMLElement,
+    };
+
+    if (elements.spinner) elements.spinner.style.cssText = BUTTON_STYLES.SPINNER;
+    if (elements.text) elements.text.style.cssText = BUTTON_STYLES.TEXT;
+    if (elements.checkmark) elements.checkmark.style.cssText = BUTTON_STYLES.CHECKMARK;
+    if (elements.shortcut) elements.shortcut.style.cssText = BUTTON_STYLES.SHORTCUT;
+    if (elements.notificationDot) elements.notificationDot.style.cssText = BUTTON_STYLES.NOTIFICATION_DOT;
+
+    // Update hover effects
+    setupButtonHoverEffects(mem0Button);
+
+    // Update the notification dot
+    updateNotificationDot();
+  }
+};
+
 let isProcessingMem0: boolean = false;
+let isButtonLoading: boolean = false;
+let isShowingAdded: boolean = false;
 
 // Initialize the MutationObserver variable
 let observer: MutationObserver;
-let memoryModalShown: boolean = false;
 
 // Global variable to store all memories
 let allMemories: string[] = [];
@@ -20,971 +219,225 @@ let allMemories: string[] = [];
 // Track added memories by ID
 const allMemoriesById: Set<string> = new Set<string>();
 
-// Reference to the modal overlay for updates
-let currentModalOverlay: HTMLDivElement | null = null;
-
-// Store dragged position
-let draggedPosition: { top: number; left: number } | null = null;
-
 let inputValueCopy: string = "";
 
-// Using MemoryItem from src/types/content-scripts.ts
+// Helper functions for DOM manipulation
+function setElementDisplay(element: HTMLElement | null, display: string): void {
+  if (element) {
+    element.style.display = display;
+  }
+}
 
-function createMemoryModal(
-  memoryItems: MemoryItem[],
-  isLoading: boolean = false,
-  sourceButtonId: string | null = null
-): void {
-  // Close existing modal if it exists
-  if (memoryModalShown && currentModalOverlay) {
-    document.body.removeChild(currentModalOverlay);
+function setElementText(element: HTMLElement | null, text: string): void {
+  if (element) {
+    element.textContent = text;
+  }
+}
+
+// Helper for creating styled elements
+function createStyledElement(tag: string, styles: string, text?: string): HTMLElement {
+  const element = document.createElement(tag);
+  element.style.cssText = styles;
+  if (text) {
+    element.textContent = text;
+  }
+  return element;
+}
+
+// Helper for adding CSS animations
+function addAnimationStyles(): void {
+  if (!document.getElementById("notification-dot-animation")) {
+    const style = document.createElement("style");
+    style.id = "notification-dot-animation";
+    style.innerHTML = `
+      @keyframes popIn {
+        0% { transform: scale(0); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+      }
+      
+      #mem0-notification-dot.active {
+        display: block !important;
+        animation: popIn 0.3s ease-out forwards;
+      }
+    `;
+    document.head.appendChild(style);
   }
 
-  memoryModalShown = true;
-  let currentMemoryIndex = 0;
-
-  // Calculate modal dimensions (estimated)
-  const modalWidth = 447;
-  let modalHeight = 400; // Default height
-  let memoriesPerPage = 3; // Default number of memories per page
-
-  let topPosition;
-  let leftPosition;
-
-  // Use dragged position if available, otherwise calculate based on button
-  if (draggedPosition) {
-    topPosition = draggedPosition.top;
-    leftPosition = draggedPosition.left;
-  } else if (sourceButtonId === "mem0-icon-button") {
-    // Position relative to the mem0-icon-button (in the input area)
-    const iconButton = document.querySelector("#mem0-icon-button");
-    if (iconButton) {
-      const buttonRect = iconButton.getBoundingClientRect();
-
-      // Determine if there's enough space above the button
-      const spaceAbove = buttonRect.top;
-      const viewportHeight = window.innerHeight;
-
-      // Calculate position - for icon button, prefer to show ABOVE
-      leftPosition = buttonRect.left - modalWidth + buttonRect.width;
-
-      // Make sure modal doesn't go off-screen to the left
-      leftPosition = Math.max(leftPosition, 10);
-
-      // For icon button, show above if enough space, otherwise below
-      if (spaceAbove >= modalHeight + 10) {
-        // Place above
-        topPosition = buttonRect.top - modalHeight - 10;
-      } else {
-        // Not enough space above, place below
-        topPosition = buttonRect.bottom + 10;
-
-        // Check if it's in the lower half of the screen
-        if (buttonRect.bottom > viewportHeight / 2) {
-          modalHeight = 300; // Reduced height
-          memoriesPerPage = 2; // Show only 2 memories
-        }
+  if (!document.getElementById("spinner-animation")) {
+    const style = document.createElement("style");
+    style.id = "spinner-animation";
+    style.innerHTML = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
       }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
+// Helper for creating button elements
+function createButtonElements(): {
+  loadingSpinner: HTMLElement;
+  textElement: HTMLElement;
+  checkmarkIcon: HTMLElement;
+  shortcutBlock: HTMLElement;
+  notificationDot: HTMLElement;
+} {
+  return {
+    loadingSpinner: createStyledElement("span", BUTTON_STYLES.SPINNER),
+    textElement: createStyledElement("span", BUTTON_STYLES.TEXT, "Memories"),
+    checkmarkIcon: createStyledElement("span", BUTTON_STYLES.CHECKMARK, "✓"),
+    shortcutBlock: createStyledElement("span", BUTTON_STYLES.SHORTCUT, "Ctrl + M"),
+    notificationDot: createStyledElement("div", BUTTON_STYLES.NOTIFICATION_DOT),
+  };
+}
+
+// Helper for setting up hover effects
+function setupButtonHoverEffects(button: HTMLElement): void {
+  const colors = THEME_COLORS[currentTheme];
+
+  button.addEventListener("mouseenter", () => {
+    const currentBg = button.style.backgroundColor;
+    if (currentBg.includes("22, 101, 52")) {
+      button.style.backgroundColor = colors.BUTTON_BG_ACTIVE_HOVER;
     } else {
-      // Fallback to input-based positioning
-      positionRelativeToInput();
+      button.style.backgroundColor = colors.BUTTON_BG_HOVER;
     }
-  } else if (sourceButtonId === "sync-button") {
-    // Position relative to the sync button
-    const syncButton = document.querySelector("#sync-button");
-    if (syncButton) {
-      const buttonRect = syncButton.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
+  });
 
-      // Position below the sync button by default
-      leftPosition = buttonRect.left;
-      topPosition = buttonRect.bottom + 10;
-
-      // Check if it's in the lower half of the screen
-      if (buttonRect.bottom > viewportHeight / 2) {
-        modalHeight = 300; // Reduced height
-        memoriesPerPage = 2; // Show only 2 memories
-      }
-
-      // Make sure modal doesn't go off-screen to the right
-      leftPosition = Math.min(leftPosition, window.innerWidth - modalWidth - 10);
+  button.addEventListener("mouseleave", () => {
+    const currentBg = button.style.backgroundColor;
+    if (currentBg.includes("16, 85, 42")) {
+      button.style.backgroundColor = colors.BUTTON_BG_ACTIVE;
     } else {
-      // Fallback to input-based positioning
-      positionRelativeToInput();
+      button.style.backgroundColor = colors.BUTTON_BG;
     }
-  } else {
-    // Default positioning relative to the input field
-    positionRelativeToInput();
+  });
+}
+
+// Helper for setting up click handler
+function setupButtonClickHandler(button: HTMLElement): void {
+  button.addEventListener("click", async () => {
+    try {
+      const memoryEnabled = await getMemoryEnabledState();
+      if (memoryEnabled) {
+        await handleMem0Modal("mem0-icon-button");
+      }
+    } catch (error) {
+      console.error("Error handling Mem0 button click:", error);
+    }
+  });
+}
+
+// Helper functions for main logic
+function removeExistingButton(): void {
+  const existingButton = document.querySelector("#mem0-icon-button") as HTMLElement;
+  if (existingButton?.parentNode) {
+    (existingButton.parentNode as HTMLElement).remove();
   }
 
-  // Helper function to position modal relative to input field
-  function positionRelativeToInput() {
-    const inputElement =
-      document.querySelector("#prompt-textarea") ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
+  const floatingContainer = document.querySelector("#mem0-floating-container");
+  if (floatingContainer) {
+    floatingContainer.remove();
+  }
+}
 
-    if (!inputElement) {
-      console.error("Input element not found");
-      return;
-    }
+function findOrCreateButtonContainer(): HTMLElement | null {
+  const plusButton = document.querySelector('button[data-testid="composer-plus-btn"]');
+  const leadingContainer = plusButton?.closest('div[class*="leading"]');
 
-    // Get the position and dimensions of the input field
-    const inputRect = inputElement.getBoundingClientRect();
-
-    // Determine if there's enough space below the input field
-    const viewportHeight = window.innerHeight;
-    const spaceBelow = viewportHeight - inputRect.bottom;
-    const spaceAbove = inputRect.top;
-
-    // Position the modal aligned to the right of the input
-    leftPosition = Math.max(inputRect.right - 20 - modalWidth, 10); // 20px offset from right edge
-
-    // Decide whether to place modal above or below based on available space
-    if (spaceBelow >= modalHeight) {
-      // Place below the input
-      topPosition = inputRect.bottom + 10;
-
-      // Check if it's in the lower half of the screen
-      if (inputRect.bottom > viewportHeight / 2) {
-        modalHeight = 300; // Reduced height
-        memoriesPerPage = 2; // Show only 2 memories
-      }
-    } else {
-      // Place above the input if not enough space below
-      topPosition = inputRect.top - modalHeight - 10;
-    }
+  if (plusButton && leadingContainer) {
+    return leadingContainer as HTMLElement;
   }
 
-  // Create modal overlay
-  const modalOverlay = document.createElement("div");
-  modalOverlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: transparent;
-    display: flex;
-    z-index: 10000;
-    pointer-events: auto;
-  `;
-
-  // Save reference to current modal overlay
-  currentModalOverlay = modalOverlay;
-
-  // Add event listener to close modal when clicking outside
-  modalOverlay.addEventListener("click", event => {
-    // Only close if clicking directly on the overlay, not its children
-    if (event.target === modalOverlay) {
-      closeModal();
-    }
-  });
-
-  // Create modal container with positioning
-  const modalContainer = document.createElement("div");
-  modalContainer.style.cssText = `
-    background-color: #1C1C1E;
-    border-radius: 12px;
-    width: ${modalWidth}px;
-    height: ${modalHeight}px;
-    display: flex;
-    flex-direction: column;
-    color: white;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    position: absolute;
-    top: ${topPosition}px;
-    left: ${leftPosition}px;
-    pointer-events: auto;
-    border: 1px solid #27272A;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    overflow: hidden;
-  `;
-
-  // Create modal header
-  const modalHeader = document.createElement("div");
-  modalHeader.style.cssText = `
-    display: flex;
-    align-items: center;
-    padding: 10px 16px;
-    justify-content: space-between;
-    background-color: #232325;
-    flex-shrink: 0;
-    cursor: move;
-    user-select: none;
-  `;
-
-  // Create header left section with just the logo
-  const headerLeft = document.createElement("div");
-  headerLeft.style.cssText = `
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-  `;
-
-  // Add Mem0 logo (updated to SVG)
-  const logoImg = document.createElement("img");
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
-  logoImg.style.cssText = `
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    margin-right: 8px;
-  `;
-
-  // Add "OpenMemory" title
-  const title = document.createElement("div");
-  title.textContent = "OpenMemory";
-  title.style.cssText = `
-    font-size: 16px;
-    font-weight: 600;
-    color: white;
-  `;
-
-  // Create header right section
-  const headerRight = document.createElement("div");
-  headerRight.style.cssText = `
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-  `;
-
-  // Create Add to Prompt button with arrow
-  const addToPromptBtn = document.createElement("button");
-  addToPromptBtn.style.cssText = `
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding: 5px 16px;
-    gap: 8px;
-    background-color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
-    color: black;
-  `;
-  addToPromptBtn.textContent = "Add to Prompt";
-
-  // Add arrow icon to button
-  const arrowIcon = document.createElement("span");
-  arrowIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-    <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>
-`;
-  addToPromptBtn.appendChild(arrowIcon);
-
-  // (Removed) LLM button – auto-rerank is now handled on modal open
-  // Create settings button
-  const settingsBtn = document.createElement("button");
-  settingsBtn.style.cssText = `
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 8px;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-  `;
-  settingsBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" xmlns="http://www.w3.org/2000/svg">
-    <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-
-  // Add click event to open app.mem0.ai in a new tab
-  settingsBtn.addEventListener("click", () => {
-    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
-      document.body.removeChild(currentModalOverlay);
-      memoryModalShown = false;
-      currentModalOverlay = null;
-    }
-
-    chrome.runtime.sendMessage({ action: SidebarAction.SIDEBAR_SETTINGS });
-  });
-
-  // Add hover effect for the settings button
-  settingsBtn.addEventListener("mouseenter", () => {
-    settingsBtn.style.opacity = "1";
-  });
-  settingsBtn.addEventListener("mouseleave", () => {
-    settingsBtn.style.opacity = "0.6";
-  });
-
-  // Add drag functionality to modal header
-  let isDragging = false;
-  const dragOffset = { x: 0, y: 0 };
-
-  modalHeader.addEventListener("mousedown", (e: MouseEvent) => {
-    // Don't start dragging if clicking on buttons
-    const target = e.target as HTMLElement;
-    if (target?.closest("button")) {
-      return;
-    }
-
-    isDragging = true;
-    modalHeader.style.cursor = "grabbing";
-
-    const modalRect = modalContainer.getBoundingClientRect();
-    dragOffset.x = e.clientX - modalRect.left;
-    dragOffset.y = e.clientY - modalRect.top;
-
-    e.preventDefault();
-  });
-
-  document.addEventListener("mousemove", e => {
-    if (!isDragging) {
-      return;
-    }
-
-    const newLeft = e.clientX - dragOffset.x;
-    const newTop = e.clientY - dragOffset.y;
-
-    // Constrain to viewport
-    const maxLeft = window.innerWidth - modalWidth;
-    const maxTop = window.innerHeight - modalHeight;
-
-    const constrainedLeft = Math.max(0, Math.min(newLeft, maxLeft));
-    const constrainedTop = Math.max(0, Math.min(newTop, maxTop));
-
-    modalContainer.style.left = `${constrainedLeft}px`;
-    modalContainer.style.top = `${constrainedTop}px`;
-
-    // Store the dragged position
-    draggedPosition = {
-      left: constrainedLeft,
-      top: constrainedTop,
-    };
-
-    e.preventDefault();
-  });
-
-  document.addEventListener("mouseup", () => {
-    if (isDragging) {
-      isDragging = false;
-      modalHeader.style.cursor = "move";
-    }
-  });
-
-  // Content section
-  const contentSection = document.createElement("div");
-  const contentSectionHeight = modalHeight - 130; // Account for header and navigation
-  contentSection.style.cssText = `
-    display: flex;
-    flex-direction: column;
-    padding: 0 16px;
-    gap: 12px;
-    overflow: hidden;
-    flex: 1;
-    height: ${contentSectionHeight}px;
-  `;
-
-  // Create memories counter
-  const memoriesCounter = document.createElement("div");
-  memoriesCounter.style.cssText = `
-    font-size: 16px;
-    font-weight: 600;
-    color: #FFFFFF;
-    margin-top: 16px;
-    flex-shrink: 0;
-  `;
-
-  // Update counter text based on loading state and number of memories
-  if (isLoading) {
-    memoriesCounter.textContent = `Loading Relevant Memories...`;
-  } else {
-    memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
-  }
-
-  // Calculate max height for memories content based on modal height
-  const memoriesContentMaxHeight = contentSectionHeight - 40; // Account for memories counter
-
-  // Create memories content container with adjusted height
-  const memoriesContent = document.createElement("div");
-  memoriesContent.style.cssText = `
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overflow-y: auto;
-    flex: 1;
-    max-height: ${memoriesContentMaxHeight}px;
-    padding-right: 8px;
-    margin-right: -8px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  `;
-  memoriesContent.style.cssText += "::-webkit-scrollbar { display: none; }";
-
-  // Track currently expanded memory
-  let currentlyExpandedMemory: HTMLElement | null = null;
-
-  // Function to create skeleton loading items (adjusted for different heights)
-  function createSkeletonItems() {
-    memoriesContent.innerHTML = "";
-
-    for (let i = 0; i < memoriesPerPage; i++) {
-      const skeletonItem = document.createElement("div");
-      skeletonItem.style.cssText = `
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start;
-        justify-content: space-between;
-        padding: 12px;
-        background-color: #27272A;
-        border-radius: 8px;
-        height: 72px;
-        flex-shrink: 0;
-        animation: pulse 1.5s infinite ease-in-out;
-      `;
-
-      const skeletonText = document.createElement("div");
-      skeletonText.style.cssText = `
-        background-color: #383838;
-        border-radius: 4px;
-        height: 14px;
-        width: 85%;
-        margin-bottom: 8px;
-      `;
-
-      const skeletonText2 = document.createElement("div");
-      skeletonText2.style.cssText = `
-        background-color: #383838;
-        border-radius: 4px;
-        height: 14px;
-        width: 65%;
-      `;
-
-      const skeletonActions = document.createElement("div");
-      skeletonActions.style.cssText = `
-        display: flex;
-        gap: 4px;
-        margin-left: 10px;
-      `;
-
-      const skeletonButton1 = document.createElement("div");
-      skeletonButton1.style.cssText = `
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background-color: #383838;
-      `;
-
-      const skeletonButton2 = document.createElement("div");
-      skeletonButton2.style.cssText = `
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background-color: #383838;
-      `;
-
-      skeletonActions.appendChild(skeletonButton1);
-      skeletonActions.appendChild(skeletonButton2);
-
-      const textContainer = document.createElement("div");
-      textContainer.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        flex-grow: 1;
-      `;
-      textContainer.appendChild(skeletonText);
-      textContainer.appendChild(skeletonText2);
-
-      skeletonItem.appendChild(textContainer);
-      skeletonItem.appendChild(skeletonActions);
-      memoriesContent.appendChild(skeletonItem);
-    }
-
-    // Add keyframe animation to document if not exists
-    if (!document.getElementById("skeleton-animation")) {
-      const style = document.createElement("style");
-      style.id = "skeleton-animation";
-      style.innerHTML = `
-        @keyframes pulse {
-          0% { opacity: 0.6; }
-          50% { opacity: 0.8; }
-          100% { opacity: 0.6; }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-  }
-
-  // Function to show memories with adjusted count based on modal position
-  function showMemories() {
-    memoriesContent.innerHTML = "";
-
-    if (isLoading) {
-      createSkeletonItems();
-      return;
-    }
-
-    if (memoryItems.length === 0) {
-      showEmptyState();
-      // Disable navigation buttons when there are no memories
-      updateNavigationState(0, 0);
-      return;
-    }
-
-    // Use the dynamically set memoriesPerPage value
-    const memoriesToShow = Math.min(memoriesPerPage, memoryItems.length);
-
-    // Calculate total pages and current page
-    const totalPages = Math.ceil(memoryItems.length / memoriesToShow);
-    const currentPage = Math.floor(currentMemoryIndex / memoriesToShow) + 1;
-
-    // Update navigation buttons state
-    updateNavigationState(currentPage, totalPages);
-
-    for (let i = 0; i < memoriesToShow; i++) {
-      const memoryIndex = currentMemoryIndex + i;
-      if (memoryIndex >= memoryItems.length) {
-        break;
-      } // Stop if we've reached the end
-
-      const memory = memoryItems[memoryIndex]!;
-
-      // Skip memories that have been added already
-      if (allMemoriesById.has(String(memory.id))) {
-        continue;
-      }
-
-      // Ensure memory has an ID
-      if (!memory.id) {
-        memory.id = `memory-${Date.now()}-${memoryIndex}`;
-      }
-
-      const memoryContainer = document.createElement("div");
-      memoryContainer.style.cssText = `
-        display: flex;
-        flex-direction: row;
-        align-items: flex-start;
-        justify-content: space-between;
-        padding: 12px; 
-        background-color: #27272A;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        min-height: 72px; 
-        max-height: 72px; 
-        overflow: hidden;
-        flex-shrink: 0;
-      `;
-
-      const memoryText = document.createElement("div");
-      memoryText.style.cssText = `
-        font-size: 14px;
-        line-height: 1.5;
-        color: #D4D4D8;
-        flex-grow: 1;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        transition: all 0.2s ease;
-        height: 42px; /* Height for 2 lines of text */
-      `;
-      memoryText.textContent = memory.text || "";
-
-      const actionsContainer = document.createElement("div");
-      actionsContainer.style.cssText = `
-        display: flex;
-        gap: 4px;
-        margin-left: 10px;
-        flex-shrink: 0;
-      `;
-
-      // Add button
-      const addButton = document.createElement("button");
-      addButton.style.cssText = `
-        border: none;
-        cursor: pointer;
-        padding: 4px;
-        background:rgb(66, 66, 69);
-        color:rgb(199, 199, 201);
-        border-radius: 100%;
-        transition: all 0.2s ease;
-      `;
-
-      addButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>`;
-
-      // Add click handler for add button
-      addButton.addEventListener("click", (e: MouseEvent) => {
-        e.stopPropagation();
-
-        // Add this memory
-        allMemoriesById.add(String(memory.id));
-        allMemories.push(String(memory.text || ""));
-        updateInputWithMemories();
-
-        // Remove this memory from the list
-        const index = memoryItems.findIndex((m: MemoryItem) => m.id === memory.id);
-        if (index !== -1) {
-          memoryItems.splice(index, 1);
-
-          // Recalculate pagination after removing an item
-          // If we're on a page that's now empty, go to previous page
-          if (currentMemoryIndex > 0 && currentMemoryIndex >= memoryItems.length) {
-            currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
-          }
-
-          memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
-          showMemories();
-        }
-      });
-
-      // Menu button
-      const menuButton = document.createElement("button");
-      menuButton.style.cssText = `
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px;
-        color: #A1A1AA;
-      `;
-      menuButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="2"/>
-        <circle cx="12" cy="5" r="2"/>
-        <circle cx="12" cy="19" r="2"/>
-      </svg>`;
-
-      // Track expanded state
-      let isExpanded = false;
-
-      // Create remove button (hidden by default)
-      const removeButton = document.createElement("button");
-      removeButton.style.cssText = `
-        display: none;
-        align-items: center;
-        gap: 6px;
-        background:rgb(66, 66, 69);
-        color:rgb(199, 199, 201);
-        border-radius: 8px;
-        padding: 2px 4px;
-        border: none;
-        cursor: pointer;
-        font-size: 13px;
-        margin-top: 12px;
-        width: fit-content;
-      `;
-      removeButton.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Remove
-      `;
-
-      // Create content wrapper for text and remove button
-      const contentWrapper = document.createElement("div");
-      contentWrapper.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        flex-grow: 1;
-      `;
-      contentWrapper.appendChild(memoryText);
-      contentWrapper.appendChild(removeButton);
-
-      // Function to expand memory
-      function expandMemory() {
-        if (currentlyExpandedMemory && currentlyExpandedMemory !== memoryContainer) {
-          currentlyExpandedMemory.dispatchEvent(new Event("collapse"));
-        }
-
-        isExpanded = true;
-        memoryText.style.webkitLineClamp = "unset";
-        memoryText.style.height = "auto";
-        contentWrapper.style.overflowY = "auto";
-        contentWrapper.style.maxHeight = "240px"; // Limit height to prevent overflow
-        contentWrapper.style.scrollbarWidth = "none";
-        // contentWrapper.style.msOverflowStyle is non-standard; omit to satisfy TS
-        contentWrapper.style.cssText += "::-webkit-scrollbar { display: none; }";
-        memoryContainer.style.backgroundColor = "#1C1C1E";
-        memoryContainer.style.maxHeight = "300px"; // Allow expansion but within container
-        memoryContainer.style.overflow = "hidden";
-        removeButton.style.display = "flex";
-        currentlyExpandedMemory = memoryContainer;
-
-        // Scroll to make expanded memory visible if needed
-        memoriesContent.scrollTop = memoryContainer.offsetTop - memoriesContent.offsetTop;
-      }
-
-      // Function to collapse memory
-      function collapseMemory() {
-        isExpanded = false;
-        memoryText.style.webkitLineClamp = "2";
-        memoryText.style.height = "42px";
-        contentWrapper.style.overflowY = "visible";
-        memoryContainer.style.backgroundColor = "#27272A";
-        memoryContainer.style.maxHeight = "72px";
-        memoryContainer.style.overflow = "hidden";
-        removeButton.style.display = "none";
-        currentlyExpandedMemory = null;
-      }
-
-      memoryContainer.addEventListener("collapse", collapseMemory);
-
-      menuButton.addEventListener("click", (e: MouseEvent) => {
-        e.stopPropagation();
-        if (isExpanded) {
-          collapseMemory();
-        } else {
-          expandMemory();
-        }
-      });
-
-      // Add click handler for remove button
-      removeButton.addEventListener("click", (e: MouseEvent) => {
-        e.stopPropagation();
-        // Remove from memoryItems
-        const index = memoryItems.findIndex((m: MemoryItem) => m.id === memory.id);
-        if (index !== -1) {
-          memoryItems.splice(index, 1);
-
-          // Recalculate pagination after removing an item
-          const newTotalPages = Math.ceil(memoryItems.length / memoriesPerPage);
-
-          // If we're on the last page and it's now empty, go to previous page
-          if (currentMemoryIndex > 0 && currentMemoryIndex >= memoryItems.length) {
-            currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
-          }
-
-          memoriesCounter.textContent = `${memoryItems.length} Relevant Memories`;
-          showMemories();
-        }
-      });
-
-      actionsContainer.appendChild(addButton);
-      actionsContainer.appendChild(menuButton);
-
-      memoryContainer.appendChild(contentWrapper);
-      memoryContainer.appendChild(actionsContainer);
-      memoriesContent.appendChild(memoryContainer);
-
-      // Add hover effect
-      memoryContainer.addEventListener("mouseenter", () => {
-        memoryContainer.style.backgroundColor = isExpanded ? "#18181B" : "#323232";
-      });
-      memoryContainer.addEventListener("mouseleave", () => {
-        memoryContainer.style.backgroundColor = isExpanded ? "#1C1C1E" : "#27272A";
-      });
-    }
-
-    // If after filtering for already added memories, there are no items to show,
-    // check if we need to go to previous page
-    if (memoriesContent.children.length === 0 && memoryItems.length > 0) {
-      if (currentMemoryIndex > 0) {
-        currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
-        showMemories();
-      } else {
-        showEmptyState();
-      }
-    }
-  }
-
-  // Function to show empty state
-  function showEmptyState(): void {
-    memoriesContent.innerHTML = "";
-
-    const emptyContainer = document.createElement("div");
-    emptyContainer.style.cssText = `
+  // Fallback: create floating container
+  const inputElement =
+    document.querySelector("#prompt-textarea") ||
+    document.querySelector('div[contenteditable="true"]') ||
+    document.querySelector("textarea");
+
+  if (inputElement) {
+    const container = document.createElement("div");
+    container.id = "mem0-floating-container";
+    container.style.cssText = `
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px 16px;
-      text-align: center;
-      flex: 1;
-      min-height: 200px;
+      gap: 4px;
     `;
-
-    const emptyIcon = document.createElement("div");
-    emptyIcon.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717A" xmlns="http://www.w3.org/2000/svg">
-      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v10a2 2 0 01-2 2h-4M3 21h4a2 2 0 002-2v-4m-6 6V9m18 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
-    emptyIcon.style.marginBottom = "16px";
-
-    const emptyText = document.createElement("div");
-    emptyText.textContent = "No relevant memories found";
-    emptyText.style.cssText = `
-      color: #71717A;
-      font-size: 14px;
-      font-weight: 500;
-    `;
-
-    emptyContainer.appendChild(emptyIcon);
-    emptyContainer.appendChild(emptyText);
-    memoriesContent.appendChild(emptyContainer);
+    document.body.appendChild(container);
+    return container;
   }
 
-  // Update navigation button states
-  function updateNavigationState(currentPage: number, totalPages: number): void {
-    // If there are no memories or total pages is 0, disable both buttons
-    if (memoryItems.length === 0 || totalPages === 0) {
-      prevButton.disabled = true;
-      prevButton.style.opacity = "0.5";
-      prevButton.style.cursor = "not-allowed";
-      nextButton.disabled = true;
-      nextButton.style.opacity = "0.5";
-      nextButton.style.cursor = "not-allowed";
-      return;
-    }
+  return null;
+}
 
-    if (currentPage <= 1) {
-      prevButton.disabled = true;
-      prevButton.style.opacity = "0.5";
-      prevButton.style.cursor = "not-allowed";
-    } else {
-      prevButton.disabled = false;
-      prevButton.style.opacity = "1";
-      prevButton.style.cursor = "pointer";
-    }
+function createButtonContainer(): HTMLElement {
+  const container = document.createElement("span");
+  container.className = "";
+  container.dataset.state = "closed";
+  container.style.position = "relative";
+  return container;
+}
 
-    if (currentPage >= totalPages) {
-      nextButton.disabled = true;
-      nextButton.style.opacity = "0.5";
-      nextButton.style.cursor = "not-allowed";
-    } else {
-      nextButton.disabled = false;
-      nextButton.style.opacity = "1";
-      nextButton.style.cursor = "pointer";
-    }
+function insertButtonIntoContainer(
+  buttonContainer: HTMLElement,
+  mem0ButtonContainer: HTMLElement
+): void {
+  const plusButton = document.querySelector('button[data-testid="composer-plus-btn"]');
+
+  if (plusButton && buttonContainer.contains(plusButton)) {
+    plusButton.parentElement?.insertBefore(mem0ButtonContainer, plusButton.nextSibling);
+  } else {
+    buttonContainer.appendChild(mem0ButtonContainer);
   }
 
-  // Navigation section at bottom
-  const navigationSection = document.createElement("div");
-  navigationSection.style.cssText = `
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-    padding: 10px;
-    border-top: none;
-    flex-shrink: 0;
+  // Ensure horizontal layout
+  buttonContainer.style.cssText += `
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
   `;
+}
 
-  // Navigation buttons
-  const prevButton = document.createElement("button");
-  prevButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M15 19l-7-7 7-7" stroke="#A1A1AA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-  prevButton.style.cssText = `
-    background: #27272A;
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  `;
+function createMem0Button(buttonContainer: HTMLElement): HTMLElement {
+  const mem0ButtonContainer = createButtonContainer();
+  const mem0Button = createStyledElement("button", BUTTON_STYLES.BASE);
 
-  const nextButton = document.createElement("button");
-  nextButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M9 5l7 7-7 7" stroke="#A1A1AA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>`;
-  nextButton.style.cssText = prevButton.style.cssText;
+  // Setup button properties
+  mem0Button.id = "mem0-icon-button";
+  mem0Button.setAttribute("aria-label", "OpenMemory button");
+  (mem0Button as HTMLButtonElement).type = "button";
 
-  // Add navigation button handlers
-  prevButton.addEventListener("click", () => {
-    if (currentMemoryIndex >= memoriesPerPage) {
-      currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
-      showMemories();
-    }
-  });
+  // Add animations
+  addAnimationStyles();
 
-  nextButton.addEventListener("click", () => {
-    if (currentMemoryIndex + memoriesPerPage < memoryItems.length) {
-      currentMemoryIndex = currentMemoryIndex + memoriesPerPage;
-      showMemories();
-    }
-  });
+  // Create and append button elements
+  const elements = createButtonElements();
+  elements.notificationDot.id = "mem0-notification-dot";
 
-  // Add hover effects
-  [prevButton, nextButton].forEach(button => {
-    button.addEventListener("mouseenter", () => {
-      if (!button.disabled) {
-        button.style.backgroundColor = "#323232";
-      }
-    });
-    button.addEventListener("mouseleave", () => {
-      if (!button.disabled) {
-        button.style.backgroundColor = "#27272A";
-      }
-    });
-  });
+  mem0Button.appendChild(elements.loadingSpinner);
+  mem0Button.appendChild(elements.textElement);
+  mem0Button.appendChild(elements.checkmarkIcon);
+  mem0Button.appendChild(elements.shortcutBlock);
+  mem0Button.appendChild(elements.notificationDot);
 
-  // Assemble modal
-  headerLeft.appendChild(logoImg);
-  headerLeft.appendChild(title);
-  headerRight.appendChild(addToPromptBtn);
-  headerRight.appendChild(settingsBtn);
-  // No LLM button; auto-rerank happens below if enabled
+  mem0ButtonContainer.appendChild(mem0Button);
+  insertButtonIntoContainer(buttonContainer, mem0ButtonContainer);
 
-  modalHeader.appendChild(headerLeft);
-  modalHeader.appendChild(headerRight);
+  return mem0Button;
+}
 
-  contentSection.appendChild(memoriesCounter);
-  contentSection.appendChild(memoriesContent);
-
-  navigationSection.appendChild(prevButton);
-  navigationSection.appendChild(nextButton);
-
-  modalContainer.appendChild(modalHeader);
-  modalContainer.appendChild(contentSection);
-  modalContainer.appendChild(navigationSection);
-
-  modalOverlay.appendChild(modalContainer);
-
-  // Append to body
-  document.body.appendChild(modalOverlay);
-
-  // Show initial memories
-  showMemories();
-
-  // Function to close the modal
-  function closeModal() {
-    if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
-      document.body.removeChild(currentModalOverlay);
-    }
-    currentModalOverlay = null;
-    memoryModalShown = false;
-    // Reset dragged position when modal is explicitly closed
-    draggedPosition = null;
-  }
-
-  // Update Add to Prompt button click handler
-  addToPromptBtn.addEventListener("click", () => {
-    // Only add memories that are not already added
-    const newMemories = memoryItems
-      .filter(memory => !allMemoriesById.has(String(memory.id)) && !memory.removed)
-      .map(memory => {
-        allMemoriesById.add(String(memory.id));
-        return String(memory.text || "");
-      });
-
-    // Add all new memories to allMemories
-    allMemories.push(...newMemories);
-
-    // Update the input with all memories
-    if (allMemories.length > 0) {
-      updateInputWithMemories();
-      closeModal();
-    } else {
-      // If no new memories were added but we have existing ones, just close
-      if (allMemoriesById.size > 0) {
-        closeModal();
-      }
-    }
-
-    // Remove all added memories from the memoryItems list
-    for (let i = memoryItems.length - 1; i >= 0; i--) {
-      if (allMemoriesById.has(String(memoryItems[i]?.id))) {
-        memoryItems.splice(i, 1);
-      }
-    }
-  });
+function setupButtonInteractions(button: HTMLElement): void {
+  setupButtonHoverEffects(button);
+  setupButtonClickHandler(button);
+  updateNotificationDot();
+  setTimeout(updateNotificationDot, 500);
 }
 
 // Shared function to update the input field with all collected memories
@@ -1205,13 +658,13 @@ function captureAndStoreMemory(): void {
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "ChatGPT",
+          provider: Provider.ChatGPT,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       };
 
-      fetch("https://api.mem0.ai/v1/memories/", {
+      fetch(API_MEMORIES, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1225,456 +678,39 @@ function captureAndStoreMemory(): void {
   );
 }
 
-// Function to add the Mem0 button next to the mic icon
+// Function to add the Mem0 button next to the plus icon
 async function addMem0IconButton(): Promise<void> {
   // Check if memory is enabled
   const memoryEnabled = await getMemoryEnabledState();
   if (!memoryEnabled) {
-    // If memory is disabled, remove the button if it exists
-    const existingButton = document.querySelector("#mem0-icon-button") as HTMLElement;
-    if (existingButton && existingButton.parentNode) {
-      (existingButton.parentNode as HTMLElement).remove();
-    }
-    // Also remove floating container if it exists
-    const floatingContainer = document.querySelector("#mem0-floating-container");
-    if (floatingContainer) {
-      floatingContainer.remove();
-    }
+    removeExistingButton();
     return;
   }
 
-  // Strategy 1: Look specifically for the microphone button area
-  let buttonContainer = null;
-  let referenceButton = null;
-  let microphoneButton = null;
-
-  // First, find the microphone button specifically
-  microphoneButton =
-    document.querySelector('button[aria-label="Dictate button"]') ||
-    document.querySelector(
-      'button[aria-label*="voice"], button[aria-label*="Voice"], button[aria-label*="Dictate"], button[aria-label*="mic"], button[aria-label*="Mic"]'
-    ) ||
-    Array.from(document.querySelectorAll("button")).find(btn => {
-      // Check if this button has the microphone icon structure
-      const rect = btn.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        return false;
-      } // Skip invisible buttons
-
-      const svg = btn.querySelector("svg");
-      if (svg) {
-        const paths = svg.querySelectorAll("path");
-        // Look for microphone-like SVG paths (common patterns)
-        for (let i = 0; i < paths.length; i++) {
-          const path = paths[i]!;
-          const d = path.getAttribute("d");
-          if (
-            d &&
-            (d.includes("M12 1a") ||
-              d.includes("m12 2a") ||
-              d.includes("M12 14c") ||
-              d.includes("microphone") ||
-              d.includes("M8 3a3") || // Common mic path pattern
-              d.includes("M12 1c") ||
-              d.toLowerCase().includes("mic"))
-          ) {
-            return true;
-          }
-        }
-
-        // Also check for microphone-related viewBox or class names
-        if (svg.getAttribute("viewBox") && btn.className.includes("mic")) {
-          return true;
-        }
-      }
-
-      // Check the button's position - microphone is usually on the right side
-      const inputElement =
-        document.querySelector("#prompt-textarea") ||
-        document.querySelector('div[contenteditable="true"]') ||
-        document.querySelector("textarea");
-      if (inputElement) {
-        const inputRect = inputElement.getBoundingClientRect();
-        // Microphone button should be to the right of the input
-        return rect.left > inputRect.right - 200 && rect.left < inputRect.right + 50;
-      }
-
-      return false;
-    });
-
-  if (microphoneButton) {
-    // Look for the proper container - the Dictate button is nested within spans
-    let container = microphoneButton.parentElement;
-
-    // Walk up the DOM to find the flex container that holds all the buttons
-    while (container && container !== document.body) {
-      // Look for the container with gap classes that holds multiple buttons
-      if (
-        container.className &&
-        (container.className.includes("gap-1.5") ||
-          container.className.includes("gap-2") ||
-          (container.className.includes("items-center") && container.className.includes("flex")))
-      ) {
-        // Check if this container has multiple button-like elements
-        const buttonElements = container.querySelectorAll('button, [role="button"]');
-        if (buttonElements.length > 0 || container.children.length > 1) {
-          buttonContainer = container;
-          referenceButton = microphoneButton;
-          break;
-        }
-      }
-      container = container.parentElement;
-    }
-
-    // Fallback to immediate parent if no suitable container found
-    if (!buttonContainer) {
-      buttonContainer = microphoneButton.parentElement;
-      referenceButton = microphoneButton;
-    }
+  const buttonContainer = findOrCreateButtonContainer();
+  if (!buttonContainer || document.querySelector("#mem0-icon-button")) {
+    return;
   }
 
-  // Fallback: Look for composer trailing actions if microphone not found
-  if (!buttonContainer) {
-    const composerTrailing = document.querySelector('div[data-testid="composer-trailing-actions"]');
-    if (composerTrailing) {
-      // Look for button containers within composer trailing actions
-      const containers = composerTrailing.querySelectorAll("div");
-      for (let i = 0; i < containers.length; i++) {
-        const container = containers[i]!;
-        const buttons = container.querySelectorAll("button");
-        if (buttons.length > 0) {
-          buttonContainer = container;
-          referenceButton = buttons[buttons.length - 1]; // Use last button as reference
-          break;
-        }
-      }
-    }
-  }
-
-  // Strategy 2: Look for buttons near the input element
-  if (!buttonContainer) {
-    const inputElement =
-      document.querySelector("#prompt-textarea") ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-
-    if (inputElement) {
-      // Search up the DOM tree for button containers
-      let parent = inputElement.parentElement;
-      let level = 0;
-      while (parent && level < 5 && !buttonContainer) {
-        const buttons = parent.querySelectorAll("button");
-        if (buttons.length > 0) {
-          // Look for buttons that might be action buttons (not just text buttons)
-          for (let i = 0; i < buttons.length; i++) {
-            const btn = buttons[i]!;
-            const rect = btn.getBoundingClientRect();
-            // Check if button is visible and reasonable size
-            if (rect.width > 0 && rect.height > 0 && rect.width < 100) {
-              buttonContainer = parent;
-              referenceButton = btn;
-              break;
-            }
-          }
-        }
-        parent = parent.parentElement;
-        level++;
-      }
-    }
-  }
-
-  // Strategy 3: Fallback - create our own container
-  if (!buttonContainer) {
-    const inputElement =
-      document.querySelector("#prompt-textarea") ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-    if (inputElement) {
-      // Find the closest form or container element
-      const formContainer =
-        inputElement.closest("form") ||
-        inputElement.closest('div[role="group"]') ||
-        inputElement.parentElement;
-
-      if (formContainer) {
-        buttonContainer = formContainer;
-        // Try to find any existing button as reference
-        referenceButton = formContainer.querySelector("button");
-      }
-    }
-  }
-
-  // Final fallback: Create a floating button if no container found
-  if (!buttonContainer) {
-    const inputElement =
-      document.querySelector("#prompt-textarea") ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-
-    if (inputElement) {
-      // Create a custom floating container
-      buttonContainer = document.createElement("div");
-      buttonContainer.id = "mem0-floating-container";
-      buttonContainer.style.cssText = `
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-        display: flex;
-        gap: 4px;
-      `;
-      document.body.appendChild(buttonContainer);
-    }
-  }
-
-  if (buttonContainer && !document.querySelector("#mem0-icon-button")) {
-    // Use microphone button styles if available, otherwise use reference button styles
-    let buttonStyles =
-      "btn relative btn-primary btn-small flex items-center justify-center rounded-full border border-token-border-default p-1 text-token-text-secondary focus-visible:outline-black dark:text-token-text-secondary dark:focus-visible:outline-white bg-transparent dark:bg-transparent can-hover:hover:bg-token-main-surface-secondary dark:hover:bg-transparent dark:hover:opacity-100 h-9 min-h-9 w-9";
-
-    if (microphoneButton) {
-      buttonStyles = microphoneButton.className;
-    } else if (referenceButton) {
-      buttonStyles = referenceButton.className;
-    }
-
-    if (true) {
-      // Always execute the button creation now that we have a container
-      const mem0ButtonContainer = document.createElement("span");
-      mem0ButtonContainer.className = "";
-      mem0ButtonContainer.dataset.state = "closed";
-      mem0ButtonContainer.style.position = "relative"; // Add position relative for popover positioning
-
-      // Match the structure of the Dictate button if we found it
-      if (microphoneButton && microphoneButton.getAttribute("aria-label") === "Dictate button") {
-        // Copy the exact class structure from the Dictate button's container
-        const dictateContainer = microphoneButton.closest('span[data-state="closed"]');
-        if (dictateContainer && dictateContainer.className) {
-          mem0ButtonContainer.className = dictateContainer.className;
-        }
-      }
-
-      // Additional styling only if we haven't already copied from Dictate button container
-      if (!mem0ButtonContainer.className && microphoneButton && microphoneButton.parentElement) {
-        const micContainer = microphoneButton.parentElement;
-        if (micContainer.className) {
-          // Only copy safe styling classes, avoid layout-affecting ones
-          const safeClasses = micContainer.className
-            .split(" ")
-            .filter(
-              cls =>
-                !cls.includes("flex") &&
-                !cls.includes("grid") &&
-                !cls.includes("absolute") &&
-                !cls.includes("relative") &&
-                !cls.includes("fixed") &&
-                !cls.includes("w-") &&
-                !cls.includes("h-") &&
-                !cls.includes("m-") &&
-                !cls.includes("p-")
-            );
-          if (safeClasses.length > 0) {
-            mem0ButtonContainer.className = safeClasses.join(" ");
-          }
-        }
-      }
-
-      const mem0Button = document.createElement("button");
-      mem0Button.id = "mem0-icon-button";
-      mem0Button.className = buttonStyles;
-      mem0Button.setAttribute("aria-label", "OpenMemory button");
-      mem0Button.type = "button";
-
-      // Ensure consistent button styling regardless of inherited classes
-      mem0Button.style.cssText = `
-        ${mem0Button.style.cssText}
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        min-width: 32px !important;
-        min-height: 32px !important;
-        border-radius: 50% !important;
-        flex-shrink: 0 !important;
-        position: relative !important;
-      `;
-
-      // Create notification dot
-      const notificationDot = document.createElement("div");
-      notificationDot.id = "mem0-notification-dot";
-      notificationDot.style.cssText = `
-        position: absolute;
-        top: -3px;
-        right: -3px;
-        width: 10px;
-        height: 10px;
-        background-color:rgb(128, 221, 162);
-        border-radius: 50%;
-        border: 2px solid #1C1C1E;
-        display: none;
-        z-index: 1001;
-        pointer-events: none;
-      `;
-
-      // Add keyframe animation for the dot
-      if (!document.getElementById("notification-dot-animation")) {
-        const style = document.createElement("style");
-        style.id = "notification-dot-animation";
-        style.innerHTML = `
-          @keyframes popIn {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-          }
-          
-          #mem0-notification-dot.active {
-            display: block !important;
-            animation: popIn 0.3s ease-out forwards;
-          }
-        `;
-        document.head.appendChild(style);
-      }
-
-      // Create popover element (hidden by default)
-      const popover = document.createElement("div");
-      popover.className = "mem0-button-popover";
-      popover.style.cssText = `
-        position: absolute;
-        bottom: 48px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: #1C1C1E;
-        border: 1px solid #27272A;
-        color: white;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 12px;
-        white-space: nowrap;
-        z-index: 10001;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        display: none;
-        transition: opacity 0.2s;
-      `;
-      popover.textContent = "Add memories to your prompt";
-
-      // Add arrow
-      const arrow = document.createElement("div");
-      arrow.style.cssText = `
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%) rotate(45deg);
-        width: 10px;
-        height: 10px;
-        background-color: #1C1C1E;
-        border-right: 1px solid #27272A;
-        border-bottom: 1px solid #27272A;
-      `;
-      popover.appendChild(arrow);
-      mem0ButtonContainer.appendChild(popover);
-
-      const iconContainer = document.createElement("div");
-      iconContainer.className = "flex items-center justify-center";
-
-      const icon = document.createElement("img");
-      icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      icon.className = "h-[18px] w-[18px]";
-      icon.style.borderRadius = "50%";
-
-      iconContainer.appendChild(icon);
-      mem0Button.appendChild(iconContainer);
-      mem0Button.appendChild(notificationDot);
-      mem0ButtonContainer.appendChild(mem0Button);
-
-      // Insert the button container with proper positioning and spacing
-      if (microphoneButton && buttonContainer.contains(microphoneButton)) {
-        // For Dictate button, we need to find the right insertion point
-        // The button is nested: container > span[data-state] > button
-        let insertionTarget = microphoneButton;
-        const insertionParent = buttonContainer;
-
-        // If the microphone button is nested in spans, find the top-level span in our container
-        let currentElement = microphoneButton.parentElement;
-        while (
-          currentElement &&
-          currentElement !== buttonContainer &&
-          currentElement.parentElement === buttonContainer
-        ) {
-          insertionTarget = currentElement;
-          break;
-        }
-        while (currentElement && currentElement !== buttonContainer) {
-          if (currentElement.parentElement === buttonContainer) {
-            insertionTarget = currentElement;
-            break;
-          }
-          currentElement = currentElement.parentElement;
-        }
-
-        // Insert BEFORE the target element (to the left of the microphone)
-        insertionParent.insertBefore(mem0ButtonContainer, insertionTarget);
-
-        // Add proper spacing to match other elements in the container
-        mem0ButtonContainer.style.marginRight = "0px"; // Let the container handle spacing
-        mem0ButtonContainer.style.display = "inline-flex";
-        mem0ButtonContainer.style.alignItems = "center";
-      } else if (referenceButton && buttonContainer.contains(referenceButton)) {
-        // Insert next to the reference button
-        if (referenceButton.nextSibling) {
-          buttonContainer.insertBefore(mem0ButtonContainer, referenceButton.nextSibling);
-        } else {
-          buttonContainer.appendChild(mem0ButtonContainer);
-        }
-        mem0ButtonContainer.style.marginLeft = "4px";
-        mem0ButtonContainer.style.display = "inline-flex";
-        mem0ButtonContainer.style.alignItems = "center";
-      } else {
-        // Insert at the end of the button container with fallback styling
-        buttonContainer.appendChild(mem0ButtonContainer);
-        mem0ButtonContainer.style.marginLeft = "4px";
-        mem0ButtonContainer.style.display = "inline-flex";
-        mem0ButtonContainer.style.alignItems = "center";
-      }
-
-      // Add hover event for popover
-      mem0ButtonContainer.addEventListener("mouseenter", () => {
-        // Close any existing button popup first
-        const existingPopup = document.querySelector(".mem0-button-popup");
-        if (existingPopup) {
-          existingPopup.remove();
-        }
-
-        popover.style.display = "block";
-        setTimeout(() => (popover.style.opacity = "1"), 10);
-      });
-
-      mem0ButtonContainer.addEventListener("mouseleave", () => {
-        popover.style.opacity = "0";
-        setTimeout(() => (popover.style.display = "none"), 200);
-      });
-
-      // Add click event listener
-      mem0Button.addEventListener("click", async () => {
-        try {
-          const memoryEnabled = await getMemoryEnabledState();
-          if (memoryEnabled) {
-            // Call handleMem0Modal with button ID
-            await handleMem0Modal("mem0-icon-button");
-          }
-        } catch (error) {
-          console.error("Error handling Mem0 button click:", error);
-        }
-      });
-
-      // Update notification dot based on input content
-      updateNotificationDot();
-
-      // Ensure notification dot is updated after DOM is fully loaded
-      setTimeout(updateNotificationDot, 500);
-    }
-  }
+  const mem0Button = createMem0Button(buttonContainer);
+  setupButtonInteractions(mem0Button);
 
   // Add send button listener
   addSendButtonListener();
+}
+
+// Helper function to update text color based on button state
+function updateButtonTextColor(button: HTMLElement, isActive: boolean): void {
+  const textElement = button.querySelector("span:nth-child(2)") as HTMLElement;
+  const checkmarkElement = button.querySelector("span:nth-child(3)") as HTMLElement;
+
+  if (currentTheme === Theme.LIGHT) {
+    // In light theme: black text for inactive (gray), white text for active (green)
+    const textColor = isActive ? "white" : "#1a1a1a";
+
+    if (textElement) textElement.style.color = textColor;
+    if (checkmarkElement) checkmarkElement.style.color = textColor;
+  }
 }
 
 async function updateNotificationDot(): Promise<void> {
@@ -1689,22 +725,34 @@ async function updateNotificationDot(): Promise<void> {
     (document.querySelector('div[contenteditable="true"]') as HTMLDivElement) ||
     (document.querySelector("textarea") as HTMLTextAreaElement);
 
+  const mem0Button = document.querySelector("#mem0-icon-button") as HTMLElement;
   const notificationDot = document.querySelector("#mem0-notification-dot") as HTMLElement;
 
-  if (inputElement && notificationDot) {
-    // Function to check if input has text
+  if (inputElement && mem0Button && notificationDot) {
+    // Function to check if input has text and update button state
     const checkForText = () => {
-      const inputText = inputElement.textContent || inputElement.value || "";
-      const hasText = inputText.trim() !== "";
-
-      if (hasText) {
-        notificationDot.classList.add("active");
-        // Force display style
-        notificationDot.style.display = "block";
-      } else {
-        notificationDot.classList.remove("active");
-        notificationDot.style.display = "none";
+      // Don't update button state if loading or showing "Added"
+      if (isButtonLoading || isShowingAdded) {
+        return;
       }
+
+      const hasText = (inputElement.textContent || inputElement.value || "").trim() !== "";
+
+      // Find elements once
+      const checkmarkIcon = mem0Button?.querySelector("span:nth-child(3)") as HTMLElement;
+      const shortcutBlock = mem0Button?.querySelector("span:nth-child(4)") as HTMLElement;
+
+      // Apply styles
+      const colors = THEME_COLORS[currentTheme];
+      mem0Button.style.backgroundColor = hasText ? colors.BUTTON_BG_ACTIVE : colors.BUTTON_BG;
+      notificationDot.style.display = "none";
+
+      const displayValue = hasText ? "inline-block" : "none";
+      setElementDisplay(checkmarkIcon, displayValue);
+      setElementDisplay(shortcutBlock, displayValue);
+
+      // Update text color based on button state
+      updateButtonTextColor(mem0Button, hasText);
     };
 
     // Set up an observer to watch for changes to the input field
@@ -1756,19 +804,9 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
     return;
   }
 
-  const inputElement =
-    (document.querySelector("#prompt-textarea") as HTMLTextAreaElement | HTMLDivElement) ||
-    (document.querySelector('div[contenteditable="true"]') as HTMLDivElement) ||
-    (document.querySelector("textarea") as HTMLTextAreaElement);
-
-  const mem0Button = document.querySelector("#mem0-icon-button") as HTMLElement;
-
   let message = getInputValue();
-  // If no message, show a popup and return
+  // If no message, just return without showing popup
   if (!message || message.trim() === "") {
-    if (mem0Button) {
-      showButtonPopup(mem0Button as HTMLElement, "Please enter some text first");
-    }
     return;
   }
 
@@ -1787,8 +825,8 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
 
   isProcessingMem0 = true;
 
-  // Show the loading modal immediately with the source button ID
-  createMemoryModal([], true, sourceButtonId);
+  // Show loading spinner
+  updateButtonState("loading");
 
   try {
     const data = await new Promise<StorageData>(resolve => {
@@ -1847,11 +885,11 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
       top_k: topK,
       filter_memories: false,
       // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: Source.OPENMEMORY_CHROME_EXTENSION,
       ...optionalParams,
     };
 
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+    const searchResponse = await fetch(API_SEARCH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1866,15 +904,33 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
 
     const responseData = await searchResponse.json();
 
-    // Initial items from search (keep same structure used by modal)
+    // Get memory items from search
     const memoryItems = ((responseData || []) as MemorySearchResponse).map(item => ({
       id: item.id,
       text: item.memory,
       categories: item.categories || [],
     }));
 
-    // Update the modal with real data and the source button ID
-    createMemoryModal(memoryItems, false, sourceButtonId);
+    // Instead of showing modal, directly add all memories to input
+    if (memoryItems.length > 0) {
+      // Clear existing memories
+      allMemories = [];
+      allMemoriesById.clear();
+
+      // Add all found memories
+      memoryItems.forEach(memory => {
+        allMemoriesById.add(String(memory.id));
+        allMemories.push(String(memory.text || ""));
+      });
+
+      // Update input with all memories
+      updateInputWithMemories();
+    }
+
+    // Show memories popup
+    if (memoryItems.length > 0) {
+      showMemoriesPopup(true);
+    }
 
     // Proceed with adding memory asynchronously without awaiting
     fetch("https://api.mem0.ai/v1/memories/", {
@@ -1888,9 +944,9 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "ChatGPT",
+          provider: Provider.ChatGPT,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     }).catch(error => {
@@ -1898,69 +954,151 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
     });
   } catch (error) {
     console.error("Error:", error);
-    // Still show the modal but with empty state if there was an error
-    createMemoryModal([], false, sourceButtonId);
+
+    // Hide loading spinner and show error popup
+    updateButtonState("error");
+
+    // Show error popup
+    showMemoriesPopup(false);
+
     throw error;
   } finally {
+    setTimeout(() => updateButtonState("added"), 500);
+    setTimeout(() => updateButtonState("success"), 1500);
     isProcessingMem0 = false;
   }
 }
 
-// Function to show a small popup message near the button
-function showButtonPopup(button: HTMLElement, message: string): void {
+// Function to update button state (loading, success, error, added)
+function updateButtonState(state: "loading" | "success" | "error" | "added"): void {
+  const mem0Button = document.querySelector("#mem0-icon-button") as HTMLElement;
+  if (!mem0Button) {
+    return;
+  }
+
+  const elements = {
+    spinner: mem0Button.querySelector("span:nth-child(1)") as HTMLElement,
+    text: mem0Button.querySelector("span:nth-child(2)") as HTMLElement,
+    checkmark: mem0Button.querySelector("span:nth-child(3)") as HTMLElement,
+    shortcut: mem0Button.querySelector("span:nth-child(4)") as HTMLElement,
+  };
+
+  // Configuration for each state
+  const colors = THEME_COLORS[currentTheme];
+  const stateConfig = {
+    loading: {
+      spinner: true,
+      text: "Memories",
+      checkmark: false,
+      shortcut: false,
+      bgColor: colors.BUTTON_BG_ACTIVE,
+      isLoading: true,
+      isShowingAdded: false,
+      isActive: true,
+    },
+    added: {
+      spinner: false,
+      text: "Added",
+      checkmark: false,
+      shortcut: false,
+      bgColor: colors.BUTTON_BG_ACTIVE,
+      isLoading: false,
+      isShowingAdded: true,
+      isActive: true,
+    },
+    success: {
+      spinner: false,
+      text: "Memories",
+      checkmark: true,
+      shortcut: true,
+      bgColor: colors.BUTTON_BG_ACTIVE,
+      isLoading: false,
+      isShowingAdded: false,
+      isActive: true,
+    },
+    error: {
+      spinner: false,
+      text: "Memories",
+      checkmark: true,
+      shortcut: true,
+      bgColor: colors.BUTTON_BG,
+      isLoading: false,
+      isShowingAdded: false,
+      isActive: false,
+    },
+  };
+
+  const config = stateConfig[state];
+
+  // Apply configuration
+  isButtonLoading = config.isLoading;
+  isShowingAdded = config.isShowingAdded;
+
+  setElementDisplay(elements.spinner, config.spinner ? "inline-block" : "none");
+  setElementText(elements.text, config.text);
+  setElementDisplay(elements.text, "inline-block");
+  setElementDisplay(elements.checkmark, config.checkmark ? "inline-block" : "none");
+  setElementDisplay(elements.shortcut, config.shortcut ? "inline-block" : "none");
+
+  mem0Button.style.backgroundColor = config.bgColor;
+
+  // Override text color for loading state in light theme to ensure black text
+  if (currentTheme === Theme.LIGHT && state === "loading") {
+    if (elements.text) elements.text.style.color = "#1a1a1a";
+    if (elements.checkmark) elements.checkmark.style.color = "#1a1a1a";
+  } else {
+    // Update text color based on button state, only if not light theme and loading
+    updateButtonTextColor(mem0Button, config.isActive);
+  }
+}
+
+// Function to show memories popup
+function showMemoriesPopup(isSuccess: boolean): void {
   // Remove any existing popups
-  const existingPopup = document.querySelector(".mem0-button-popup") as HTMLElement;
+  const existingPopup = document.querySelector(".mem0-memories-popup") as HTMLElement;
   if (existingPopup) {
     existingPopup.remove();
   }
 
-  // Also hide any hover popover that might be showing
-  const hoverPopover = document.querySelector(".mem0-button-popover") as HTMLElement;
-  if (hoverPopover) {
-    hoverPopover.style.opacity = "0";
-    hoverPopover.style.display = "none";
-  }
-
   const popup = document.createElement("div");
-  popup.className = "mem0-button-popup";
+  popup.className = "mem0-memories-popup";
 
+  const colors = THEME_COLORS[currentTheme];
   popup.style.cssText = `
-    position: absolute;
-    top: -40px;
+    position: fixed;
+    top: 20px;
     left: 50%;
     transform: translateX(-50%);
-    background-color: #1C1C1E;
-    border: 1px solid #27272A;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    white-space: nowrap;
+    background-color: ${colors.POPUP_BG};
+    border: 1px solid ${colors.POPUP_BORDER};
+    border-radius: 12px;
+    color: ${colors.POPUP_TEXT};
+    padding: 16px;
+    width: 300px;
     z-index: 10001;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 20px ${colors.POPUP_SHADOW};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
-  popup.textContent = message;
-
-  // Create arrow
-  const arrow = document.createElement("div");
-  arrow.style.cssText = `
-    position: absolute;
-    bottom: -5px;
-    left: 50%;
-    transform: translateX(-50%) rotate(45deg);
-    width: 10px;
-    height: 10px;
-    background-color: #1C1C1E;
-    border-right: 1px solid #27272A;
-    border-bottom: 1px solid #27272A;
+  // Create content
+  const content = document.createElement("div");
+  content.style.cssText = `
+    font-size: 14px;
+    line-height: 1.4;
+    color: ${colors.POPUP_TEXT};
+    text-align: center;
   `;
 
-  popup.appendChild(arrow);
+  if (isSuccess) {
+    content.textContent = "Memories added";
+  } else {
+    content.textContent = "Error while adding memories";
+  }
 
-  // Position relative to button
-  button.style.position = "relative";
-  button.appendChild(popup);
+  popup.appendChild(content);
+
+  // Add to body
+  document.body.appendChild(popup);
 
   // Auto-remove after 3 seconds
   setTimeout(() => {
@@ -1971,7 +1109,7 @@ function showButtonPopup(button: HTMLElement, message: string): void {
 }
 
 // Safe no-op to prevent ReferenceError if auto-inject prefetch isn't defined elsewhere
-function setupAutoInjectPrefetch() {
+function setupAutoInjectPrefetch(): void {
   try {
     // Intentionally left blank; legacy callers expect this to exist.
     // Inline hint handles lightweight suggestion awareness.
@@ -2197,7 +1335,7 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
             optionalParams.project_id = items[StorageKey.SELECTED_PROJECT];
           }
 
-          fetch("https://api.mem0.ai/v1/memories/", {
+          fetch(API_MEMORIES, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2208,9 +1346,9 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
               user_id: userId,
               infer: true,
               metadata: {
-                provider: "ChatGPT",
+                provider: Provider.ChatGPT,
               },
-              source: "OPENMEMORY_CHROME_EXTENSION",
+              source: Source.OPENMEMORY_CHROME_EXTENSION,
               ...optionalParams,
             }),
           })
@@ -2317,7 +1455,7 @@ function sendMemoryToMem0(
             optionalParams.project_id = items[StorageKey.SELECTED_PROJECT];
           }
 
-          fetch("https://api.mem0.ai/v1/memories/", {
+          fetch(API_MEMORIES, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2328,9 +1466,9 @@ function sendMemoryToMem0(
               user_id: userId,
               infer: infer,
               metadata: {
-                provider: "ChatGPT",
+                provider: Provider.ChatGPT,
               },
-              source: "OPENMEMORY_CHROME_EXTENSION",
+              source: Source.OPENMEMORY_CHROME_EXTENSION,
               ...optionalParams,
             }),
           })
@@ -2364,6 +1502,9 @@ function getMemoryEnabledState(): Promise<boolean> {
 
 // Update the initialization function to add the Mem0 icon button but not intercept Enter key
 function initializeMem0Integration(): void {
+  // Initialize the listener for theme changes
+  unsubscribeThemeChange = onThemeChange(updateButtonTheme);
+
   document.addEventListener("DOMContentLoaded", () => {
     addSyncButton();
     (async () => await addMem0IconButton())();
@@ -2410,7 +1551,7 @@ function initializeMem0Integration(): void {
 // (global auto-inject interceptors removed)
 
 // Function to show login popup
-function showLoginPopup() {
+function showLoginPopup(): void {
   // First remove any existing popups
   const existingPopup = document.querySelector("#mem0-login-popup");
   if (existingPopup) {
@@ -2440,7 +1581,7 @@ function showLoginPopup() {
     width: 320px;
     padding: 24px;
     color: white;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `;
 
@@ -2545,7 +1686,7 @@ function showLoginPopup() {
 
   // Open sign-in page when clicked
   signInButton.addEventListener("click", () => {
-    window.open("https://app.mem0.ai/login", "_blank");
+    window.open(APP_LOGIN, "_blank");
     document.body.removeChild(popupOverlay);
   });
 
@@ -2573,7 +1714,7 @@ initializeMem0Integration();
 let chatgptExtensionContextValid = true;
 let chatgptCurrentUrl = window.location.href;
 
-function chatgptCheckExtensionContext() {
+function chatgptCheckExtensionContext(): boolean {
   try {
     // chrome.runtime may throw if context invalidated
     // Using optional chaining to avoid ReferenceError
@@ -2589,7 +1730,7 @@ function chatgptCheckExtensionContext() {
   }
 }
 
-function chatgptDetectNavigation() {
+function chatgptDetectNavigation(): void {
   const newUrl = window.location.href;
   if (newUrl !== chatgptCurrentUrl) {
     chatgptCurrentUrl = newUrl;

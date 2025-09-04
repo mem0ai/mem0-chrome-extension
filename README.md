@@ -29,6 +29,8 @@ https://github.com/user-attachments/assets/a069a178-631e-4b35-a182-9f4fef7735c4
 
 ## Installation
 
+> **Note:** Make sure you have [Node.js](https://nodejs.org/) installed before proceeding.
+
 1. Clone this repository.
 2. Navigate to the directory where you cloned the repository.
 3. Run `npm install` to install dependencies.
@@ -37,7 +39,7 @@ https://github.com/user-attachments/assets/a069a178-631e-4b35-a182-9f4fef7735c4
 6. Open Google Chrome and navigate to `chrome://extensions`.
 7. Enable "Developer mode" in the top right corner.
 8. Click "Load unpacked" and select the `dist` directory containing the extension files.
-9. The Mem0 Chrome Extension extension should now appear in your Chrome toolbar.
+9. The Mem0 Chrome Extension should now appear in your Chrome toolbar.
 
 
 ## Usage

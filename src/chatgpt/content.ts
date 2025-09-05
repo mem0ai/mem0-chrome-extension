@@ -68,8 +68,8 @@ const THEME_COLORS = {
     NOTIFICATION_DOT_BORDER: "#ffffff",
 
     // Spinner
-    SPINNER_BORDER: "rgba(0, 0, 0, 0.2)",
-    SPINNER_ACTIVE: "#1a1a1a",
+    SPINNER_BORDER: "rgba(255, 255, 255, 0.3)",
+    SPINNER_ACTIVE: "white",
 
     // Shortcut
     SHORTCUT_BG: "rgba(255, 255, 255, 0.11)",
@@ -299,8 +299,15 @@ function setupButtonHoverEffects(button: HTMLElement): void {
   const colors = THEME_COLORS[currentTheme];
 
   button.addEventListener("mouseenter", () => {
-    const currentBg = button.style.backgroundColor;
-    if (currentBg.includes("22, 101, 52")) {
+    // Check if button should be active based on input content
+    const inputElement =
+      (document.querySelector("#prompt-textarea") as HTMLTextAreaElement | HTMLDivElement) ||
+      (document.querySelector('div[contenteditable="true"]') as HTMLDivElement) ||
+      (document.querySelector("textarea") as HTMLTextAreaElement);
+
+    const hasText = inputElement ? (inputElement.textContent || inputElement.value || "").trim() !== "" : false;
+
+    if (hasText) {
       button.style.backgroundColor = colors.BUTTON_BG_ACTIVE_HOVER;
     } else {
       button.style.backgroundColor = colors.BUTTON_BG_HOVER;
@@ -308,8 +315,15 @@ function setupButtonHoverEffects(button: HTMLElement): void {
   });
 
   button.addEventListener("mouseleave", () => {
-    const currentBg = button.style.backgroundColor;
-    if (currentBg.includes("16, 85, 42")) {
+    // Check if button should be active based on input content
+    const inputElement =
+      (document.querySelector("#prompt-textarea") as HTMLTextAreaElement | HTMLDivElement) ||
+      (document.querySelector('div[contenteditable="true"]') as HTMLDivElement) ||
+      (document.querySelector("textarea") as HTMLTextAreaElement);
+
+    const hasText = inputElement ? (inputElement.textContent || inputElement.value || "").trim() !== "" : false;
+
+    if (hasText) {
       button.style.backgroundColor = colors.BUTTON_BG_ACTIVE;
     } else {
       button.style.backgroundColor = colors.BUTTON_BG;
@@ -346,10 +360,12 @@ function removeExistingButton(): void {
 
 function findOrCreateButtonContainer(): HTMLElement | null {
   const plusButton = document.querySelector('button[data-testid="composer-plus-btn"]');
+  const plusButtonParent = plusButton?.closest('span.flex');
   const leadingContainer = plusButton?.closest('div[class*="leading"]');
 
   if (plusButton && leadingContainer) {
-    return leadingContainer as HTMLElement;
+    // Return parent of the plusButtonParent
+    return plusButtonParent?.parentElement as HTMLElement || leadingContainer;
   }
 
   // Fallback: create floating container
@@ -391,7 +407,14 @@ function insertButtonIntoContainer(
   const plusButton = document.querySelector('button[data-testid="composer-plus-btn"]');
 
   if (plusButton && buttonContainer.contains(plusButton)) {
-    plusButton.parentElement?.insertBefore(mem0ButtonContainer, plusButton.nextSibling);
+    // Insert our button after the parent of the plusButtonParent, not inside it
+    const plusButtonParent = plusButton.closest('span.flex');
+    if (plusButtonParent && plusButtonParent.parentElement) {
+      plusButtonParent.parentElement.insertBefore(mem0ButtonContainer, plusButtonParent.nextSibling);
+    } else {
+      // Fallback: insert after the GPT button
+      plusButton.parentElement?.insertBefore(mem0ButtonContainer, plusButton.nextSibling);
+    }
   } else {
     buttonContainer.appendChild(mem0ButtonContainer);
   }
@@ -744,7 +767,12 @@ async function updateNotificationDot(): Promise<void> {
 
       // Apply styles
       const colors = THEME_COLORS[currentTheme];
-      mem0Button.style.backgroundColor = hasText ? colors.BUTTON_BG_ACTIVE : colors.BUTTON_BG;
+
+      // Only update background color if not currently being hovered
+      const isHovered = mem0Button.matches(':hover');
+      if (!isHovered) {
+        mem0Button.style.backgroundColor = hasText ? colors.BUTTON_BG_ACTIVE : colors.BUTTON_BG;
+      }
       notificationDot.style.display = "none";
 
       const displayValue = hasText ? "inline-block" : "none";
@@ -1041,15 +1069,7 @@ function updateButtonState(state: "loading" | "success" | "error" | "added"): vo
   setElementDisplay(elements.shortcut, config.shortcut ? "inline-block" : "none");
 
   mem0Button.style.backgroundColor = config.bgColor;
-
-  // Override text color for loading state in light theme to ensure black text
-  if (currentTheme === Theme.LIGHT && state === "loading") {
-    if (elements.text) elements.text.style.color = "#1a1a1a";
-    if (elements.checkmark) elements.checkmark.style.color = "#1a1a1a";
-  } else {
-    // Update text color based on button state, only if not light theme and loading
-    updateButtonTextColor(mem0Button, config.isActive);
-  }
+  updateButtonTextColor(mem0Button, config.isActive);
 }
 
 // Function to show memories popup

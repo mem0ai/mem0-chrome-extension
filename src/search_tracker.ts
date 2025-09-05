@@ -3,8 +3,9 @@ import type { HistoryStateData, HistoryUrl } from "./types/browser";
 import type { ApiMemoryRequest } from "./types/api";
 import { Provider, Category } from "./types/providers";
 import { MessageRole } from "./types/api";
-import { SOURCE, DEFAULT_USER_ID } from "./types/api";
+import { Source, DEFAULT_USER_ID } from "./types/api";
 import { StorageKey } from "./types/storage";
+import { API_MEMORIES } from "./consts/api";
 
 (function () {
   // Utilities
@@ -83,7 +84,7 @@ import { StorageKey } from "./types/storage";
         engine: engine || "",
         page_url: pageUrl || location.href,
       },
-      source: SOURCE,
+      source: Source.OPENMEMORY_CHROME_EXTENSION,
     };
     if (settings.orgId) {
       body.org_id = settings.orgId;
@@ -95,7 +96,7 @@ import { StorageKey } from "./types/storage";
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const res = await fetch("https://api.mem0.ai/v1/memories/", {
+      const res = await fetch(API_MEMORIES, {
         method: "POST",
         headers,
         body: JSON.stringify(body),

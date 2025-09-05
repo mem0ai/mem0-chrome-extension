@@ -2,9 +2,12 @@ import type { OptionalApiParams } from "../types/memory";
 import type { MemorySearchResponse } from "../types/api";
 import type { StorageData } from "../types/storage";
 import type { MutableMutationObserver, ExtendedElement } from "../types/dom";
-import { MessageRole } from "../types/api";
+import { MessageRole, Source } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { Provider } from "../types/providers";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { API_MEMORIES, API_SEARCH, APP_LOGIN } from "../consts/api";
 
 export {};
 
@@ -31,7 +34,6 @@ let isInitialized: boolean = false;
 let sendListenerAdded: boolean = false;
 let mainObserver: MutableMutationObserver | null = null;
 let notificationObserver: MutationObserver | null = null;
-const memoryStateCheckInterval: number | null = null;
 let setupRetryCount: number = 0;
 const MAX_SETUP_RETRIES: number = 10;
 
@@ -358,7 +360,7 @@ function addSendButtonListener(): void {
           optionalParams.project_id = items.selected_project;
         }
         // Send memory to mem0 API asynchronously without waiting for response
-        fetch("https://api.mem0.ai/v1/memories/", {
+        fetch(API_MEMORIES, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -369,9 +371,9 @@ function addSendButtonListener(): void {
             user_id: userId,
             infer: true,
             metadata: {
-              provider: "Gemini",
+              provider: Provider.Gemini,
             },
-            source: "OPENMEMORY_CHROME_EXTENSION",
+            source: Source.OPENMEMORY_CHROME_EXTENSION,
             ...optionalParams,
           }),
         }).catch(error => {
@@ -489,7 +491,7 @@ async function handleMem0Processing(
     }
 
     // Existing search API call
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+    const searchResponse = await fetch(API_SEARCH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -505,7 +507,7 @@ async function handleMem0Processing(
         top_k: topK,
         filter_memories: false,
         // llm_rerank: true,
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     });
@@ -537,7 +539,7 @@ async function handleMem0Processing(
     }
 
     // New add memory API call (non-blocking)
-    fetch("https://api.mem0.ai/v1/memories/", {
+    fetch(API_MEMORIES, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -548,9 +550,9 @@ async function handleMem0Processing(
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "Gemini",
+          provider: Provider.Gemini,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     })
@@ -573,7 +575,7 @@ function injectMem0Button(): void {
   const maxButtonRetries = 10;
 
   // Function to periodically check and add the button if the parent element exists
-  async function tryAddButton() {
+  async function tryAddButton(): Promise<void> {
     // **PERFORMANCE FIX: Add retry limit**
     if (buttonRetryCount >= maxButtonRetries) {
       return;
@@ -1072,7 +1074,7 @@ function showLoginPopup(): void {
 
   // Open sign-in page when clicked
   signInButton.addEventListener("click", () => {
-    window.open("https://app.mem0.ai/login", "_blank");
+    window.open(APP_LOGIN, "_blank");
     document.body.removeChild(popupOverlay);
   });
 
@@ -1745,7 +1747,7 @@ function createMemoryModal(
   }
 
   // Function to show empty state
-  function showEmptyState() {
+  function showEmptyState(): void {
     memoriesContent.innerHTML = "";
 
     const emptyContainer = document.createElement("div");
@@ -2047,7 +2049,7 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
     }
 
     // Existing search API call
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+    const searchResponse = await fetch(API_SEARCH, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2062,7 +2064,7 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
         threshold: threshold,
         top_k: topK,
         filter_memories: true,
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     });
@@ -2087,7 +2089,7 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
     createMemoryModal(memoryItems, false, sourceButtonId);
 
     // Proceed with adding memory asynchronously without awaiting
-    fetch("https://api.mem0.ai/v1/memories/", {
+    fetch(API_MEMORIES, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2098,9 +2100,9 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "Gemini",
+          provider: Provider.Gemini,
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       }),
     }).catch(error => {

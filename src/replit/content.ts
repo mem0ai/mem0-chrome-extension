@@ -2,9 +2,12 @@ import type { MemoryItem, OptionalApiParams } from "../types/memory";
 import type { MemorySearchResponse } from "../types/api";
 import type { StorageItems } from "../types/storage";
 import type { MutableMutationObserver, ExtendedHTMLElement } from "../types/dom";
-import { MessageRole } from "../types/api";
+import { MessageRole, Source } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { Provider } from "../types/providers";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { API_MEMORIES, API_SEARCH, APP_LOGIN } from "../consts/api";
 
 export {};
 
@@ -330,7 +333,7 @@ try {
           }
 
           // Send memory to mem0 API asynchronously without waiting for response
-          fetch("https://api.mem0.ai/v1/memories/", {
+          fetch(API_MEMORIES, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -341,9 +344,9 @@ try {
               user_id: userId,
               infer: true,
               metadata: {
-                provider: "Replit",
+                provider: Provider.Replit,
               },
-              source: "OPENMEMORY_CHROME_EXTENSION",
+              source: Source.OPENMEMORY_CHROME_EXTENSION,
               ...optionalParams,
             }),
           })
@@ -428,7 +431,7 @@ try {
   }
 
   // Handler for the modal approach
-  async function handleMem0Modal(sourceButtonId: string | null = null) {
+  async function handleMem0Modal(sourceButtonId: string | null = null): Promise<void> {
     // Prevent multiple simultaneous modals
     if (isProcessingMem0) {
       return;
@@ -532,7 +535,7 @@ try {
       const messages = [{ role: MessageRole.User, content: message }];
 
       // Existing search API call
-      const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
+      const searchResponse = await fetch(API_SEARCH, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -548,7 +551,7 @@ try {
           top_k: topK,
           filter_memories: false,
           // llm_rerank: true,
-          source: "OPENMEMORY_CHROME_EXTENSION",
+          source: Source.OPENMEMORY_CHROME_EXTENSION,
           ...optionalParams,
         }),
       });
@@ -577,7 +580,7 @@ try {
       createMemoryModal(memoryItems, false, sourceButtonId);
 
       // Proceed with adding memory asynchronously without awaiting
-      fetch("https://api.mem0.ai/v1/memories/", {
+      fetch(API_MEMORIES, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -588,9 +591,9 @@ try {
           user_id: userId,
           infer: true,
           metadata: {
-            provider: "Replit",
+            provider: Provider.Replit,
           },
-          source: "OPENMEMORY_CHROME_EXTENSION",
+          source: Source.OPENMEMORY_CHROME_EXTENSION,
           ...optionalParams,
         }),
       }).catch(error => {
@@ -606,7 +609,7 @@ try {
     }
   }
 
-  function initializeMem0Integration() {
+  function initializeMem0Integration(): void {
     try {
       // Prevent duplicate initialization
       if (isInitialized) {
@@ -758,7 +761,7 @@ try {
   }
 
   // Shared function to update the input field with all collected memories
-  function updateInputWithMemories() {
+  function updateInputWithMemories(): void {
     const inputElement = getTextarea();
 
     if (inputElement && allMemories.length > 0) {
@@ -840,7 +843,7 @@ try {
   }
 
   // Function to show login popup
-  function showLoginPopup() {
+  function showLoginPopup(): void {
     // First remove any existing popups
     const existingPopup = document.querySelector("#mem0-login-popup");
     if (existingPopup) {
@@ -966,7 +969,7 @@ try {
 
     // Open sign-in page when clicked
     signInButton.addEventListener("click", () => {
-      window.open("https://app.mem0.ai/login", "_blank");
+      window.open(APP_LOGIN, "_blank");
       document.body.removeChild(popupOverlay);
     });
 
@@ -1119,7 +1122,7 @@ try {
     let modalStartX = 0;
     let modalStartY = 0;
 
-    function startDrag(e: MouseEvent) {
+    function startDrag(e: MouseEvent): void {
       // Only allow dragging from the header area
       const target = e.target as HTMLElement | null;
       if ((target && target.closest(".mem0-modal-header")) || e.target === modalContainer) {
@@ -1133,7 +1136,7 @@ try {
       }
     }
 
-    function doDrag(e: MouseEvent) {
+    function doDrag(e: MouseEvent): void {
       if (!isDragging) {
         return;
       }
@@ -1155,7 +1158,7 @@ try {
       modalContainer.style.top = newY + "px";
     }
 
-    function stopDrag() {
+    function stopDrag(): void {
       isDragging = false;
       modalContainer.style.cursor = "move";
     }
@@ -1440,7 +1443,7 @@ try {
     }
 
     // Function to show empty state
-    function showEmptyState() {
+    function showEmptyState(): void {
       memoriesContent.innerHTML = "";
 
       const emptyContainer = document.createElement("div");
@@ -1535,7 +1538,7 @@ try {
     document.body.appendChild(modalOverlay);
 
     // Function to show memories with adjusted count based on modal position
-    function showMemories() {
+    function showMemories(): void {
       memoriesContent.innerHTML = "";
 
       if (isLoading) {
@@ -1752,7 +1755,7 @@ try {
         }
 
         // Function to collapse memory
-        function collapseMemory() {
+        function collapseMemory(): void {
           isExpanded = false;
           memoryText.style.webkitLineClamp = "2";
           memoryText.style.height = "42px";
@@ -1852,7 +1855,7 @@ try {
     showMemories();
 
     // Update navigation button states
-    function updateNavigationState(currentPage: number, totalPages: number) {
+    function updateNavigationState(currentPage: number, totalPages: number): void {
       if (memoryItems.length === 0 || totalPages === 0) {
         prevButton.disabled = true;
         prevButton.style.opacity = "0.5";
@@ -1910,7 +1913,7 @@ try {
     });
 
     // Function to close the modal
-    function closeModal() {
+    function closeModal(): void {
       if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
         // Clean up drag event listeners
         document.removeEventListener("mousemove", doDrag);
@@ -1923,14 +1926,14 @@ try {
     }
   }
 
-  function injectMem0Button() {
+  function injectMem0Button(): void {
     // Prevent duplicate button injection
     if (buttonInjected || document.querySelector("#mem0-floating-button")) {
       return;
     }
 
     // Function to add the button
-    async function tryAddButton() {
+    async function tryAddButton(): Promise<void> {
       // First check if memory is enabled
       const memoryEnabled = await getMemoryEnabledState();
 
@@ -2014,7 +2017,7 @@ try {
       });
 
       // Add click event
-      floatingButton.addEventListener("click", function () {
+      floatingButton.addEventListener("click", function (): void {
         getMemoryEnabledState().then(memoryEnabled => {
           if (memoryEnabled) {
             handleMem0Modal("mem0-floating-button");
@@ -2057,7 +2060,7 @@ try {
   }
 
   // Function to update notification dot visibility based on text in the input
-  function updateNotificationDot() {
+  function updateNotificationDot(): void {
     const textarea = getTextarea();
     const notificationDot = document.querySelector("#mem0-notification-dot");
 
@@ -2071,7 +2074,7 @@ try {
     }
 
     // Function to check if input has text
-    const checkForText = () => {
+    const checkForText = (): void => {
       const inputText = textarea.textContent || textarea.innerText || "";
       const hasText = inputText.trim() !== "";
 

@@ -1,5 +1,7 @@
-function fetchAndSaveSession() {
-  fetch("https://app.mem0.ai/api/auth/session")
+import { APP_AUTH_SESSION, APP_LOGIN } from "../consts/api";
+
+function fetchAndSaveSession(): void {
+  fetch(APP_AUTH_SESSION)
     .then(response => response.json())
     .then(data => {
       if (data && data.access_token) {
@@ -13,7 +15,7 @@ function fetchAndSaveSession() {
 }
 
 // Check if the URL contains the login page and update userLoggedIn
-if (window.location.href.includes("https://app.mem0.ai/login")) {
+if (window.location.href.includes(APP_LOGIN)) {
   chrome.storage.sync.set({ userLoggedIn: false });
 }
 

@@ -3,7 +3,7 @@
     ? (window as any).OPENMEMORY_PROMPTS
     : {};
 
-const OPENMEMORY_PROMPTS = (window as any).OPENMEMORY_PROMPTS;
+const OPENMEMORY_PROMPTS: OpenMemoryPrompts = (window as any).OPENMEMORY_PROMPTS;
 
 OPENMEMORY_PROMPTS.rerank_system_prompt = `
 You are OpenMemory Filterer.
@@ -38,3 +38,5 @@ OPENMEMORY_PROMPTS.memory_header_plain_regex =
 // HTML variant used in some editors (e.g., Claude ProseMirror)
 OPENMEMORY_PROMPTS.memory_header_html_regex =
   /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/;
+
+export { OPENMEMORY_PROMPTS };

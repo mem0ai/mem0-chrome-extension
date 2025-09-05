@@ -40,4 +40,6 @@ export type LoginData = {
 
 export const DEFAULT_USER_ID = "chrome-extension-user";
 
-export const SOURCE = "OPENMEMORY_CHROME_EXTENSION";
+export enum Source {
+  OPENMEMORY_CHROME_EXTENSION = "OPENMEMORY_CHROME_EXTENSION",
+}

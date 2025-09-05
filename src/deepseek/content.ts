@@ -1,9 +1,11 @@
 import type { MemoryItem, OptionalApiParams } from "../types/memory";
 import type { MemorySearchResponse } from "../types/api";
 import type { ExtendedHTMLElement } from "../types/dom";
-import { MessageRole } from "../types/api";
+import { MessageRole, Source } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { API_MEMORIES, API_SEARCH, APP_LOGIN } from "../consts/api";
 
 export {};
 
@@ -312,7 +314,7 @@ function initializeMem0Integration(): void {
   }
 
   // Stage 1: Initialize critical features (keyboard shortcuts, basic listeners)
-  function stageCriticalInit() {
+  function stageCriticalInit(): void {
     try {
       // Early exit if already initialized
       if (window.mem0Initialized) {
@@ -337,7 +339,7 @@ function initializeMem0Integration(): void {
   }
 
   // Stage 2: Initialize UI components after the DOM has settled
-  function stageUIInit() {
+  function stageUIInit(): void {
     try {
       // Early exit if already initialized
       if (window.mem0Initialized) {
@@ -390,7 +392,7 @@ function initializeMem0Integration(): void {
   }
 
   // Add keyboard listeners with error handling
-  function addKeyboardListeners() {
+  function addKeyboardListeners(): void {
     try {
       // Skip if already added
       if (window.mem0KeyboardListenersAdded) {
@@ -574,8 +576,6 @@ function getAuthDetails(): Promise<{ apiKey: string; accessToken: string; userId
   });
 }
 
-const MEM0_API_BASE_URL = "https://api.mem0.ai";
-
 async function searchMemories(query: string): Promise<MemoryItem[]> {
   try {
     const items = await chrome.storage.sync.get([
@@ -613,7 +613,7 @@ async function searchMemories(query: string): Promise<MemoryItem[]> {
       headers["Authorization"] = `Api-Key ${items.apiKey}`;
     }
 
-    const url = `${MEM0_API_BASE_URL}/v2/memories/search/`;
+    const url = API_SEARCH;
     const body = JSON.stringify({
       query: query,
       filters: {
@@ -624,7 +624,7 @@ async function searchMemories(query: string): Promise<MemoryItem[]> {
       top_k: topK,
       filter_memories: false,
       // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
+      source: Source.OPENMEMORY_CHROME_EXTENSION,
       ...optionalParams,
     });
 
@@ -690,7 +690,7 @@ function addMemory(memoryText: string) {
         headers["Authorization"] = `Api-Key ${items.apiKey}`;
       }
 
-      const url = `${MEM0_API_BASE_URL}/v1/memories/`;
+      const url = API_MEMORIES;
       const body = JSON.stringify({
         messages: [
           {
@@ -699,7 +699,7 @@ function addMemory(memoryText: string) {
           },
         ],
         user_id: userId,
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: Source.OPENMEMORY_CHROME_EXTENSION,
         ...optionalParams,
       });
 
@@ -1179,7 +1179,7 @@ function createMemoryModal(
   let currentlyExpandedMemory: HTMLElement | null = null;
 
   // Function to create skeleton loading items
-  function createSkeletonItems() {
+  function createSkeletonItems(): void {
     memoriesContent.innerHTML = "";
 
     for (let i = 0; i < memoriesPerPage; i++) {
@@ -1392,7 +1392,7 @@ function createMemoryModal(
     };
   }
 
-  function handleMouseUp() {
+  function handleMouseUp(): void {
     isDragging = false;
     modalHeader.style.cursor = "move";
     document.removeEventListener("mousemove", handleMouseMove);
@@ -1410,7 +1410,7 @@ function createMemoryModal(
   }
 
   // Function to close the modal
-  function closeModal() {
+  function closeModal(): void {
     if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
       document.body.removeChild(currentModalOverlay);
     }
@@ -1421,7 +1421,7 @@ function createMemoryModal(
   }
 
   // Function to show memories
-  function showMemories() {
+  function showMemories(): void {
     memoriesContent.innerHTML = "";
 
     if (isLoading) {
@@ -1596,7 +1596,7 @@ function createMemoryModal(
       let isExpanded = false;
 
       // Function to expand memory
-      function expandMemory() {
+      function expandMemory(): void {
         if (currentlyExpandedMemory && currentlyExpandedMemory !== memoryContainer) {
           currentlyExpandedMemory.dispatchEvent(new Event("collapse"));
         }
@@ -1620,7 +1620,7 @@ function createMemoryModal(
       }
 
       // Function to collapse memory
-      function collapseMemory() {
+      function collapseMemory(): void {
         isExpanded = false;
         memoryText.style.webkitLineClamp = "2";
         memoryText.style.height = "42px";
@@ -1720,7 +1720,7 @@ function createMemoryModal(
 }
 
 // Function to show empty state with specific container
-function showEmptyState(container: HTMLElement) {
+function showEmptyState(container: HTMLElement): void {
   if (!container) {
     return;
   }
@@ -1764,7 +1764,7 @@ function updateNavigationState(
   nextButton: HTMLButtonElement,
   currentPage: number,
   totalPages: number
-) {
+): void {
   if (!prevButton || !nextButton) {
     return;
   }
@@ -2139,7 +2139,7 @@ function showLoginModal(): void {
       chrome.runtime.sendMessage({ action: SidebarAction.SHOW_LOGIN_POPUP });
     } catch {}
     // Fallback: open the login page directly
-    window.open("https://app.mem0.ai/login", "_blank");
+    window.open(APP_LOGIN, "_blank");
 
     // Close the modal
     document.body.removeChild(popupOverlay);
@@ -2189,7 +2189,7 @@ function addMem0IconButton() {
   }
 
   // Helper function to create and add the button
-  function createAndAddButton() {
+  function createAndAddButton(): { success: boolean; status: string; error?: string } {
     // Check if the button already exists
     if (document.querySelector("#mem0-icon-button")) {
       return { success: true, status: "already_exists" };

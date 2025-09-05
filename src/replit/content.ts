@@ -1,10 +1,18 @@
 import type { MemoryItem, OptionalApiParams } from "../types/memory";
 import type { MemorySearchResponse } from "../types/api";
 import type { StorageItems } from "../types/storage";
-import type { MutableMutationObserver, ExtendedHTMLElement } from "../types/dom";
+import type { ExtendedHTMLElement } from "../types/dom";
 import { MessageRole } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { sendExtensionEvent, getBrowser } from "../utils/util_functions";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+
+// Local types for this file
+type MutableMutationObserver = MutationObserver & {
+  memoryStateInterval?: ReturnType<typeof setInterval>;
+  debounceTimer?: ReturnType<typeof setTimeout>;
+};
 
 export {};
 
@@ -526,6 +534,12 @@ try {
         isProcessingMem0 = false;
         return;
       }
+
+      sendExtensionEvent("modal_clicked", {
+        provider: "replit",
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        browser: getBrowser()
+      });
 
       const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
 
@@ -1659,6 +1673,14 @@ try {
         addButton.addEventListener("click", (e: MouseEvent) => {
           e.stopPropagation();
 
+          sendExtensionEvent("memory_injection", {
+            provider: "replit",
+            source: "OPENMEMORY_CHROME_EXTENSION",
+            browser: getBrowser(),
+            injected_all: false,
+            memory_id: memory.id
+          });
+
           // Add this memory
           allMemoriesById.add(String(memory.id));
           allMemories.push(String(memory.text || ""));
@@ -1894,6 +1916,14 @@ try {
           return memory.text;
         });
 
+      sendExtensionEvent("memory_injection", {
+        provider: "replit",
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        browser: getBrowser(),
+        injected_all: true,
+        memory_count: newMemories.length
+      });
+      
       // Add all new memories to allMemories
       allMemories.push(...newMemories);
 

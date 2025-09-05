@@ -4,21 +4,6 @@ import { initContextMenuMemory } from "./context-menu-memory";
 import { initDirectUrlTracking } from "./direct-url-tracker";
 import { StorageKey } from "./types/storage";
 
-chrome.action.onClicked.addListener((tab: chrome.tabs.Tab) => {
-  chrome.storage.sync.get(
-    [StorageKey.API_KEY, StorageKey.ACCESS_TOKEN],
-    (data: { [StorageKey.API_KEY]?: string; [StorageKey.ACCESS_TOKEN]?: string }) => {
-      const isAuthenticated = Boolean(data.apiKey || data.access_token);
-      if (!isAuthenticated) {
-        chrome.action.openPopup();
-        return;
-      }
-      if (tab.id != null) {
-        chrome.tabs.sendMessage(tab.id, { action: SidebarAction.TOGGLE_SIDEBAR });
-      }
-    }
-  );
-});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({ memory_enabled: true }, () => {

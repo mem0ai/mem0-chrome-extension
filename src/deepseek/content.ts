@@ -4,6 +4,8 @@ import type { ExtendedHTMLElement } from "../types/dom";
 import { MessageRole } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { getBrowser, sendExtensionEvent } from "../utils/util_functions";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
 
 export {};
 
@@ -16,7 +18,7 @@ let memoryModalShown: boolean = false;
 let allMemories: string[] = [];
 let allMemoriesById: Set<string> = new Set<string>();
 let currentModalOverlay: HTMLDivElement | null = null;
-let mem0ButtonCheckInterval: number | null = null; // Add interval variable for button checks
+let mem0ButtonCheckInterval: ReturnType<typeof setInterval> | null = null; // Add interval variable for button checks
 let modalDragPosition: { left: number; top: number } | null = null; // Store the dragged position of the modal
 
 // Using MemoryItem from src/types/content-scripts.ts (includes memory field for compatibility)
@@ -1556,6 +1558,13 @@ function createMemoryModal(
       // Add click handler for add button
       addButton.addEventListener("click", (e: MouseEvent) => {
         e.stopPropagation();
+        sendExtensionEvent("memory_injection", {
+          provider: "deepseek",
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          browser: getBrowser(),
+          injected_all: false,
+          memory_id: memory.id
+        });
 
         // Add this memory
         allMemoriesById.add(String(memory.id));
@@ -1703,6 +1712,13 @@ function createMemoryModal(
         return String(memory.memory || memory.text || "");
       });
 
+    sendExtensionEvent("memory_injection", {
+      provider: "deepseek",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser(),
+      injected_all: true,
+      memory_count: newMemories.length
+    });
     // Add all new memories to allMemories
     allMemories.push(...newMemories);
 
@@ -1877,6 +1893,11 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
         return;
       }
 
+      sendExtensionEvent("modal_clicked", {
+        provider: "deepseek",
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        browser: getBrowser()
+      });
       // Search for memories
       const memories = await searchMemories(message);
 

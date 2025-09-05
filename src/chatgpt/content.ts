@@ -5,6 +5,8 @@ import type { MemorySearchResponse, LoginData } from "../types/api";
 import { MessageRole } from "../types/api";
 import type { StorageData } from "../types/storage";
 import { SidebarAction } from "../types/messages";
+import { getBrowser, sendExtensionEvent } from "../utils/util_functions";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
 
 export {};
 
@@ -612,6 +614,13 @@ function createMemoryModal(
       // Add click handler for add button
       addButton.addEventListener("click", (e: MouseEvent) => {
         e.stopPropagation();
+        sendExtensionEvent("memory_injection", {
+          provider: "chatgpt",
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          browser: getBrowser(),
+          injected_all: false,
+          memory_id: memory.id
+        });
 
         // Add this memory
         allMemoriesById.add(String(memory.id));
@@ -963,6 +972,14 @@ function createMemoryModal(
         allMemoriesById.add(String(memory.id));
         return String(memory.text || "");
       });
+
+    sendExtensionEvent("memory_injection", {
+      provider: "chatgpt",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser(),
+      injected_all: true,
+      memory_count: newMemories.length
+    });
 
     // Add all new memories to allMemories
     allMemories.push(...newMemories);
@@ -1823,6 +1840,11 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
       return;
     }
 
+    sendExtensionEvent("modal_clicked", {
+      provider: "chatgpt",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser()
+    });
     const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
 
     const messages = getLastMessages(2);

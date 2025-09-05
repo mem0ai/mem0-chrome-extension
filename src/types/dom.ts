@@ -1,4 +1,3 @@
-import type { OpenMemoryPrompts } from "./memory";
 
 // Global interfaces for DOM extensions
 declare global {
@@ -15,7 +14,6 @@ declare global {
     mem0Initialized?: boolean;
     mem0KeyboardListenersAdded?: boolean;
     mem0ButtonAdded?: boolean;
-    OPENMEMORY_PROMPTS: OpenMemoryPrompts;
   }
 }
 

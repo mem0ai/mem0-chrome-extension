@@ -25,15 +25,15 @@
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["src/utils/llm_prompts.ts", "src/claude/content.ts"]
+      "js": ["src/claude/content.ts"]
     },
     {
       "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
-      "js": ["src/utils/llm_prompts.ts", "src/chatgpt/content.ts"]
+      "js": ["src/chatgpt/content.ts"]
     },
     {
       "matches": ["https://www.perplexity.ai/*"],
-      "js": ["src/utils/llm_prompts.ts", "src/perplexity/content.ts"]
+      "js": ["src/perplexity/content.ts"]
     },
     {
       "matches": ["https://app.mem0.ai/*"],
@@ -41,19 +41,19 @@
     },
     {
       "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
-      "js": ["src/utils/llm_prompts.ts", "src/grok/content.ts"]
+      "js": ["src/grok/content.ts"]
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["src/utils/llm_prompts.ts", "src/deepseek/content.ts"]
+      "js": ["src/deepseek/content.ts"]
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["src/utils/llm_prompts.ts", "src/gemini/content.ts"]
+      "js": ["src/gemini/content.ts"]
     },
     {
       "matches": ["https://replit.com/*"],
-      "js": ["src/utils/llm_prompts.ts", "src/replit/content.ts"]
+      "js": ["src/replit/content.ts"]
     },
     {
       "matches": ["<all_urls>"],

@@ -4,6 +4,8 @@ import type { StorageItems } from "../types/storage";
 import { MessageRole } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { getBrowser, sendExtensionEvent } from "../utils/util_functions";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
 
 export {};
 
@@ -792,6 +794,14 @@ function createMemoryModal(
         return String(memory.text || "");
       });
 
+    sendExtensionEvent("memory_injection", {
+      provider: "perplexity",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser(),
+      injected_all: true,
+      memory_count: newMemories.length
+    });
+
     // Add all new memories to allMemories
     allMemories.push(...newMemories);
 
@@ -1185,6 +1195,14 @@ function createMemoryModal(
         // Add click handler for add button
         addButton.addEventListener("click", (e: MouseEvent) => {
           e.stopPropagation();
+
+          sendExtensionEvent("memory_injection", {
+            provider: "perplexity",
+            source: "OPENMEMORY_CHROME_EXTENSION",
+            browser: getBrowser(),
+            injected_all: false,
+            memory_id: memory.id
+          });
 
           // Add this memory
           allMemoriesById.add(String(memory.id));
@@ -1881,6 +1899,12 @@ async function handleMem0Processing(
 
     // Show loading modal now that we've confirmed credentials and memory enabled
     createMemoryModal([], true, sourceButtonId);
+
+    sendExtensionEvent("modal_clicked", {
+      provider: "perplexity",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser()
+    });
 
     const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
 

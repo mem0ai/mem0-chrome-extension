@@ -1,11 +1,5 @@
-(window as any).OPENMEMORY_PROMPTS =
-  typeof (window as any).OPENMEMORY_PROMPTS !== "undefined"
-    ? (window as any).OPENMEMORY_PROMPTS
-    : {};
-
-const OPENMEMORY_PROMPTS = (window as any).OPENMEMORY_PROMPTS;
-
-OPENMEMORY_PROMPTS.rerank_system_prompt = `
+export const OPENMEMORY_PROMPTS = {
+  rerank_system_prompt: `
 You are OpenMemory Filterer.
 
 Your tasks:
@@ -22,19 +16,21 @@ Output JSON ONLY, with exactly these keys:
 {
   "selected_memory_ids": ["id1", "id2", ...]
 }
-`;
+`,
 
-// Shared memory header inserted into prompts in various providers
-OPENMEMORY_PROMPTS.memory_header_text =
-  "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):";
-OPENMEMORY_PROMPTS.memory_header_html_strong = `<strong>${OPENMEMORY_PROMPTS.memory_header_text}</strong>`;
-OPENMEMORY_PROMPTS.memory_marker_prefix = "Here is some of my memories to help answer better";
+  // Shared memory header inserted into prompts in various providers
+  memory_header_text: "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):",
+  
+  get memory_header_html_strong() {
+    return `<strong>${this.memory_header_text}</strong>`;
+  },
+  
+  memory_marker_prefix: "Here is some of my memories to help answer better",
 
-// Central regexes for stripping the inserted memory header and its content
-// Plain text variant (end of prompt) – matches the header and everything after it
-OPENMEMORY_PROMPTS.memory_header_plain_regex =
-  /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/;
+  // Central regexes for stripping the inserted memory header and its content
+  // Plain text variant (end of prompt) – matches the header and everything after it
+  memory_header_plain_regex: /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/,
 
-// HTML variant used in some editors (e.g., Claude ProseMirror)
-OPENMEMORY_PROMPTS.memory_header_html_regex =
-  /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/;
+  // HTML variant used in some editors (e.g., Claude ProseMirror)
+  memory_header_html_regex: /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/
+};

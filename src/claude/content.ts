@@ -5,6 +5,8 @@ import type { ExtendedHTMLElement, ExtendedDocument, ExtendedElement } from "../
 import { MessageRole } from "../types/api";
 import { SidebarAction } from "../types/messages";
 import { StorageKey } from "../types/storage";
+import { getBrowser, sendExtensionEvent } from "../utils/util_functions";
+import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
 
 export {};
 
@@ -1215,6 +1217,13 @@ function createMemoryModal(
       // Add click handler for add button
       addButton.addEventListener("click", (e: MouseEvent) => {
         e.stopPropagation();
+        sendExtensionEvent("memory_injection", {
+          provider: "claude",
+          source: "OPENMEMORY_CHROME_EXTENSION", 
+          browser: getBrowser(),
+          injected_all: false,
+          memory_id: memory.id
+        });
 
         // Mark this memory as added
         allMemoriesById.add(String(memory.id));
@@ -1669,6 +1678,14 @@ function createMemoryModal(
         return String(memory.text || "");
       });
 
+    sendExtensionEvent("memory_injection", {
+      provider: "claude",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser(),
+      injected_all: true,
+      memory_count: newMemories.length
+    });
+
     // Add new memories to allMemories (don't replace existing ones)
     if (newMemories.length > 0) {
       // Add new memories to the existing array
@@ -2119,6 +2136,13 @@ async function handleMem0Modal(
     tempDiv.innerHTML = message;
     message = tempDiv.textContent || tempDiv.innerText || message;
     message = message.trim();
+
+
+    sendExtensionEvent("modal_clicked", {
+      provider: "claude",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser()
+    });
 
     const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
 

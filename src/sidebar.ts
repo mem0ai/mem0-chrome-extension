@@ -5,6 +5,7 @@ import { StorageKey } from "./types/storage";
 import type { Organization, Project } from "./types/organizations";
 import { DEFAULT_USER_ID } from "./types/api";
 import type { Memory, MemoriesResponse } from "./types/memory";
+import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
 
 (function () {
   let sidebarVisible = false;
@@ -46,6 +47,14 @@ import type { Memory, MemoriesResponse } from "./types/memory";
   }
 
   function toggleSidebar(): void {
+    // Track extension usage when sidebar is toggled
+    if (typeof sendExtensionEvent === 'function') {
+      sendExtensionEvent("extension_browser_icon_clicked", {
+        browser: getBrowser(),
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        tab_url: window.location.href
+      });
+    }
     const sidebar = document.getElementById("mem0-sidebar");
     if (sidebar) {
       // If sidebar exists, toggle its visibility

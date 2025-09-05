@@ -21,6 +21,74 @@ let dragOffset = { x: 0, y: 0 };
 let inputObserver = null;
 let lastInputValue = "";
 
+let currentModalSourceButtonId = null;
+
+var grokSearch = OPENMEMORY_SEARCH.createOrchestrator({
+  fetch: async function(query, opts) {
+    const data = await new Promise((resolve) => {
+      chrome.storage.sync.get(
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+        function (items) { resolve(items); }
+      );
+    });
+
+    const apiKey = data.apiKey;
+    const accessToken = data.access_token;
+    if (!apiKey && !accessToken) return [];
+
+    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
+    const userId = data.userId || data.user_id || "chrome-extension-user";
+    const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
+    const topK = (data.top_k !== undefined) ? data.top_k : 10;
+
+    const optionalParams = {};
+    if (data.selected_org) optionalParams.org_id = data.selected_org;
+    if (data.selected_project) optionalParams.project_id = data.selected_project;
+
+    const payload = {
+      query,
+      filters: { user_id: userId },
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      rerank: true,
+      threshold,
+      top_k: topK,
+      filter_memories: false,
+      ...optionalParams,
+    };
+
+    const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    });
+
+    if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
+    return await res.json();
+  },
+
+  onSuccess: function(normQuery, responseData) {
+    if (!memoryModalShown) return;
+    const memoryItems = (responseData || []).map(item => ({
+      id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      text: item.memory,
+      categories: item.categories || []
+    }));
+    createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+  },
+
+  onError: function() {
+    if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
+  },
+
+  minLength: 3,
+  debounceMs: 150,
+  cacheTTL: 60000
+});
+
 function getTextarea() {
   const selectors = [
     'textarea.w-full.px-2.\\@\\[480px\\]\\/input\\:px-3.bg-transparent.focus\\:outline-none.text-primary.align-bottom.min-h-14.pt-5.my-0.mb-5',
@@ -36,6 +104,26 @@ function getTextarea() {
     if (textarea) return textarea;
   }
   return null;
+}
+
+var grokBackgroundSearchHandler = null;
+
+function hookGrokBackgroundSearchTyping() {
+  const textarea = getTextarea();
+  if (!textarea) return;
+
+  if (!grokBackgroundSearchHandler) {
+    grokBackgroundSearchHandler = function () {
+      let text = textarea.value || "";
+      try {
+        const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+        text = text.replace(MEM0_PLAIN, "").trim();
+      } catch (_e) {}
+      grokSearch.setText(text);
+    };
+  }
+  textarea.addEventListener('input', grokBackgroundSearchHandler);
+  textarea.addEventListener('keyup', grokBackgroundSearchHandler);
 }
 
 function setupInputObserver() {
@@ -118,60 +206,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false) {
       optionalParams.project_id = data.selected_project;
     }
 
-    // Existing search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      ...optionalParams,
-    };
-    
-    const searchResponse = await fetch(
-      "https://api.mem0.ai/v2/memories/search/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(searchPayload),
-      }
-    );
-
-    if (!searchResponse.ok) {
-      throw new Error(
-        `API request failed with status ${searchResponse.status}`
-      );
-    }
-
-    const responseData = await searchResponse.json();
-    
-    // Extract memories and their categories
-    let memoryItems = responseData.map(item => {
-      return {
-        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        text: item.memory,
-        categories: item.categories || []
-      };
-    });
-
-    if (memoryItems.length > 0) {
-      // Show the memory modal instead of directly injecting
-      createMemoryModal(memoryItems);
-    } else {
-      // No memories found, display a message
-      alert("No relevant memories found");
-      if (clickSendButton) {
-        clickSendButtonWithDelay();
-      }
-    }
+    currentModalSourceButtonId = sourceButtonId;
+    grokSearch.runImmediate(message);
 
     // New add memory API call (non-blocking)
     fetch("https://api.mem0.ai/v1/memories/", {
@@ -354,6 +390,7 @@ function initializeMem0Integration() {
       injectMem0Button();
       addSendButtonListener();
       updateNotificationDot();
+      hookGrokBackgroundSearchTyping();
     } else {
       // Remove the button if memory is disabled
       const existingContainer = document.querySelector('#mem0-button-container');
@@ -607,6 +644,7 @@ function injectMem0Button() {
     
     // Also update notification dot when DOM changes
     updateNotificationDot();
+    hookGrokBackgroundSearchTyping();
   });
   
   observer.observe(document.body, {
@@ -1735,52 +1773,8 @@ async function handleMem0Modal(sourceButtonId = null) {
       optionalParams.project_id = data.selected_project;
     }
 
-    // Existing search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-    
-    const searchResponse = await fetch(
-      "https://api.mem0.ai/v2/memories/search/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(searchPayload),
-      }
-    );
-
-    if (!searchResponse.ok) {
-      throw new Error(
-        `API request failed with status ${searchResponse.status}`
-      );
-    }
-
-    const responseData = await searchResponse.json();
-
-    // Extract memories and their categories
-    let memoryItems = responseData.map(item => {
-      return {
-        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-        text: item.memory,
-        categories: item.categories || []
-      };
-    });
-
-    // Update the modal with real data and the source button ID
-    createMemoryModal(memoryItems, false, sourceButtonId);
+    currentModalSourceButtonId = 'mem0-icon-button';
+    grokSearch.runImmediate(message); 
 
     // Proceed with adding memory asynchronously without awaiting
     fetch("https://api.mem0.ai/v1/memories/", {

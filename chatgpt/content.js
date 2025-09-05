@@ -18,6 +18,75 @@ let draggedPosition = null;
 
 let inputValueCopy = "";
 
+let currentModalSourceButtonId = null; 
+
+  var chatgptSearch = OPENMEMORY_SEARCH.createOrchestrator({
+    fetch: async function(query, opts) {
+      const data = await new Promise((resolve) => {
+        chrome.storage.sync.get(
+          ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+          function (items) { resolve(items); }
+        );
+      });
+  
+      const apiKey = data.apiKey;
+      const accessToken = data.access_token;
+      if (!apiKey && !accessToken) return [];
+  
+      const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
+      const userId = data.userId || data.user_id || "chrome-extension-user";
+      const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
+      const topK = (data.top_k !== undefined) ? data.top_k : 10;
+  
+      const optionalParams = {};
+      if (data.selected_org) optionalParams.org_id = data.selected_org;
+      if (data.selected_project) optionalParams.project_id = data.selected_project;
+  
+      const payload = {
+        query,
+        filters: { user_id: userId },
+        rerank: true,
+        threshold: threshold,
+        top_k: topK,
+        filter_memories: false,
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        ...optionalParams,
+      };
+  
+      const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body: JSON.stringify(payload),
+        signal: opts && opts.signal
+      });
+  
+      if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
+      return await res.json();
+    },
+  
+    // Don’t render on prefetch. When modal is open, update it.
+    onSuccess: function(normQuery, responseData) {
+      if (!memoryModalShown) return;
+      const memoryItems = (responseData || []).map(item => ({
+        id: item.id,
+        text: item.memory,
+        categories: item.categories || []
+      }));
+      createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+    },
+  
+    onError: function() {
+      if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
+    },
+  
+    minLength: 3,
+    debounceMs: 150,
+    cacheTTL: 60000
+  });
+
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
   // Close existing modal if it exists
   if (memoryModalShown && currentModalOverlay) {
@@ -1784,71 +1853,9 @@ async function handleMem0Modal(sourceButtonId = null) {
       optionalParams.project_id = data.selected_project;
     }
 
-    // Existing search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-    
-    const searchResponse = await fetch(
-      "https://api.mem0.ai/v2/memories/search/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(searchPayload),
-      }
-    );
+    currentModalSourceButtonId = sourceButtonId; 
+    chatgptSearch.runImmediate(message); 
 
-    if (!searchResponse.ok) {
-      throw new Error(
-        `API request failed with status ${searchResponse.status}`
-      );
-    }
-
-    const responseData = await searchResponse.json();
-
-    // Initial items from search (keep same structure used by modal)
-    const memoryItems = (responseData || []).map(item => ({
-      id: item.id,
-      text: item.memory,
-      categories: item.categories || []
-    }));
-
-    // Update the modal with real data and the source button ID
-    createMemoryModal(memoryItems, false, sourceButtonId);
-
-    // Proceed with adding memory asynchronously without awaiting
-    fetch("https://api.mem0.ai/v1/memories/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
-        messages: messages,
-        user_id: userId,
-        infer: true,
-        metadata: {
-          provider: "ChatGPT",
-        },
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      }),
-    }).catch((error) => {
-      console.error("Error adding memory:", error);
-    });
   } catch (error) {
     console.error("Error:", error);
     // Still show the modal but with empty state if there was an error
@@ -2007,6 +2014,25 @@ function getInputValue() {
     document.querySelector("textarea");
 
   return inputElement ? (inputElement.textContent || inputElement.value) : null;
+}
+
+var chatgptBackgroundSearchHandler = null;
+
+function hookBackgroundSearchTyping() {
+  const inputElement =
+    document.querySelector('#prompt-textarea') ||
+    document.querySelector('div[contenteditable="true"]') ||
+    document.querySelector("textarea");
+  if (!inputElement) return;
+
+  if (!chatgptBackgroundSearchHandler) {
+    chatgptBackgroundSearchHandler = function () {
+      const text = getInputValue() || "";
+      chatgptSearch.setText(text);
+    };
+  }
+  inputElement.addEventListener('input', chatgptBackgroundSearchHandler);
+  inputElement.addEventListener('keyup', chatgptBackgroundSearchHandler);
 }
 
 function addSyncButton() {
@@ -2341,6 +2367,7 @@ function initializeMem0Integration() {
     (async () => await addMem0IconButton())();
     addSendButtonListener();
     (async () => await updateNotificationDot())();
+    hookBackgroundSearchTyping(); 
     setupAutoInjectPrefetch();
   });
 
@@ -2360,6 +2387,7 @@ function initializeMem0Integration() {
     (async () => await addMem0IconButton())();
     addSendButtonListener();
     (async () => await updateNotificationDot())();
+    hookBackgroundSearchTyping(); 
     setupAutoInjectPrefetch();
   });
 
@@ -2370,6 +2398,7 @@ function initializeMem0Integration() {
     (async () => await addMem0IconButton())();
     addSendButtonListener();
     (async () => await updateNotificationDot())();
+    hookBackgroundSearchTyping(); 
     setupAutoInjectPrefetch();
   });
 

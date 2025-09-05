@@ -311,6 +311,9 @@ function initializeMem0Integration() {
         }
       }, 2000);
       
+      // Start background search typing hook once
+      try { hookDeepseekBackgroundSearchTyping(); } catch (e) {}
+
       // Wait additional time for UI to stabilize
       setTimeout(stageUIInit, 1000); // Reduced time
     } catch (e) {
@@ -537,6 +540,72 @@ function getAuthDetails() {
 }
 
 const MEM0_API_BASE_URL = "https://api.mem0.ai"; 
+
+let currentModalSourceButtonId = null;
+
+var deepseekSearch = OPENMEMORY_SEARCH.createOrchestrator({
+  fetch: async function(query, opts) {
+    const items = await chrome.storage.sync.get(["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"]);
+    const userId = items.userId || items.user_id || "chrome-extension-user";
+    const threshold = items.similarity_threshold !== undefined ? items.similarity_threshold : 0.1;
+    const topK = items.top_k !== undefined ? items.top_k : 10;
+    if (!items.access_token && !items.apiKey) {
+      return [];
+    }
+    const optionalParams = {};
+    if (items.selected_org) optionalParams.org_id = items.selected_org;
+    if (items.selected_project) optionalParams.project_id = items.selected_project;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (items.access_token) headers['Authorization'] = `Bearer ${items.access_token}`;
+    else headers['Authorization'] = `Api-Key ${items.apiKey}`;
+
+    const url = `${MEM0_API_BASE_URL}/v2/memories/search/`;
+    const body = JSON.stringify({
+      query: query,
+      filters: { user_id: userId },
+      rerank: true,
+      threshold: threshold,
+      top_k: topK,
+      filter_memories: false,
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      ...optionalParams,
+    });
+
+    const response = await fetch(url, { method: 'POST', headers, body, signal: opts && opts.signal });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return (data || []).map((item) => ({
+      id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      text: item.memory,
+      categories: item.categories || []
+    }));
+  },
+  onSuccess: function(normQuery, memoryItems) {
+    if (!memoryModalShown) return;
+    createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+  },
+  onError: function() {
+    if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
+  },
+  minLength: 3,
+  debounceMs: 150,
+  cacheTTL: 60000
+});
+
+var deepseekBackgroundSearchHandler = null;
+function hookDeepseekBackgroundSearchTyping() {
+  const inputEl = getInputElement();
+  if (!inputEl) return;
+  if (!deepseekBackgroundSearchHandler) {
+    deepseekBackgroundSearchHandler = function() {
+      const text = getInputElementValue() || "";
+      deepseekSearch.setText(text);
+    };
+  }
+  inputEl.addEventListener('input', deepseekBackgroundSearchHandler);
+  inputEl.addEventListener('keyup', deepseekBackgroundSearchHandler);
+}
 
 async function searchMemories(query) {
     try {
@@ -1808,32 +1877,17 @@ async function handleMem0Modal(sourceButtonId = null) {
         showLoginModal();
         return;
       }
-
+      
       sendExtensionEvent("modal_clicked", {
         provider: "deepseek",
         source: "OPENMEMORY_CHROME_EXTENSION",
         browser: getBrowser()
       });
 
-      // Search for memories
-      const memories = await searchMemories(message);
+      currentModalSourceButtonId = sourceButtonId;
+      deepseekSearch.runImmediate(message);
 
-      // Format memories for the modal
-      let memoryItems = memories.map(item => {
-        return {
-          id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          text: item.memory,
-          memory: item.memory,
-          categories: item.categories || []
-        };
-      });
-
-      // Update the modal with real data
-      createMemoryModal(memoryItems, false, sourceButtonId);
-
-      // Add memory asynchronously
-      addMemory(message).catch(error => {
-      });
+      addMemory(message).catch(error => {});
     } catch (error) {
       console.error("Error in handleMem0Modal:", error);
       createMemoryModal([], false, sourceButtonId);

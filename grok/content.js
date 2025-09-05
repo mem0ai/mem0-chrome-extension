@@ -1210,6 +1210,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
       // Add click handler for add button
       addButton.addEventListener('click', (e) => {
         e.stopPropagation();
+
+        sendExtensionEvent("memory_injection", {
+          provider: "grok",
+          source: "OPENMEMORY_CHROME_EXTENSION",
+          browser: getBrowser(),
+          injected_all: false,
+          memory_id: memory.id
+        });
         
         // Add this memory
         allMemoriesById.add(memory.id);
@@ -1551,6 +1559,14 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
         allMemoriesById.add(memory.id);
         return memory.text;
       });
+
+    sendExtensionEvent("memory_injection", {
+      provider: "grok",
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      browser: getBrowser(),
+      injected_all: true,
+      memory_count: newMemories.length
+    });
     
     // Add all new memories to allMemories
     allMemories.push(...newMemories);
@@ -1736,6 +1752,12 @@ async function handleMem0Modal(sourceButtonId = null) {
       isProcessingMem0 = false;
       return;
     }
+
+    sendExtensionEvent("modal_clicked", {
+      provider: "grok",
+      source: "OPENMEMORY_CHROME_EXTENSION", 
+      browser: getBrowser()
+    });
 
     const authHeader = accessToken
       ? `Bearer ${accessToken}`

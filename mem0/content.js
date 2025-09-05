@@ -5,6 +5,12 @@ function fetchAndSaveSession() {
             if (data && data.access_token) {
                 chrome.storage.sync.set({ access_token: data.access_token });
                 chrome.storage.sync.set({ userLoggedIn: true });
+
+                //Track successful login
+                sendExtensionEvent("login_success", {
+                    browser: getBrowser(),
+                    source: "OPENMEMORY_CHROME_EXTENSION"
+                });
             }
         })
         .catch(error => {

@@ -8,6 +8,74 @@ let lastTyped = "";
 // Timestamp of when a send was initiated (to prevent duplicate fallback posts)
 let lastSendInitiatedAt = 0;
 
+let currentModalSourceButtonId = null;
+
+var claudeSearch = OPENMEMORY_SEARCH.createOrchestrator({
+  fetch: async function(query, opts) {
+    const data = await new Promise((resolve) => {
+      chrome.storage.sync.get(
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+        function (items) { resolve(items); }
+      );
+    });
+
+    const apiKey = data.apiKey;
+    const accessToken = data.access_token;
+    if (!apiKey && !accessToken) return [];
+
+    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
+    const userId = data.userId || data.user_id || "chrome-extension-user";
+    const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
+    const topK = (data.top_k !== undefined) ? data.top_k : 10;
+
+    const optionalParams = {};
+    if (data.selected_org) optionalParams.org_id = data.selected_org;
+    if (data.selected_project) optionalParams.project_id = data.selected_project;
+
+    const payload = {
+      query,
+      filters: { user_id: userId },
+      rerank: true,
+      threshold,
+      top_k: topK,
+      filter_memories: false,
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      ...optionalParams,
+    };
+
+    const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    });
+
+    if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
+    return await res.json();
+  },
+
+  onSuccess: function(normQuery, responseData) {
+    if (!memoryModalShown) return;
+    const memoryItems = (responseData || []).map((item, index) => ({
+      id: item.id || `memory-${Date.now()}-${index}`,
+      text: item.memory,
+      categories: item.categories || []
+    }));
+    createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+  },
+
+  onError: function() {
+    if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
+  },
+
+  minLength: 3,
+  debounceMs: 150,
+  cacheTTL: 60000
+});
+
 // Sliding window for conversation context
 let conversationHistory = [];
 const MAX_CONVERSATION_HISTORY = 12; // Keep last 12 messages (6 pairs of user/assistant)
@@ -2091,52 +2159,8 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
       optionalParams.project_id = data.selected_project;
     }
 
-    // Search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-    
-    const searchResponse = await fetch(
-      "https://api.mem0.ai/v2/memories/search/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(searchPayload),
-      }
-    );
-
-    if (!searchResponse.ok) {
-      throw new Error(
-        `API request failed with status ${searchResponse.status}`
-      );
-    }
-
-    const responseData = await searchResponse.json();
-    
-    // Extract memories and their categories
-    let memoryItems = responseData.map((item, index) => {
-      return {
-        id: item.id || `memory-${Date.now()}-${index}`,
-        text: item.memory,
-        categories: item.categories || []
-      };
-    });
-
-    // Update the modal with the retrieved memories
-    createMemoryModal(memoryItems, false, sourceButtonId);
+    currentModalSourceButtonId = sourceButtonId; 
+    claudeSearch.runImmediate(message); 
 
     // New add memory API call (non-blocking)
     fetch("https://api.mem0.ai/v1/memories/", {
@@ -2242,6 +2266,30 @@ function getInputValue() {
   }
   
   return inputElement.textContent || inputElement.value;
+}
+
+var claudeBackgroundSearchHandler = null;
+
+function hookClaudeBackgroundSearchTyping() {
+  const inputElement =
+    document.querySelector('div[contenteditable="true"]') ||
+    document.querySelector("textarea") ||
+    document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+    document.querySelector('p[data-placeholder="Reply to Claude..."]');
+  if (!inputElement) return;
+
+  if (!claudeBackgroundSearchHandler) {
+    claudeBackgroundSearchHandler = function () {
+      let text = getInputValue() || "";
+      try {
+        const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+        text = text.replace(MEM0_PLAIN, "").trim();
+      } catch (_e) {}
+      claudeSearch.setText(text);
+    };
+  }
+  inputElement.addEventListener('input', claudeBackgroundSearchHandler);
+  inputElement.addEventListener('keyup', claudeBackgroundSearchHandler);
 }
 
 // Auto-inject support: simple debounce and config
@@ -2388,6 +2436,7 @@ function initializeMem0Integration() {
         if (enabled) {
           addMem0Button();
           updateNotificationDot();
+          hookClaudeBackgroundSearchTyping(); 
         } else {
           removeMemButton();
         }
@@ -2409,6 +2458,7 @@ function initializeMem0Integration() {
         
         // Update notification dot on input changes
         updateNotificationDot();
+        hookClaudeBackgroundSearchTyping()
       } else {
         removeMemButton();
       }
@@ -2448,6 +2498,7 @@ function initializeMem0Integration() {
       if (enabled) {
         addMem0Button();
         updateNotificationDot();
+        hookClaudeBackgroundSearchTyping(); 
       } else {
         removeMemButton();
       }

@@ -16,6 +16,68 @@ let modalPosition = { top: null, left: null };
 let isDragging = false;
 let dragOffset = { x: 0, y: 0 };
 
+let currentModalSourceButtonId = null;
+
+var perplexitySearch = OPENMEMORY_SEARCH.createOrchestrator({
+  fetch: async function(query, opts) {
+    const data = await new Promise((resolve) => {
+      chrome.storage.sync.get([
+        "apiKey","userId","access_token","selected_org","selected_project","user_id","similarity_threshold","top_k"
+      ], function(items){ resolve(items); });
+    });
+    const userId = data.userId || data.user_id || "chrome-extension-user";
+    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
+    const topK = data.top_k !== undefined ? data.top_k : 10;
+    if (!data.apiKey && !data.access_token) return [];
+    const authHeader = data.access_token ? `Bearer ${data.access_token}` : `Token ${data.apiKey}`;
+    const optionalParams = {};
+    if (data.selected_org) optionalParams.org_id = data.selected_org;
+    if (data.selected_project) optionalParams.project_id = data.selected_project;
+    const resp = await fetch("https://api.mem0.ai/v2/memories/search/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader },
+      body: JSON.stringify({
+        query: query,
+        filters: { user_id: userId },
+        rerank: true,
+        threshold: threshold,
+        top_k: topK,
+        filter_memories: false,
+        source: "OPENMEMORY_CHROME_EXTENSION",
+        ...optionalParams,
+      }),
+      signal: opts && opts.signal,
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    return (json || []).map((item) => ({ id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substring(2,9)}`, text: item.memory, categories: item.categories || [] }));
+  },
+  onSuccess: function(normQuery, memoryItems) {
+    if (!memoryModalShown) return;
+    createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+  },
+  onError: function() {
+    if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
+  },
+  minLength: 3,
+  debounceMs: 150,
+  cacheTTL: 60000
+});
+
+var perplexityBackgroundSearchHandler = null;
+function hookPerplexityBackgroundSearchTyping() {
+  const textarea = getTextarea();
+  if (!textarea) return;
+  if (!perplexityBackgroundSearchHandler) {
+    perplexityBackgroundSearchHandler = function() {
+      const text = getInputText(textarea).trim();
+      perplexitySearch.setText(text);
+    };
+  }
+  textarea.addEventListener('input', perplexityBackgroundSearchHandler);
+  textarea.addEventListener('keyup', perplexityBackgroundSearchHandler);
+}
+
 function getTextarea() {
   return (
     document.querySelector('textarea[id="ask-input"]') || // Follow-up screen textarea
@@ -293,19 +355,25 @@ async function addMem0Button() {
     return;
   }
 
-  // Check for the model selection button to find the right area
-  const modelSelectionButton = document.querySelector('button[aria-label="Choose a model"]');
-  
-  if (!modelSelectionButton) {
-    // If the button isn't found yet, retry after a short delay
-    setTimeout(addMem0Button, 500);
-    return;
+  // Find a suitable container on Perplexity near the submit/composer controls
+  let buttonContainer = null;
+
+  // Prefer the parent of the Submit button if available
+  const submitButton = document.querySelector('button[aria-label="Submit"]');
+  if (submitButton && submitButton.parentElement) {
+    buttonContainer = submitButton.parentElement;
   }
-  
-  // Find the container div that holds the buttons
-  const buttonContainer = modelSelectionButton.closest('.bg-background-50.dark\\:bg-offsetDark.flex.items-center.justify-self-end.rounded-full');
-  
+
+  // Fallbacks: use containers near the input element
   if (!buttonContainer) {
+    const inputEl = getTextarea();
+    if (inputEl) {
+      buttonContainer = inputEl.closest('form') || inputEl.closest('[class*="flex"]') || inputEl.parentElement;
+    }
+  }
+
+  if (!buttonContainer) {
+    // If a container isn't found yet, retry after a short delay
     setTimeout(addMem0Button, 500);
     return;
   }
@@ -419,11 +487,85 @@ async function addMem0Button() {
   // Add the notification dot to the button
   mem0Button.appendChild(notificationDot);
   
-  // Add the button wrapper to the container
-  buttonContainer.insertBefore(mem0ButtonWrapper, buttonContainer.firstChild);
-  
+  // Try to find the right-side icons container near the submit button and prepend there
+  let iconsContainer = null;
+  try {
+    // 1) Exact class combo (from screenshot) – Tailwind classes require escaping ':'
+    iconsContainer = document.querySelector(
+      'div.bg-raised.dark\\:bg-offset.flex.items-center.justify-self-end.rounded-full'
+    );
+
+    // 2) Slightly relaxed class combo
+    if (!iconsContainer) {
+      iconsContainer = document.querySelector(
+        'div.bg-raised.flex.items-center.rounded-full'
+      );
+    }
+
+    // 3) Attribute-contains selector as a robust fallback
+    if (!iconsContainer) {
+      iconsContainer = document.querySelector(
+        'div[class*="bg-raised"][class*="items-center"][class*="rounded-full"]'
+      );
+    }
+
+    // 4) Fallback based on Submit button proximity
+    if (!iconsContainer) {
+      const submitBtn = document.querySelector('button[aria-label="Submit"]');
+      if (submitBtn && submitBtn.parentElement) {
+        const sibling = submitBtn.parentElement.previousElementSibling;
+        if (sibling && sibling.querySelectorAll('button').length > 0) {
+          iconsContainer = sibling;
+        }
+        if (!iconsContainer) {
+          const candidates = submitBtn.parentElement.querySelectorAll('div');
+          for (const c of candidates) {
+            if (c.querySelectorAll('button').length >= 2) { iconsContainer = c; break; }
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  // If we found the icons container, insert as the left-most icon there, otherwise use the broader container
+  const targetContainer = iconsContainer || buttonContainer;
+  targetContainer.insertBefore(mem0ButtonWrapper, targetContainer.firstChild);
+
   // Add the button to the wrapper
   mem0ButtonWrapper.appendChild(mem0Button);
+
+  // Match sizing and spacing to sibling icon buttons when possible
+  try {
+    const sampleBtn = (iconsContainer || buttonContainer).querySelector('button:not([aria-label="Submit"])');
+    if (sampleBtn) {
+      const cs = window.getComputedStyle(sampleBtn);
+      mem0Button.style.width = cs.width;
+      mem0Button.style.height = cs.height;
+      mem0Button.style.borderRadius = cs.borderRadius;
+      mem0Button.style.padding = cs.padding;
+      mem0Button.style.background = 'transparent';
+      mem0Button.style.display = cs.display || 'inline-flex';
+      mem0Button.style.alignItems = 'center';
+      mem0Button.style.justifyContent = 'center';
+      mem0ButtonWrapper.style.marginRight = cs.marginRight || '8px';
+      mem0ButtonWrapper.style.display = 'inline-flex';
+      mem0ButtonWrapper.style.alignItems = 'center';
+      mem0ButtonWrapper.style.justifyContent = 'center';
+    } else {
+      // Sensible defaults
+      mem0Button.style.width = '32px';
+      mem0Button.style.height = '32px';
+      mem0Button.style.borderRadius = '8px';
+      mem0Button.style.background = 'transparent';
+      mem0Button.style.display = 'inline-flex';
+      mem0Button.style.alignItems = 'center';
+      mem0Button.style.justifyContent = 'center';
+      mem0ButtonWrapper.style.marginRight = '8px';
+      mem0ButtonWrapper.style.display = 'inline-flex';
+      mem0ButtonWrapper.style.alignItems = 'center';
+      mem0ButtonWrapper.style.justifyContent = 'center';
+    }
+  } catch (_) {}
   
   // Add hover effect for tooltip
   mem0ButtonWrapper.addEventListener('mouseenter', () => {
@@ -1846,6 +1988,7 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
 
     // Show loading modal now that we've confirmed credentials and memory enabled
     createMemoryModal([], true, sourceButtonId);
+    currentModalSourceButtonId = sourceButtonId;
 
     const authHeader = accessToken
       ? `Bearer ${accessToken}`
@@ -1853,55 +1996,8 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
 
     const messages = [{ role: "user", content: message }];
 
-    // Existing search API call
-    const searchResponse = await fetch(
-      "https://api.mem0.ai/v2/memories/search/",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify({
-          query: message,
-          filters: {
-            user_id: userId,
-          },
-          rerank: true,
-          threshold: threshold,
-          top_k: topK,
-          filter_memories: false,
-          // llm_rerank: true,
-          source: "OPENMEMORY_CHROME_EXTENSION",
-          ...optionalParams,
-        }),
-      }
-    );
-
-    if (!searchResponse.ok) {
-      throw new Error(
-        `API request failed with status ${searchResponse.status}`
-      );
-    }
-
-    const responseData = await searchResponse.json();
-    
-    // Extract memories with their categories for the modal
-    let memoryItems = responseData.map(item => {
-      return {
-        id: item.id || `memory-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        text: item.memory,
-        categories: item.categories || []
-      };
-    });
-
-      // Don't reset position when transitioning from loading to loaded
-      if (currentModalOverlay) {
-        document.body.removeChild(currentModalOverlay);
-        memoryModalShown = false;
-        // Don't reset modalPosition here - preserve it for the new modal
-      }
-      createMemoryModal(memoryItems, false, sourceButtonId);
+    // Use orchestrator immediate run
+    perplexitySearch.runImmediate(message);
   
   // If no memories found, the createMemoryModal function will show empty state
   
@@ -1989,6 +2085,7 @@ function initializeMem0Integration() {
     }
     
     setupInputObserver();
+    try { hookPerplexityBackgroundSearchTyping(); } catch (e) {}
     
     // Add the Mem0 button to the UI
     addMem0Button();

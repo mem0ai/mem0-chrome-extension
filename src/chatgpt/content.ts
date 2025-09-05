@@ -105,7 +105,7 @@ const getButtonStyles = (
       border: 1px solid ${colors.BUTTON_BORDER} !important;
       border-radius: 1200px !important;
       padding: 8px 12px !important;
-      margin-left: 8px !important;
+      margin-left: 0 !important;
       color: ${colors.TEXT_PRIMARY} !important;
       font-size: 14px !important;
       font-weight: 500 !important;

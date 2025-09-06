@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenMemory",
-  "version": "1.3.17",
+  "version": "1.3.18",
   "description": "🧠 OpenMemory keeps your conversations in sync. 🔄 No more repeating yourself—just seamless AI collaboration! ✨",
   "icons": {
     "16": "icons/icon16.png",

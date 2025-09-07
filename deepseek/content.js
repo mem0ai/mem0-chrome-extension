@@ -2159,6 +2159,86 @@ function showLoginModal() {
 // Function to add the Mem0 icon button - enhanced with error handling and return status
 function addMem0IconButton() {
   try {
+    // Prefer OPENMEMORY_UI mounts; fall back to legacy injection only if unavailable
+    if (window.OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus) {
+      try {
+        if (!document.getElementById('mem0-icon-button')) {
+          OPENMEMORY_UI.resolveCachedAnchor({ learnKey: location.host + ':' + location.pathname }, null, 24*60*60*1000)
+            .then(function(hit){
+              if (!hit || !hit.el) return;
+              var hs = OPENMEMORY_UI.createShadowRootHost('mem0-root');
+              var host = hs.host, shadow = hs.shadow; host.id = 'mem0-icon-button';
+              var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.deepseek) ? SITE_CONFIG.deepseek : null;
+              var placement = (hit.placement || (cfg && cfg.placement)) || { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' };
+              OPENMEMORY_UI.applyPlacement({ container: host, anchor: hit.el, placement: placement });
+              var style = document.createElement('style');
+              style.textContent = `
+                :host { position: relative; }
+                .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+                .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+                .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+                :host([data-has-text="1"]) .dot { display:block; }
+              `;
+              var btn = document.createElement('button'); btn.className = 'mem0-btn';
+              var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+              var dot = document.createElement('div'); dot.className = 'dot';
+              btn.appendChild(img); shadow.append(style, btn, dot);
+              btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+              if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+            });
+        }
+      } catch (_) {}
+
+      OPENMEMORY_UI.mountOnEditorFocus({
+        existingHostSelector: '#mem0-icon-button',
+        editorSelector: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.deepseek && SITE_CONFIG.deepseek.editorSelector) ? SITE_CONFIG.deepseek.editorSelector : 'textarea, [contenteditable="true"], input[type="text"]',
+        deriveAnchor: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.deepseek && typeof SITE_CONFIG.deepseek.deriveAnchor === 'function') ? SITE_CONFIG.deepseek.deriveAnchor : function(editor){ return editor.closest('form') || editor.parentElement; },
+        placement: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.deepseek && SITE_CONFIG.deepseek.placement) ? SITE_CONFIG.deepseek.placement : { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
+        render: function(shadow, host){
+          host.id = 'mem0-icon-button';
+          var style = document.createElement('style');
+          style.textContent = `
+            :host { position: relative; }
+            .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+            .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+            .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+            :host([data-has-text="1"]) .dot { display:block; }
+          `;
+          var btn = document.createElement('button'); btn.className = 'mem0-btn';
+          var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+          var dot = document.createElement('div'); dot.className = 'dot';
+          btn.appendChild(img); shadow.append(style, btn, dot);
+          btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+          if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+        },
+        fallback: function(){
+          var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.deepseek) ? SITE_CONFIG.deepseek : null;
+          return OPENMEMORY_UI.mountResilient({
+            anchors: [{ find: function(){ var sel = (cfg && cfg.editorSelector) || 'textarea, [contenteditable="true"], input[type="text"]'; var ed = document.querySelector(sel); if (!ed) return null; try { return (cfg && typeof cfg.deriveAnchor === 'function') ? cfg.deriveAnchor(ed) : (ed.closest('form') || ed.parentElement); } catch(_) { return ed.closest('form') || ed.parentElement; } } }],
+            placement: (cfg && cfg.placement) || { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
+            enableFloatingFallback: true,
+            render: function(shadow, host){
+              host.id = 'mem0-icon-button';
+              var style = document.createElement('style');
+              style.textContent = `
+                :host { position: relative; }
+                .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+                .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+                .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+                :host([data-has-text="1"]) .dot { display:block; }
+              `;
+              var btn = document.createElement('button'); btn.className = 'mem0-btn';
+              var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+              var dot = document.createElement('div'); dot.className = 'dot';
+              btn.appendChild(img); shadow.append(style, btn, dot);
+              btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+              if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+            }
+          });
+        }
+      });
+      return { success: true, status: "openmemory_ui_mount" };
+    }
     // Check if memory is enabled before adding the button
     getMemoryEnabledState().then(memoryEnabled => {
       if (!memoryEnabled) {

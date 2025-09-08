@@ -8,8 +8,12 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation"],
-  "host_permissions": ["https://api.mem0.ai/*", "https://app.mem0.ai/*"],
+  "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation", "webRequest"],
+  "host_permissions": [
+    "https://api.mem0.ai/*",
+    "https://app.mem0.ai/*",
+    "https://claude.ai/*"
+  ],
   "action": {
     "default_popup": "src/popup.html",
     "default_icon": {

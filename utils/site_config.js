@@ -5,6 +5,7 @@ SITE_CONFIG.claude = {
   deriveAnchor: function(editor) {
     return editor.closest('form') || editor.parentElement;
   },
+  // Place the icon floating near the editor to avoid container clipping on some layouts
   placement: { strategy: 'float', placement: 'right-start', gap: 8 },
   fallbackAnchors: ['#input-tools-menu-trigger', 'button[aria-label*="Send" i]']
 };

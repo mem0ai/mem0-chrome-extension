@@ -334,9 +334,9 @@
       const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
       toggleCheckbox.checked = result.memory_enabled !== false;
       
-      // Load track searches (default: enabled)
+      // Load track searches (default: disabled)
       const trackSearchesCheckbox = trackSearchSection.querySelector("#trackSearchesToggle");
-      trackSearchesCheckbox.checked = result.track_searches !== false;
+      trackSearchesCheckbox.checked = result.track_searches === true;
       
       const userIdInput = userIdSection.querySelector("#userIdInput");
       // Set saved value or keep default value

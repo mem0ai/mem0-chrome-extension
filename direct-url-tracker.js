@@ -82,13 +82,13 @@ export function initDirectUrlTracking() {
 
         const settings = await getSettings();
         if (!settings.hasCreds || settings.memoryEnabled === false) return;
-        // Gate by track_searches toggle (default ON if undefined). We treat typed URL as part of tracking searches/history.
+        // Gate by track_searches toggle (default OFF if undefined). We treat typed URL as part of tracking searches/history.
         const allow = await new Promise((resolve) => {
           try {
             chrome.storage.sync.get(["track_searches"], (d) => {
-              resolve(d.track_searches !== false);
+              resolve(d.track_searches === true);
             });
-          } catch { resolve(true); }
+          } catch { resolve(false); }
         });
         if (!allow) return;
         const hostname = (() => { try { return new URL(url).hostname; } catch { return ""; } })();

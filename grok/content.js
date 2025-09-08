@@ -773,7 +773,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     topPosition = modalPosition.y;
   } else {
     // Position relative to the OpenMemory button
-    const mem0Button = document.querySelector('button[aria-label="OpenMemory"]');
+    const mem0Button = document.getElementById('mem0-icon-button') || document.querySelector('button[aria-label="OpenMemory"]');
     
     if (mem0Button) {
       const buttonRect = mem0Button.getBoundingClientRect();

@@ -5,7 +5,7 @@ SITE_CONFIG.claude = {
   deriveAnchor: function(editor) {
     return editor.closest('form') || editor.parentElement;
   },
-  placement: { strategy: 'dock', container: 'form', side: 'bottom', align: 'start', gap: 8 },
+  placement: { strategy: 'float', placement: 'right-start', gap: 8 },
   fallbackAnchors: ['#input-tools-menu-trigger', 'button[aria-label*="Send" i]']
 };
 
@@ -46,7 +46,14 @@ SITE_CONFIG.grok = {
     return autoBtn ? (autoBtn.parentElement || root) : root;
   },
   placement: { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
-  autoButtonTextPattern: /\bAuto\b/i
+  autoButtonTextPattern: /\bAuto\b/i, 
+  fallbackAnchors: [
+    'button[aria-label*="Send" i]',
+    'button[data-testid*="send" i]', 
+    'form button[type="submit"]',
+    'textarea',
+    '[role="textbox"]'
+  ]
 };
 
 SITE_CONFIG.deepseek = {

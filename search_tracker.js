@@ -88,13 +88,13 @@
 
     getSettings().then(async (settings) => {
       if (!settings.hasCreds || settings.memoryEnabled === false) return;
-      // Gate by track_searches toggle (default ON if undefined)
+      // Gate by track_searches toggle (default off if undefined)
       const allow = await new Promise((resolve) => {
         try {
           chrome.storage.sync.get(["track_searches"], (d) => {
-            resolve(d.track_searches !== false);
+            resolve(d.track_searches === true);
           });
-        } catch { resolve(true); }
+        } catch { resolve(false); }
       });
       if (!allow) return;
       const ts = formatTimestamp();

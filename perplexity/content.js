@@ -749,7 +749,7 @@ async function addMem0Button() {
     
     if (textarea && getInputText(textarea).trim()) {
       // If there's text in the input, process memories
-      handleMem0Processing(getInputText(textarea).trim(), false, 'mem0-icon-button');
+      handleMem0Modal('mem0-icon-button');
     } else {
       // If no text, check login status first
       chrome.storage.sync.get(
@@ -2273,7 +2273,7 @@ function initializeMem0Integration() {
         event.preventDefault();
         const textarea = getTextarea();
         if (textarea && getInputText(textarea).trim()) {
-          handleMem0Processing(getInputText(textarea).trim(), false, 'mem0-icon-button');
+          handleMem0Modal('mem0-icon-button');
         }
       }
     });

@@ -79,7 +79,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "src/popup.ts"],
+      "resources": ["icons/*"],
       "matches": ["<all_urls>"]
     }
   ]

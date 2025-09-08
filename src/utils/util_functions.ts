@@ -1,7 +1,7 @@
-import type { StorageData } from '../types/storage';
+import { StorageKey, type StorageData } from '../types/storage';
 
 type EventType = string;
-type AdditionalData = Record<string, any>;
+type AdditionalData = Record<string, unknown>;
 type CallbackFunction = (success: boolean) => void;
 
 type ExtensionEventPayload = {
@@ -11,7 +11,7 @@ type ExtensionEventPayload = {
     version: string;
     user_agent: string;
     user_id: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 };
 
@@ -24,62 +24,82 @@ type BrowserType = 'Edge' | 'Opera' | 'Chrome' | 'Firefox' | 'Safari' | 'Unknown
  * @param callback - Optional callback function called after attempt (receives success boolean)
  */
 export const sendExtensionEvent = (
-  eventType: EventType, 
+  eventType: EventType,
   additionalData: AdditionalData = {},
   callback: CallbackFunction | null = null
 ): void => {
-  chrome.storage.sync.get(["apiKey", "access_token", "userId", "user_id"], (data: StorageData) => {
-    if (!data.apiKey && !data.access_token) {
-      if (callback) callback(false);
-      return;
-    }
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (data.access_token) {
-      headers["Authorization"] = `Bearer ${data.access_token}`;
-    } else if (data.apiKey) {
-      headers["Authorization"] = `Token ${data.apiKey}`;
-    }
-
-    const payload: ExtensionEventPayload = {
-      event_type: eventType,
-      additional_data: {
-        timestamp: new Date().toISOString(),
-        version: chrome.runtime.getManifest().version,
-        user_agent: navigator.userAgent,
-        user_id: data.userId || data.user_id || "chrome-extension-user",
-        ...additionalData
+  chrome.storage.sync.get(
+    [StorageKey.API_KEY, StorageKey.ACCESS_TOKEN, StorageKey.USER_ID_CAMEL, StorageKey.USER_ID],
+    (data: StorageData) => {
+      if (!data[StorageKey.API_KEY] && !data[StorageKey.ACCESS_TOKEN]) {
+        if (callback) {
+          callback(false);
+        }
+        return;
       }
-    };
 
-    console.log("eventType", eventType);
-    console.log("payload", payload);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
 
-    fetch("https://api.mem0.ai/v1/extension/", {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(payload),
-    })
-    .then(response => {
-      const success = response.ok;
-      if (callback) callback(success);
-    })
-    .catch(error => {
-      console.error(`Error sending ${eventType} event:`, error);
-      if (callback) callback(false);
-    });
-  });
+      if (data[StorageKey.ACCESS_TOKEN]) {
+        headers['Authorization'] = `Bearer ${data[StorageKey.ACCESS_TOKEN]}`;
+      } else if (data[StorageKey.API_KEY]) {
+        headers['Authorization'] = `Token ${data[StorageKey.API_KEY]}`;
+      }
+
+      const payload: ExtensionEventPayload = {
+        event_type: eventType,
+        additional_data: {
+          timestamp: new Date().toISOString(),
+          version: chrome.runtime.getManifest().version,
+          user_agent: navigator.userAgent,
+          user_id:
+            data[StorageKey.USER_ID_CAMEL] || data[StorageKey.USER_ID] || 'chrome-extension-user',
+          ...additionalData,
+        },
+      };
+
+      console.log('eventType', eventType);
+      console.log('payload', payload);
+
+      fetch('https://api.mem0.ai/v1/extension/', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(payload),
+      })
+        .then(response => {
+          const success = response.ok;
+          if (callback) {
+            callback(success);
+          }
+        })
+        .catch(error => {
+          console.error(`Error sending ${eventType} event:`, error);
+          if (callback) {
+            callback(false);
+          }
+        });
+    }
+  );
 };
 
 export const getBrowser = (): BrowserType => {
   const userAgent = navigator.userAgent;
-  if (userAgent.includes('Edg/')) return 'Edge';
-  if (userAgent.includes('OPR/') || userAgent.includes('Opera/')) return 'Opera';
-  if (userAgent.includes('Chrome/')) return 'Chrome';
-  if (userAgent.includes('Firefox/')) return 'Firefox';
-  if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) return 'Safari';
+  if (userAgent.includes('Edg/')) {
+    return 'Edge';
+  }
+  if (userAgent.includes('OPR/') || userAgent.includes('Opera/')) {
+    return 'Opera';
+  }
+  if (userAgent.includes('Chrome/')) {
+    return 'Chrome';
+  }
+  if (userAgent.includes('Firefox/')) {
+    return 'Firefox';
+  }
+  if (userAgent.includes('Safari/') && !userAgent.includes('Chrome/')) {
+    return 'Safari';
+  }
   return 'Unknown';
 };

@@ -1,4 +1,4 @@
-// Memory items
+/** Individual memory structure with id, text, and categories */
 export type MemoryItem = {
   id?: string;
   text: string;
@@ -9,29 +9,31 @@ export type MemoryItem = {
   user_id?: string;
 };
 
-export type Memory = {
-  id?: string;
-  memory?: string;
-  categories?: string[];
-};
+/** Simplified memory structure */
+export type Memory = Partial<{
+  id: string;
+  memory: string;
+  categories: string[];
+}>;
 
-export type MemoriesResponse = {
-  count?: number;
-  results?: Memory[];
-};
+/** Search result item from API */
+export type MemorySearchItem = { id: string | number; memory: string; categories?: string[] };
 
-// Prompts
+/** API response wrapper for memories */
+export type MemoriesResponse = Partial<{
+  count: number;
+  results: Memory[];
+}>;
+
+/** Prompt templates and regex patterns */
 export type OpenMemoryPrompts = {
   memory_header_html_strong: string;
   memory_header_plain_regex: RegExp;
   memory_header_html_regex: RegExp;
 };
 
-// API parameters
-export type OptionalApiParams = {
-  org_id?: string;
-  project_id?: string;
-};
-
-// Data for browser history
-export type HistoryStateData = Record<string, unknown> | null;
+/** Optional parameters for API calls (org_id, project_id) */
+export type OptionalApiParams = Partial<{
+  org_id: string;
+  project_id: string;
+}>;

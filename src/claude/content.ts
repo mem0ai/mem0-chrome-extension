@@ -1,12 +1,12 @@
-import type { MemoryItem, OptionalApiParams, HistoryStateData } from "../types/memory";
-import type { MemorySearchResponse } from "../types/api";
-import type { StorageData } from "../types/storage";
-import type { ExtendedHTMLElement, ExtendedDocument, ExtendedElement } from "../types/dom";
-import { MessageRole } from "../types/api";
-import { SidebarAction } from "../types/messages";
-import { StorageKey } from "../types/storage";
-import { getBrowser, sendExtensionEvent } from "../utils/util_functions";
-import { OPENMEMORY_PROMPTS } from "../utils/llm_prompts";
+import { MessageRole } from '../types/api';
+import type { HistoryStateData } from '../types/browser';
+import type { ExtendedDocument, ExtendedElement, ExtendedHTMLElement } from '../types/dom';
+import type { MemoryItem, MemorySearchItem, OptionalApiParams } from '../types/memory';
+import { SidebarAction } from '../types/messages';
+import { type StorageData, StorageKey } from '../types/storage';
+import { createOrchestrator, type SearchStorage } from '../utils/background_search';
+import { OPENMEMORY_PROMPTS } from '../utils/llm_prompts';
+import { getBrowser, sendExtensionEvent } from '../utils/util_functions';
 
 export {};
 
@@ -17,9 +17,104 @@ let isProcessingMem0: boolean = false;
 let memoryEnabled: boolean = true;
 
 // Cache of the latest typed text to avoid race when the editor is cleared
-let lastTyped = "";
+let lastTyped = '';
 // Timestamp of when a send was initiated (to prevent duplicate fallback posts)
 let lastSendInitiatedAt = 0;
+
+let currentModalSourceButtonId: string | null = null;
+
+const claudeSearch = createOrchestrator({
+  fetch: async function (query: string, opts: { signal?: AbortSignal }) {
+    const data = await new Promise<SearchStorage>(resolve => {
+      chrome.storage.sync.get(
+        [
+          StorageKey.API_KEY,
+          StorageKey.USER_ID_CAMEL,
+          StorageKey.ACCESS_TOKEN,
+          StorageKey.SELECTED_ORG,
+          StorageKey.SELECTED_PROJECT,
+          StorageKey.USER_ID,
+          StorageKey.SIMILARITY_THRESHOLD,
+          StorageKey.TOP_K,
+        ],
+        function (items) {
+          resolve(items as SearchStorage);
+        }
+      );
+    });
+
+    const apiKey = data[StorageKey.API_KEY];
+    const accessToken = data[StorageKey.ACCESS_TOKEN];
+    if (!apiKey && !accessToken) {
+      return [];
+    }
+
+    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
+    const userId =
+      data[StorageKey.USER_ID_CAMEL] || data[StorageKey.USER_ID] || 'chrome-extension-user';
+    const threshold =
+      data[StorageKey.SIMILARITY_THRESHOLD] !== undefined
+        ? data[StorageKey.SIMILARITY_THRESHOLD]
+        : 0.1;
+    const topK = data[StorageKey.TOP_K] !== undefined ? data[StorageKey.TOP_K] : 10;
+
+    const optionalParams: OptionalApiParams = {};
+    if (data[StorageKey.SELECTED_ORG]) {
+      optionalParams.org_id = data[StorageKey.SELECTED_ORG];
+    }
+    if (data[StorageKey.SELECTED_PROJECT]) {
+      optionalParams.project_id = data[StorageKey.SELECTED_PROJECT];
+    }
+
+    const payload = {
+      query,
+      filters: { user_id: userId },
+      rerank: true,
+      threshold,
+      top_k: topK,
+      filter_memories: false,
+      source: 'OPENMEMORY_CHROME_EXTENSION',
+      ...optionalParams,
+    };
+
+    const res = await fetch('https://api.mem0.ai/v2/memories/search/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+      },
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal,
+    });
+
+    if (!res.ok) {
+      throw new Error(`API request failed with status ${res.status}`);
+    }
+    return await res.json();
+  },
+
+  onSuccess: function (normQuery: string, responseData: MemorySearchItem[]) {
+    if (!memoryModalShown) {
+      return;
+    }
+    const memoryItems = (responseData || []).map((item: MemorySearchItem, index: number) => ({
+      id: String(item.id || `memory-${Date.now()}-${index}`),
+      text: item.memory,
+      categories: item.categories || [],
+    }));
+    createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+  },
+
+  onError: function () {
+    if (memoryModalShown) {
+      createMemoryModal([], false, currentModalSourceButtonId);
+    }
+  },
+
+  minLength: 3,
+  debounceMs: 150,
+  cacheTTL: 60000,
+});
 
 // Sliding window for conversation context
 let conversationHistory: Array<{ role: MessageRole; content: string; timestamp: number }> = [];
@@ -52,10 +147,7 @@ function addToConversationHistory(role: MessageRole, content: string) {
 
   // Maintain sliding window - remove oldest messages if we exceed limit
   if (conversationHistory.length > MAX_CONVERSATION_HISTORY) {
-    const removed = conversationHistory.splice(
-      0,
-      conversationHistory.length - MAX_CONVERSATION_HISTORY
-    );
+    conversationHistory.splice(0, conversationHistory.length - MAX_CONVERSATION_HISTORY);
   }
 }
 
@@ -86,7 +178,7 @@ function getConversationContext(includeCurrent: boolean = true) {
 // Function to initialize conversation history from existing messages on page
 function initializeConversationHistoryFromDOM() {
   const messageContainer = document.querySelector(
-    ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full"
+    '.flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full'
   );
 
   if (!messageContainer) {
@@ -94,24 +186,21 @@ function initializeConversationHistoryFromDOM() {
   }
 
   const messageElements = Array.from(messageContainer.children);
-  let foundMessages = 0;
 
   // Process existing messages in chronological order
   messageElements.forEach(element => {
-    const userElement = element.querySelector(".font-user-message");
-    const assistantElement = element.querySelector(".font-claude-message");
+    const userElement = element.querySelector('.font-user-message');
+    const assistantElement = element.querySelector('.font-claude-message');
 
     if (userElement) {
-      const content = (userElement.textContent || "").trim();
+      const content = (userElement.textContent || '').trim();
       if (content) {
         addToConversationHistory(MessageRole.User, content);
-        foundMessages++;
       }
     } else if (assistantElement) {
-      const content = (assistantElement.textContent || "").trim();
+      const content = (assistantElement.textContent || '').trim();
       if (content) {
         addToConversationHistory(MessageRole.Assistant, content);
-        foundMessages++;
       }
     }
   });
@@ -153,9 +242,11 @@ async function getMemoryEnabledState() {
             return;
           }
           resolve(data.memory_enabled);
-        } catch (_e) {}
+        } catch {
+          // Ignore errors when checking chrome.runtime.lastError
+        }
       });
-    } catch (error) {
+    } catch {
       resolve(true); // Default to enabled if exception
     }
   });
@@ -163,9 +254,9 @@ async function getMemoryEnabledState() {
 
 // Function to remove mem0 button if it exists
 function removeMemButton(): void {
-  const mem0Button = document.querySelector("#mem0-button");
+  const mem0Button = document.querySelector('#mem0-button');
   if (mem0Button) {
-    const buttonContainer = mem0Button.closest("div");
+    const buttonContainer = mem0Button.closest('div');
     if (buttonContainer) {
       buttonContainer.remove();
     } else {
@@ -174,7 +265,7 @@ function removeMemButton(): void {
   }
 
   // Also remove tooltip if it exists
-  const tooltip = document.querySelector("#mem0-tooltip");
+  const tooltip = document.querySelector('#mem0-tooltip');
   if (tooltip) {
     tooltip.remove();
   }
@@ -194,24 +285,24 @@ function addMem0Button(): void {
     const sendButton = document.querySelector('button[aria-label="Send Message"]');
     const sendUpButton = document.querySelector('button[aria-label="Send message"]');
     const screenshotButton = document.querySelector('button[aria-label="Capture screenshot"]');
-    const inputToolsMenuButton = document.querySelector("#input-tools-menu-trigger") as HTMLElement;
+    const inputToolsMenuButton = document.querySelector('#input-tools-menu-trigger') as HTMLElement;
 
     function createPopup(
       container: HTMLElement,
-      position: "top" | "right" = "top"
+      position: 'top' | 'right' = 'top'
     ): HTMLDivElement {
-      const popup = document.createElement("div");
-      popup.className = "mem0-popup";
-      let positionStyles = "";
+      const popup = document.createElement('div');
+      popup.className = 'mem0-popup';
+      let positionStyles = '';
 
-      if (position === "top") {
+      if (position === 'top') {
         positionStyles = `
           bottom: 100%;
           left: 50%;
           transform: translateX(-40%);
           margin-bottom: 11px;
         `;
-      } else if (position === "right") {
+      } else if (position === 'right') {
         positionStyles = `
           top: 50%;
           left: 100%;
@@ -237,31 +328,31 @@ function addMem0Button(): void {
       return popup;
     }
 
-    if (inputToolsMenuButton && !document.querySelector("#mem0-button")) {
-      const buttonContainer = document.createElement("div");
-      buttonContainer.style.position = "relative";
-      buttonContainer.style.display = "inline-block";
+    if (inputToolsMenuButton && !document.querySelector('#mem0-button')) {
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.position = 'relative';
+      buttonContainer.style.display = 'inline-block';
 
-      const mem0Button = document.createElement("button");
-      mem0Button.id = "mem0-button";
+      const mem0Button = document.createElement('button');
+      mem0Button.id = 'mem0-button';
       mem0Button.className = inputToolsMenuButton.className;
-      mem0Button.style.marginLeft = "0px";
-      mem0Button.setAttribute("aria-label", "Add memories to your prompt");
+      mem0Button.style.marginLeft = '0px';
+      mem0Button.setAttribute('aria-label', 'Add memories to your prompt');
 
-      const mem0Icon = document.createElement("img");
-      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      mem0Icon.style.width = "16px";
-      mem0Icon.style.height = "16px";
-      mem0Icon.style.borderRadius = "50%";
+      const mem0Icon = document.createElement('img');
+      mem0Icon.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+      mem0Icon.style.width = '16px';
+      mem0Icon.style.height = '16px';
+      mem0Icon.style.borderRadius = '50%';
 
-      const popup = createPopup(buttonContainer, "top");
+      const popup = createPopup(buttonContainer, 'top');
       mem0Button.appendChild(mem0Icon);
-      mem0Button.addEventListener("click", () => {
+      mem0Button.addEventListener('click', () => {
         if (memoryEnabled) {
           // Hide the tooltip if it's showing
-          const tooltip = document.querySelector("#mem0-tooltip");
+          const tooltip = document.querySelector('#mem0-tooltip');
           if (tooltip) {
-            tooltip.style.display = "none";
+            tooltip.style.display = 'none';
           }
 
           handleMem0Modal(popup);
@@ -269,8 +360,8 @@ function addMem0Button(): void {
       });
 
       // Create notification dot
-      const notificationDot = document.createElement("div");
-      notificationDot.id = "mem0-notification-dot";
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
       notificationDot.style.cssText = `
         position: absolute;
         top: -3px;
@@ -287,9 +378,9 @@ function addMem0Button(): void {
       mem0Button.appendChild(notificationDot);
 
       // Add keyframe animation for the dot
-      if (!document.getElementById("notification-dot-animation")) {
-        const style = document.createElement("style");
-        style.id = "notification-dot-animation";
+      if (!document.getElementById('notification-dot-animation')) {
+        const style = document.createElement('style');
+        style.id = 'notification-dot-animation';
         style.innerHTML = `
           @keyframes popIn {
             0% { transform: scale(0); }
@@ -307,9 +398,9 @@ function addMem0Button(): void {
 
       buttonContainer.appendChild(mem0Button);
 
-      const tooltip = document.createElement("div");
-      tooltip.id = "mem0-tooltip";
-      tooltip.textContent = "Add memories to your prompt";
+      const tooltip = document.createElement('div');
+      tooltip.id = 'mem0-tooltip';
+      tooltip.textContent = 'Add memories to your prompt';
       tooltip.style.cssText = `
               display: none;
               position: fixed;
@@ -325,18 +416,18 @@ function addMem0Button(): void {
           `;
       document.body.appendChild(tooltip);
 
-      mem0Button.addEventListener("mouseenter", _event => {
+      mem0Button.addEventListener('mouseenter', () => {
         // Hide any existing popup first
         const existingMem0Popup = document.querySelector('.mem0-popup[style*="display: block"]');
         if (existingMem0Popup && existingMem0Popup !== popup) {
-          existingMem0Popup.style.display = "none";
+          existingMem0Popup.style.display = 'none';
         }
 
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
 
         // Set initial tooltip properties
-        tooltip.style.display = "block";
+        tooltip.style.display = 'block';
 
         // Once displayed, we can get its height and set proper positioning
         const tooltipHeight = (tooltip as HTMLElement).offsetHeight || 24; // Default height if not yet rendered
@@ -345,14 +436,14 @@ function addMem0Button(): void {
         tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
       });
 
-      mem0Button.addEventListener("mouseleave", () => {
-        tooltip.style.display = "none";
+      mem0Button.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
       });
 
       // Find the parent container to place the button at the same level as input-tools-menu
       const parentContainer =
-        inputToolsMenuButton.closest(".relative.flex-1.flex.items-center.gap-2") ||
-        inputToolsMenuButton.closest(".relative.flex-1") ||
+        inputToolsMenuButton.closest('.relative.flex-1.flex.items-center.gap-2') ||
+        inputToolsMenuButton.closest('.relative.flex-1') ||
         ((inputToolsMenuButton.parentNode as HTMLElement)?.parentNode?.parentNode?.parentNode
           ?.parentNode as HTMLElement);
 
@@ -360,11 +451,11 @@ function addMem0Button(): void {
         // Find the third position in the container - after the first two divs
         // Looking for the flex-row div to insert before it
         const flexRowDiv = parentContainer.querySelector(
-          ".flex.flex-row.items-center.gap-2.min-w-0"
+          '.flex.flex-row.items-center.gap-2.min-w-0'
         );
 
         // Find the tools div that we want to position after
-        const toolsDiv = (inputToolsMenuButton.closest("div > div > div > div") as HTMLElement)
+        const toolsDiv = (inputToolsMenuButton.closest('div > div > div > div') as HTMLElement)
           ?.parentNode?.parentNode as HTMLElement;
 
         // Make sure our button is the third div in the container
@@ -386,36 +477,38 @@ function addMem0Button(): void {
       // Update notification dot
       try {
         updateNotificationDot();
-      } catch (_e) {}
+      } catch {
+        // Ignore errors during updateNotificationDot
+      }
     } else if (
-      window.location.href.includes("claude.ai/new") &&
+      window.location.href.includes('claude.ai/new') &&
       screenshotButton &&
-      !document.querySelector("#mem0-button")
+      !document.querySelector('#mem0-button')
     ) {
-      const buttonContainer = document.createElement("div");
-      buttonContainer.style.position = "relative";
-      buttonContainer.style.display = "inline-block";
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.position = 'relative';
+      buttonContainer.style.display = 'inline-block';
 
-      const mem0Button = document.createElement("button");
-      mem0Button.id = "mem0-button";
+      const mem0Button = document.createElement('button');
+      mem0Button.id = 'mem0-button';
       mem0Button.className = screenshotButton.className;
-      mem0Button.style.marginLeft = "0px";
-      mem0Button.setAttribute("aria-label", "Add memories to your prompt");
+      mem0Button.style.marginLeft = '0px';
+      mem0Button.setAttribute('aria-label', 'Add memories to your prompt');
 
-      const mem0Icon = document.createElement("img");
-      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      mem0Icon.style.width = "16px";
-      mem0Icon.style.height = "16px";
-      mem0Icon.style.borderRadius = "50%";
+      const mem0Icon = document.createElement('img');
+      mem0Icon.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+      mem0Icon.style.width = '16px';
+      mem0Icon.style.height = '16px';
+      mem0Icon.style.borderRadius = '50%';
 
-      const popup = createPopup(buttonContainer, "right");
+      const popup = createPopup(buttonContainer, 'right');
       mem0Button.appendChild(mem0Icon);
-      mem0Button.addEventListener("click", () => {
+      mem0Button.addEventListener('click', () => {
         if (memoryEnabled) {
           // Hide the tooltip if it's showing
-          const tooltip = document.querySelector("#mem0-tooltip");
+          const tooltip = document.querySelector('#mem0-tooltip');
           if (tooltip) {
-            tooltip.style.display = "none";
+            tooltip.style.display = 'none';
           }
 
           handleMem0Modal(popup);
@@ -423,8 +516,8 @@ function addMem0Button(): void {
       });
 
       // Create notification dot
-      const notificationDot = document.createElement("div");
-      notificationDot.id = "mem0-notification-dot";
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
       notificationDot.style.cssText = `
         position: absolute;
         top: -3px;
@@ -442,9 +535,9 @@ function addMem0Button(): void {
 
       buttonContainer.appendChild(mem0Button);
 
-      const tooltip = document.createElement("div");
-      tooltip.id = "mem0-tooltip";
-      tooltip.textContent = "Add memories to your prompt";
+      const tooltip = document.createElement('div');
+      tooltip.id = 'mem0-tooltip';
+      tooltip.textContent = 'Add memories to your prompt';
       tooltip.style.cssText = `
               display: none;
               position: fixed;
@@ -460,18 +553,18 @@ function addMem0Button(): void {
           `;
       document.body.appendChild(tooltip);
 
-      mem0Button.addEventListener("mouseenter", event => {
+      mem0Button.addEventListener('mouseenter', () => {
         // Hide any existing popup first
         const existingMem0Popup = document.querySelector('.mem0-popup[style*="display: block"]');
         if (existingMem0Popup && existingMem0Popup !== popup) {
-          existingMem0Popup.style.display = "none";
+          existingMem0Popup.style.display = 'none';
         }
 
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
 
         // Set initial tooltip properties
-        tooltip.style.display = "block";
+        tooltip.style.display = 'block';
 
         // Once displayed, we can get its height and set proper positioning
         const tooltipHeight = tooltip.offsetHeight || 24; // Default height if not yet rendered
@@ -480,8 +573,8 @@ function addMem0Button(): void {
         tooltip.style.top = `${rect.top - tooltipHeight - 10}px`; // Position 10px above button
       });
 
-      mem0Button.addEventListener("mouseleave", () => {
-        tooltip.style.display = "none";
+      mem0Button.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
       });
 
       (screenshotButton.parentNode as HTMLElement)?.insertBefore(
@@ -492,8 +585,10 @@ function addMem0Button(): void {
       // Update notification dot
       try {
         updateNotificationDot();
-      } catch (_e) {}
-    } else if ((sendButton || sendUpButton) && !document.querySelector("#mem0-button")) {
+      } catch {
+        // Ignore errors during updateNotificationDot
+      }
+    } else if ((sendButton || sendUpButton) && !document.querySelector('#mem0-button')) {
       const targetButton = sendButton || sendUpButton;
       if (!targetButton) {
         return;
@@ -505,13 +600,13 @@ function addMem0Button(): void {
         return;
       }
 
-      const buttonContainer = document.createElement("div");
-      buttonContainer.style.position = "relative";
-      buttonContainer.style.display = "inline-block";
-      buttonContainer.style.marginRight = "12px";
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.position = 'relative';
+      buttonContainer.style.display = 'inline-block';
+      buttonContainer.style.marginRight = '12px';
 
-      const mem0Button = document.createElement("button");
-      mem0Button.id = "mem0-button";
+      const mem0Button = document.createElement('button');
+      mem0Button.id = 'mem0-button';
       mem0Button.style.cssText = `
         display: flex;
         align-items: center;
@@ -526,17 +621,17 @@ function addMem0Button(): void {
         position: relative;
         transition: background-color 0.3s ease;
       `;
-      mem0Button.setAttribute("aria-label", "Add memories to your prompt");
+      mem0Button.setAttribute('aria-label', 'Add memories to your prompt');
 
-      const mem0Icon = document.createElement("img");
-      mem0Icon.src = chrome.runtime.getURL("icons/mem0-claude-icon-p.png");
-      mem0Icon.style.width = "20px";
-      mem0Icon.style.height = "20px";
-      mem0Icon.style.borderRadius = "50%";
+      const mem0Icon = document.createElement('img');
+      mem0Icon.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+      mem0Icon.style.width = '20px';
+      mem0Icon.style.height = '20px';
+      mem0Icon.style.borderRadius = '50%';
 
       // Create notification dot
-      const notificationDot = document.createElement("div");
-      notificationDot.id = "mem0-notification-dot";
+      const notificationDot = document.createElement('div');
+      notificationDot.id = 'mem0-notification-dot';
       notificationDot.style.cssText = `
         position: absolute;
         top: 0px;
@@ -551,48 +646,48 @@ function addMem0Button(): void {
         pointer-events: none;
       `;
 
-      const popup = createPopup(buttonContainer, "top");
+      const popup = createPopup(buttonContainer, 'top');
       mem0Button.appendChild(mem0Icon);
       mem0Button.appendChild(notificationDot);
-      mem0Button.addEventListener("click", () => {
+      mem0Button.addEventListener('click', () => {
         if (memoryEnabled) {
           // Hide the tooltip if it's showing
-          const tooltip = document.querySelector("#mem0-tooltip");
+          const tooltip = document.querySelector('#mem0-tooltip');
           if (tooltip) {
-            tooltip.style.display = "none";
+            tooltip.style.display = 'none';
           }
 
           handleMem0Modal(popup);
         }
       });
 
-      mem0Button.addEventListener("mouseenter", () => {
+      mem0Button.addEventListener('mouseenter', () => {
         // Hide any existing popup first
         const existingMem0Popup = document.querySelector('.mem0-popup[style*="display: block"]');
         if (existingMem0Popup && existingMem0Popup !== popup) {
-          existingMem0Popup.style.display = "none";
+          existingMem0Popup.style.display = 'none';
         }
 
         const rect = mem0Button.getBoundingClientRect();
         const buttonCenterX = rect.left + rect.width / 2;
 
         // Set initial tooltip properties
-        const tooltipEl = document.querySelector("#mem0-tooltip") as HTMLElement;
+        const tooltipEl = document.querySelector('#mem0-tooltip') as HTMLElement;
         if (tooltipEl) {
-          tooltipEl.style.display = "block";
+          tooltipEl.style.display = 'block';
           const tooltipHeight = tooltipEl.offsetHeight || 24;
           tooltipEl.style.left = `${buttonCenterX}px`;
           tooltipEl.style.top = `${rect.top - tooltipHeight - 10}px`;
         }
       });
 
-      mem0Button.addEventListener("mouseleave", () => {
-        mem0Button.style.backgroundColor = "transparent";
-        popup.style.display = "none";
+      mem0Button.addEventListener('mouseleave', () => {
+        mem0Button.style.backgroundColor = 'transparent';
+        popup.style.display = 'none';
       });
 
       // Set popover text
-      popup.textContent = "Add memories to your prompt";
+      popup.textContent = 'Add memories to your prompt';
 
       buttonContainer.appendChild(mem0Button);
 
@@ -615,20 +710,20 @@ function addMem0Button(): void {
     // Also handle Enter key press for sending messages
     const inputElement =
       document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
+      document.querySelector('textarea') ||
       document.querySelector('p[data-placeholder="How can I help you today?"]') ||
       document.querySelector('p[data-placeholder="Reply to Claude..."]');
 
     if (inputElement && !(inputElement as HTMLElement).dataset.mem0KeyListener) {
-      (inputElement as HTMLElement).dataset.mem0KeyListener = "true";
-      (inputElement as HTMLElement).addEventListener("keydown", function (event: KeyboardEvent) {
+      (inputElement as HTMLElement).dataset.mem0KeyListener = 'true';
+      (inputElement as HTMLElement).addEventListener('keydown', function (event: KeyboardEvent) {
         // Check if Enter was pressed without Shift (standard send behavior)
-        if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
           // Don't process for textarea which may want newlines
-          if (inputElement.tagName.toLowerCase() !== "textarea") {
+          if (inputElement.tagName.toLowerCase() !== 'textarea') {
             // Snapshot before send
             const current = getInputValue();
-            if (current && current.trim() !== "") {
+            if (current && current.trim() !== '') {
               lastTyped = current;
             }
             lastSendInitiatedAt = Date.now();
@@ -645,15 +740,15 @@ function addMem0Button(): void {
       });
       // Keep a live cache during typing to improve reliability
       if (!inputElement.dataset.mem0CacheListener) {
-        inputElement.dataset.mem0CacheListener = "true";
+        inputElement.dataset.mem0CacheListener = 'true';
         const updateCache = () => {
           const val = getInputValue();
-          if (val && val.trim() !== "") {
+          if (val && val.trim() !== '') {
             lastTyped = val;
           }
         };
-        inputElement.addEventListener("input", updateCache, true);
-        inputElement.addEventListener("compositionend", updateCache, true);
+        inputElement.addEventListener('input', updateCache, true);
+        inputElement.addEventListener('compositionend', updateCache, true);
       }
     }
 
@@ -691,9 +786,9 @@ function createMemoryModal(
     leftPosition = modalPosition.left;
   } else {
     // Different positioning based on which button triggered the modal
-    if (sourceButtonId === "mem0-icon-button") {
+    if (sourceButtonId === 'mem0-icon-button') {
       // Position relative to the mem0-icon-button
-      const iconButton = document.querySelector("#mem0-icon-button") as HTMLElement | null;
+      const iconButton = document.querySelector('#mem0-icon-button') as HTMLElement | null;
       if (iconButton) {
         const buttonRect = iconButton.getBoundingClientRect();
 
@@ -728,7 +823,7 @@ function createMemoryModal(
       }
     } else {
       // Default positioning relative to the Mem0 button
-      const mem0Button = document.querySelector("#mem0-button") as HTMLElement | null;
+      const mem0Button = document.querySelector('#mem0-button') as HTMLElement | null;
       if (mem0Button) {
         const buttonRect = mem0Button.getBoundingClientRect();
         const viewportHeight = window.innerHeight;
@@ -769,7 +864,7 @@ function createMemoryModal(
   function positionRelativeToInput() {
     const inputElement =
       document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
+      document.querySelector('textarea') ||
       document.querySelector('p[data-placeholder="How can I help you today?"]') ||
       document.querySelector('p[data-placeholder="Reply to Claude..."]');
 
@@ -811,7 +906,7 @@ function createMemoryModal(
   }
 
   // Create modal overlay
-  const modalOverlay = document.createElement("div");
+  const modalOverlay = document.createElement('div');
   modalOverlay.style.cssText = `
     position: fixed;
     top: 0;
@@ -828,7 +923,7 @@ function createMemoryModal(
   currentModalOverlay = modalOverlay;
 
   // Add event listener to close modal when clicking outside
-  modalOverlay.addEventListener("click", event => {
+  modalOverlay.addEventListener('click', event => {
     // Only close if clicking directly on the overlay, not its children
     if (event.target === modalOverlay) {
       closeModal();
@@ -836,7 +931,7 @@ function createMemoryModal(
   });
 
   // Create modal container with positioning
-  const modalContainer = document.createElement("div");
+  const modalContainer = document.createElement('div');
   modalContainer.style.cssText = `
     background-color: #1C1C1E;
     border-radius: 12px;
@@ -856,7 +951,7 @@ function createMemoryModal(
   `;
 
   // Create modal header
-  const modalHeader = document.createElement("div");
+  const modalHeader = document.createElement('div');
   modalHeader.style.cssText = `
     display: flex;
     align-items: center;
@@ -869,7 +964,7 @@ function createMemoryModal(
   `;
 
   // Create header left section with just the logo
-  const headerLeft = document.createElement("div");
+  const headerLeft = document.createElement('div');
   headerLeft.style.cssText = `
     display: flex;
     flex-direction: row;
@@ -877,8 +972,8 @@ function createMemoryModal(
   `;
 
   // Add Mem0 logo
-  const logoImg = document.createElement("img");
-  logoImg.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  const logoImg = document.createElement('img');
+  logoImg.src = chrome.runtime.getURL('icons/mem0-claude-icon.png');
   logoImg.style.cssText = `
     width: 26px;
     height: 26px;
@@ -887,8 +982,8 @@ function createMemoryModal(
   `;
 
   // Add "OpenMemory" title
-  const title = document.createElement("div");
-  title.textContent = "OpenMemory";
+  const title = document.createElement('div');
+  title.textContent = 'OpenMemory';
   title.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -896,7 +991,7 @@ function createMemoryModal(
   `;
 
   // Create header right section
-  const headerRight = document.createElement("div");
+  const headerRight = document.createElement('div');
   headerRight.style.cssText = `
     display: flex;
     flex-direction: row;
@@ -905,7 +1000,7 @@ function createMemoryModal(
   `;
 
   // Create Add to Prompt button with arrow
-  const addToPromptBtn = document.createElement("button");
+  const addToPromptBtn = document.createElement('button');
   addToPromptBtn.style.cssText = `
     display: flex;
     flex-direction: row;
@@ -920,17 +1015,17 @@ function createMemoryModal(
     font-weight: 600;
     color: black;
   `;
-  addToPromptBtn.textContent = "Add to Prompt";
+  addToPromptBtn.textContent = 'Add to Prompt';
 
   // Add arrow icon to button
-  const arrowIcon = document.createElement("span");
+  const arrowIcon = document.createElement('span');
   arrowIcon.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
     <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
   addToPromptBtn.appendChild(arrowIcon);
 
   // Create settings button
-  const settingsBtn = document.createElement("button");
+  const settingsBtn = document.createElement('button');
   settingsBtn.style.cssText = `
     background: none;
     border: none;
@@ -945,7 +1040,7 @@ function createMemoryModal(
   </svg>`;
 
   // Add click event to open app.mem0.ai in a new tab
-  settingsBtn.addEventListener("click", () => {
+  settingsBtn.addEventListener('click', () => {
     if (currentModalOverlay && document.body.contains(currentModalOverlay)) {
       document.body.removeChild(currentModalOverlay);
       memoryModalShown = false;
@@ -956,15 +1051,15 @@ function createMemoryModal(
   });
 
   // Add hover effect for the settings button
-  settingsBtn.addEventListener("mouseenter", () => {
-    settingsBtn.style.opacity = "1";
+  settingsBtn.addEventListener('mouseenter', () => {
+    settingsBtn.style.opacity = '1';
   });
-  settingsBtn.addEventListener("mouseleave", () => {
-    settingsBtn.style.opacity = "0.6";
+  settingsBtn.addEventListener('mouseleave', () => {
+    settingsBtn.style.opacity = '0.6';
   });
 
   // Content section
-  const contentSection = document.createElement("div");
+  const contentSection = document.createElement('div');
   const contentSectionHeight = modalHeight - 130; // Account for header and navigation
   contentSection.style.cssText = `
     display: flex;
@@ -977,7 +1072,7 @@ function createMemoryModal(
   `;
 
   // Create memories counter
-  const memoriesCounter = document.createElement("div");
+  const memoriesCounter = document.createElement('div');
   memoriesCounter.style.cssText = `
     font-size: 16px;
     font-weight: 600;
@@ -999,7 +1094,7 @@ function createMemoryModal(
   const memoriesContentMaxHeight = contentSectionHeight - 40; // Account for memories counter
 
   // Create memories content container with adjusted height
-  const memoriesContent = document.createElement("div");
+  const memoriesContent = document.createElement('div');
   memoriesContent.style.cssText = `
     display: flex;
     flex-direction: column;
@@ -1012,17 +1107,17 @@ function createMemoryModal(
     scrollbar-width: none;
     -ms-overflow-style: none;
   `;
-  memoriesContent.style.cssText += "::-webkit-scrollbar { display: none; }";
+  memoriesContent.style.cssText += '::-webkit-scrollbar { display: none; }';
 
   // Track currently expanded memory
   let currentlyExpandedMemory: HTMLElement | null = null;
 
   // Function to create skeleton loading items
   function createSkeletonItems() {
-    memoriesContent.innerHTML = "";
+    memoriesContent.innerHTML = '';
 
     for (let i = 0; i < memoriesPerPage; i++) {
-      const skeletonItem = document.createElement("div");
+      const skeletonItem = document.createElement('div');
       skeletonItem.style.cssText = `
         display: flex;
         flex-direction: row;
@@ -1036,7 +1131,7 @@ function createMemoryModal(
         animation: pulse 1.5s infinite ease-in-out;
       `;
 
-      const skeletonText = document.createElement("div");
+      const skeletonText = document.createElement('div');
       skeletonText.style.cssText = `
         background-color: #383838;
         border-radius: 4px;
@@ -1045,7 +1140,7 @@ function createMemoryModal(
         margin-bottom: 8px;
       `;
 
-      const skeletonText2 = document.createElement("div");
+      const skeletonText2 = document.createElement('div');
       skeletonText2.style.cssText = `
         background-color: #383838;
         border-radius: 4px;
@@ -1053,14 +1148,14 @@ function createMemoryModal(
         width: 65%;
       `;
 
-      const skeletonActions = document.createElement("div");
+      const skeletonActions = document.createElement('div');
       skeletonActions.style.cssText = `
         display: flex;
         gap: 4px;
         margin-left: 10px;
       `;
 
-      const skeletonButton1 = document.createElement("div");
+      const skeletonButton1 = document.createElement('div');
       skeletonButton1.style.cssText = `
         width: 20px;
         height: 20px;
@@ -1068,7 +1163,7 @@ function createMemoryModal(
         background-color: #383838;
       `;
 
-      const skeletonButton2 = document.createElement("div");
+      const skeletonButton2 = document.createElement('div');
       skeletonButton2.style.cssText = `
         width: 20px;
         height: 20px;
@@ -1079,7 +1174,7 @@ function createMemoryModal(
       skeletonActions.appendChild(skeletonButton1);
       skeletonActions.appendChild(skeletonButton2);
 
-      const textContainer = document.createElement("div");
+      const textContainer = document.createElement('div');
       textContainer.style.cssText = `
         display: flex;
         flex-direction: column;
@@ -1094,9 +1189,9 @@ function createMemoryModal(
     }
 
     // Add keyframe animation to document if not exists
-    if (!document.getElementById("skeleton-animation")) {
-      const style = document.createElement("style");
-      style.id = "skeleton-animation";
+    if (!document.getElementById('skeleton-animation')) {
+      const style = document.createElement('style');
+      style.id = 'skeleton-animation';
       style.innerHTML = `
         @keyframes pulse {
           0% { opacity: 0.6; }
@@ -1108,9 +1203,58 @@ function createMemoryModal(
     }
   }
 
+  // Function to expand memory
+  function expandMemory(
+    memoryContainer: HTMLDivElement,
+    memoryText: HTMLDivElement,
+    contentWrapper: HTMLDivElement,
+    removeButton: HTMLButtonElement,
+    isExpanded: { value: boolean }
+  ) {
+    if (currentlyExpandedMemory && currentlyExpandedMemory !== memoryContainer) {
+      currentlyExpandedMemory.dispatchEvent(new Event('collapse'));
+    }
+
+    isExpanded.value = true;
+    memoryText.style.webkitLineClamp = 'unset';
+    memoryText.style.height = 'auto';
+    contentWrapper.style.overflowY = 'auto';
+    contentWrapper.style.maxHeight = '240px'; // Limit height to prevent overflow
+    contentWrapper.style.scrollbarWidth = 'none';
+    contentWrapper.style.msOverflowStyle = 'none';
+    contentWrapper.style.cssText += '::-webkit-scrollbar { display: none; }';
+    memoryContainer.style.backgroundColor = '#1C1C1E';
+    memoryContainer.style.maxHeight = '300px'; // Allow expansion but within container
+    memoryContainer.style.overflow = 'hidden';
+    removeButton.style.display = 'flex';
+    currentlyExpandedMemory = memoryContainer;
+
+    // Scroll to make expanded memory visible if needed
+    memoriesContent.scrollTop = memoryContainer.offsetTop - memoriesContent.offsetTop;
+  }
+
+  // Function to collapse memory
+  function collapseMemory(
+    memoryContainer: HTMLDivElement,
+    memoryText: HTMLDivElement,
+    contentWrapper: HTMLDivElement,
+    removeButton: HTMLButtonElement,
+    isExpanded: { value: boolean }
+  ) {
+    isExpanded.value = false;
+    memoryText.style.webkitLineClamp = '2';
+    memoryText.style.height = '42px';
+    contentWrapper.style.overflowY = 'visible';
+    memoryContainer.style.backgroundColor = '#27272A';
+    memoryContainer.style.maxHeight = '72px';
+    memoryContainer.style.overflow = 'hidden';
+    removeButton.style.display = 'none';
+    currentlyExpandedMemory = null;
+  }
+
   // Function to show memories with adjusted count based on modal position
   function showMemories() {
-    memoriesContent.innerHTML = "";
+    memoriesContent.innerHTML = '';
 
     if (isLoading) {
       createSkeletonItems();
@@ -1126,8 +1270,8 @@ function createMemoryModal(
     // Reset Add to Prompt button state
     if (addToPromptBtn) {
       addToPromptBtn.disabled = false;
-      addToPromptBtn.style.opacity = "1";
-      addToPromptBtn.style.cursor = "pointer";
+      addToPromptBtn.style.opacity = '1';
+      addToPromptBtn.style.cursor = 'pointer';
     }
 
     // Use the dynamically set memoriesPerPage value
@@ -1146,7 +1290,10 @@ function createMemoryModal(
         break;
       } // Stop if we've reached the end
 
-      const memory = memoryItems[memoryIndex]!;
+      const memory = memoryItems[memoryIndex];
+      if (!memory) {
+        continue;
+      }
 
       // Skip memories that have been added already
       if (allMemoriesById.has(String(memory.id))) {
@@ -1158,7 +1305,7 @@ function createMemoryModal(
         memory.id = `memory-${Date.now()}-${memoryIndex}`;
       }
 
-      const memoryContainer = document.createElement("div");
+      const memoryContainer = document.createElement('div');
       memoryContainer.style.cssText = `
         display: flex;
         flex-direction: row;
@@ -1175,7 +1322,7 @@ function createMemoryModal(
         flex-shrink: 0;
       `;
 
-      const memoryText = document.createElement("div");
+      const memoryText = document.createElement('div');
       memoryText.style.cssText = `
         font-size: 14px;
         line-height: 1.5;
@@ -1188,9 +1335,9 @@ function createMemoryModal(
         transition: all 0.2s ease;
         height: 42px; /* Height for 2 lines of text */
       `;
-      memoryText.textContent = memory.text || "";
+      memoryText.textContent = memory.text || '';
 
-      const actionsContainer = document.createElement("div");
+      const actionsContainer = document.createElement('div');
       actionsContainer.style.cssText = `
         display: flex;
         gap: 4px;
@@ -1199,7 +1346,7 @@ function createMemoryModal(
       `;
 
       // Add button
-      const addButton = document.createElement("button");
+      const addButton = document.createElement('button');
       addButton.style.cssText = `
         border: none;
         cursor: pointer;
@@ -1215,21 +1362,21 @@ function createMemoryModal(
       </svg>`;
 
       // Add click handler for add button
-      addButton.addEventListener("click", (e: MouseEvent) => {
+      addButton.addEventListener('click', (e: MouseEvent) => {
         e.stopPropagation();
-        sendExtensionEvent("memory_injection", {
-          provider: "claude",
-          source: "OPENMEMORY_CHROME_EXTENSION", 
+        sendExtensionEvent('memory_injection', {
+          provider: 'claude',
+          source: 'OPENMEMORY_CHROME_EXTENSION',
           browser: getBrowser(),
           injected_all: false,
-          memory_id: memory.id
+          memory_id: memory.id,
         });
 
         // Mark this memory as added
         allMemoriesById.add(String(memory.id));
 
         // Add this memory to existing ones instead of replacing
-        allMemories.push(String(memory.text || ""));
+        allMemories.push(String(memory.text || ''));
 
         // Update the input with all memories
         updateInputWithMemories();
@@ -1253,7 +1400,7 @@ function createMemoryModal(
       });
 
       // Menu button
-      const menuButton = document.createElement("button");
+      const menuButton = document.createElement('button');
       menuButton.style.cssText = `
         background: none;
         border: none;
@@ -1267,11 +1414,11 @@ function createMemoryModal(
         <circle cx="12" cy="19" r="2"/>
       </svg>`;
 
-      // Track expanded state
-      let isExpanded = false;
+      // Track expanded state using object to maintain reference
+      const isExpanded = { value: false };
 
       // Create remove button (hidden by default)
-      const removeButton = document.createElement("button");
+      const removeButton = document.createElement('button');
       removeButton.style.cssText = `
         display: none;
         align-items: center;
@@ -1294,7 +1441,7 @@ function createMemoryModal(
       `;
 
       // Create content wrapper for text and remove button
-      const contentWrapper = document.createElement("div");
+      const contentWrapper = document.createElement('div');
       contentWrapper.style.cssText = `
         display: flex;
         flex-direction: column;
@@ -1303,56 +1450,21 @@ function createMemoryModal(
       contentWrapper.appendChild(memoryText);
       contentWrapper.appendChild(removeButton);
 
-      // Function to expand memory
-      function expandMemory() {
-        if (currentlyExpandedMemory && currentlyExpandedMemory !== memoryContainer) {
-          currentlyExpandedMemory.dispatchEvent(new Event("collapse"));
-        }
+      memoryContainer.addEventListener('collapse', () => {
+        collapseMemory(memoryContainer, memoryText, contentWrapper, removeButton, isExpanded);
+      });
 
-        isExpanded = true;
-        memoryText.style.webkitLineClamp = "unset";
-        memoryText.style.height = "auto";
-        contentWrapper.style.overflowY = "auto";
-        contentWrapper.style.maxHeight = "240px"; // Limit height to prevent overflow
-        contentWrapper.style.scrollbarWidth = "none";
-        contentWrapper.style.msOverflowStyle = "none";
-        contentWrapper.style.cssText += "::-webkit-scrollbar { display: none; }";
-        memoryContainer.style.backgroundColor = "#1C1C1E";
-        memoryContainer.style.maxHeight = "300px"; // Allow expansion but within container
-        memoryContainer.style.overflow = "hidden";
-        removeButton.style.display = "flex";
-        currentlyExpandedMemory = memoryContainer;
-
-        // Scroll to make expanded memory visible if needed
-        memoriesContent.scrollTop = memoryContainer.offsetTop - memoriesContent.offsetTop;
-      }
-
-      // Function to collapse memory
-      function collapseMemory() {
-        isExpanded = false;
-        memoryText.style.webkitLineClamp = "2";
-        memoryText.style.height = "42px";
-        contentWrapper.style.overflowY = "visible";
-        memoryContainer.style.backgroundColor = "#27272A";
-        memoryContainer.style.maxHeight = "72px";
-        memoryContainer.style.overflow = "hidden";
-        removeButton.style.display = "none";
-        currentlyExpandedMemory = null;
-      }
-
-      memoryContainer.addEventListener("collapse", collapseMemory);
-
-      menuButton.addEventListener("click", (e: MouseEvent) => {
+      menuButton.addEventListener('click', (e: MouseEvent) => {
         e.stopPropagation();
-        if (isExpanded) {
-          collapseMemory();
+        if (isExpanded.value) {
+          collapseMemory(memoryContainer, memoryText, contentWrapper, removeButton, isExpanded);
         } else {
-          expandMemory();
+          expandMemory(memoryContainer, memoryText, contentWrapper, removeButton, isExpanded);
         }
       });
 
       // Add click handler for remove button
-      removeButton.addEventListener("click", (e: MouseEvent) => {
+      removeButton.addEventListener('click', (e: MouseEvent) => {
         e.stopPropagation();
         // Remove from memoryItems
         const index = memoryItems.findIndex((m: MemoryItem) => m.id === memory.id);
@@ -1360,7 +1472,6 @@ function createMemoryModal(
           memoryItems.splice(index, 1);
 
           // Recalculate pagination after removing an item
-          const newTotalPages = Math.ceil(memoryItems.length / memoriesPerPage);
 
           // If we're on the last page and it's now empty, go to previous page
           if (currentMemoryIndex > 0 && currentMemoryIndex >= memoryItems.length) {
@@ -1380,11 +1491,11 @@ function createMemoryModal(
       memoriesContent.appendChild(memoryContainer);
 
       // Add hover effect
-      memoryContainer.addEventListener("mouseenter", () => {
-        memoryContainer.style.backgroundColor = isExpanded ? "#18181B" : "#323232";
+      memoryContainer.addEventListener('mouseenter', () => {
+        memoryContainer.style.backgroundColor = isExpanded.value ? '#18181B' : '#323232';
       });
-      memoryContainer.addEventListener("mouseleave", () => {
-        memoryContainer.style.backgroundColor = isExpanded ? "#1C1C1E" : "#27272A";
+      memoryContainer.addEventListener('mouseleave', () => {
+        memoryContainer.style.backgroundColor = isExpanded.value ? '#1C1C1E' : '#27272A';
       });
     }
 
@@ -1403,10 +1514,10 @@ function createMemoryModal(
 
   // Function to show empty state
   function showEmptyState() {
-    memoriesContent.innerHTML = "";
-    memoriesCounter.textContent = "No Relevant Memories";
+    memoriesContent.innerHTML = '';
+    memoriesCounter.textContent = 'No Relevant Memories';
 
-    const emptyContainer = document.createElement("div");
+    const emptyContainer = document.createElement('div');
     emptyContainer.style.cssText = `
       display: flex;
       flex-direction: column;
@@ -1418,14 +1529,14 @@ function createMemoryModal(
       min-height: 200px;
     `;
 
-    const emptyIcon = document.createElement("div");
+    const emptyIcon = document.createElement('div');
     emptyIcon.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#71717A" xmlns="http://www.w3.org/2000/svg">
       <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v10a2 2 0 01-2 2h-4M3 21h4a2 2 0 002-2v-4m-6 6V9m18 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
-    emptyIcon.style.marginBottom = "16px";
+    emptyIcon.style.marginBottom = '16px';
 
-    const emptyText = document.createElement("div");
-    emptyText.textContent = "No relevant memories found";
+    const emptyText = document.createElement('div');
+    emptyText.textContent = 'No relevant memories found';
     emptyText.style.cssText = `
       color: #71717A;
       font-size: 14px;
@@ -1439,8 +1550,8 @@ function createMemoryModal(
     // Disable the Add to Prompt button when there are no memories
     if (addToPromptBtn) {
       addToPromptBtn.disabled = true;
-      addToPromptBtn.style.opacity = "0.5";
-      addToPromptBtn.style.cursor = "not-allowed";
+      addToPromptBtn.style.opacity = '0.5';
+      addToPromptBtn.style.cursor = 'not-allowed';
     }
   }
 
@@ -1448,37 +1559,37 @@ function createMemoryModal(
   function updateNavigationState(currentPage: number, totalPages: number): void {
     if (memoryItems.length === 0 || totalPages === 0) {
       prevButton.disabled = true;
-      prevButton.style.opacity = "0.5";
-      prevButton.style.cursor = "not-allowed";
+      prevButton.style.opacity = '0.5';
+      prevButton.style.cursor = 'not-allowed';
       nextButton.disabled = true;
-      nextButton.style.opacity = "0.5";
-      nextButton.style.cursor = "not-allowed";
+      nextButton.style.opacity = '0.5';
+      nextButton.style.cursor = 'not-allowed';
       return;
     }
 
     if (currentPage <= 1) {
       prevButton.disabled = true;
-      prevButton.style.opacity = "0.5";
-      prevButton.style.cursor = "not-allowed";
+      prevButton.style.opacity = '0.5';
+      prevButton.style.cursor = 'not-allowed';
     } else {
       prevButton.disabled = false;
-      prevButton.style.opacity = "1";
-      prevButton.style.cursor = "pointer";
+      prevButton.style.opacity = '1';
+      prevButton.style.cursor = 'pointer';
     }
 
     if (currentPage >= totalPages) {
       nextButton.disabled = true;
-      nextButton.style.opacity = "0.5";
-      nextButton.style.cursor = "not-allowed";
+      nextButton.style.opacity = '0.5';
+      nextButton.style.cursor = 'not-allowed';
     } else {
       nextButton.disabled = false;
-      nextButton.style.opacity = "1";
-      nextButton.style.cursor = "pointer";
+      nextButton.style.opacity = '1';
+      nextButton.style.cursor = 'pointer';
     }
   }
 
   // Navigation section at bottom
-  const navigationSection = document.createElement("div");
+  const navigationSection = document.createElement('div');
   navigationSection.style.cssText = `
     display: flex;
     justify-content: center;
@@ -1489,7 +1600,7 @@ function createMemoryModal(
   `;
 
   // Navigation buttons
-  const prevButton = document.createElement("button");
+  const prevButton = document.createElement('button');
   prevButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M15 19l-7-7 7-7" stroke="#A1A1AA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
@@ -1506,21 +1617,21 @@ function createMemoryModal(
     transition: background-color 0.2s;
   `;
 
-  const nextButton = document.createElement("button");
+  const nextButton = document.createElement('button');
   nextButton.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M9 5l7 7-7 7" stroke="#A1A1AA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
   nextButton.style.cssText = prevButton.style.cssText;
 
   // Add navigation button handlers
-  prevButton.addEventListener("click", () => {
+  prevButton.addEventListener('click', () => {
     if (currentMemoryIndex >= memoriesPerPage) {
       currentMemoryIndex = Math.max(0, currentMemoryIndex - memoriesPerPage);
       showMemories();
     }
   });
 
-  nextButton.addEventListener("click", () => {
+  nextButton.addEventListener('click', () => {
     if (currentMemoryIndex + memoriesPerPage < memoryItems.length) {
       currentMemoryIndex = currentMemoryIndex + memoriesPerPage;
       showMemories();
@@ -1529,14 +1640,14 @@ function createMemoryModal(
 
   // Add hover effects
   [prevButton, nextButton].forEach(button => {
-    button.addEventListener("mouseenter", () => {
+    button.addEventListener('mouseenter', () => {
       if (!button.disabled) {
-        button.style.backgroundColor = "#323232";
+        button.style.backgroundColor = '#323232';
       }
     });
-    button.addEventListener("mouseleave", () => {
+    button.addEventListener('mouseleave', () => {
       if (!button.disabled) {
-        button.style.backgroundColor = "#27272A";
+        button.style.backgroundColor = '#27272A';
       }
     });
   });
@@ -1551,17 +1662,17 @@ function createMemoryModal(
   modalHeader.appendChild(headerRight);
 
   // Add draggable functionality to the modal header
-  modalHeader.addEventListener("mousedown", (e: MouseEvent) => {
+  modalHeader.addEventListener('mousedown', (e: MouseEvent) => {
     // Don't start dragging if clicking on a button or interactive element
     const target = e.target as HTMLElement;
     if (!target) {
       return;
     }
     if (
-      target.tagName === "BUTTON" ||
-      target.closest("button") ||
-      target.tagName === "SVG" ||
-      target.closest("svg")
+      target.tagName === 'BUTTON' ||
+      target.closest('button') ||
+      target.tagName === 'SVG' ||
+      target.closest('svg')
     ) {
       return;
     }
@@ -1575,9 +1686,9 @@ function createMemoryModal(
     e.preventDefault();
 
     // Add styles to indicate dragging
-    modalContainer.style.transition = "none";
-    document.body.style.userSelect = "none";
-    modalHeader.style.cursor = "grabbing";
+    modalContainer.style.transition = 'none';
+    document.body.style.userSelect = 'none';
+    modalHeader.style.cursor = 'grabbing';
   });
 
   // Add global mouse move and mouse up handlers
@@ -1611,19 +1722,19 @@ function createMemoryModal(
     isDragging = false;
 
     // Restore styles
-    modalContainer.style.transition = "";
-    document.body.style.userSelect = "";
-    modalHeader.style.cursor = "move";
+    modalContainer.style.transition = '';
+    document.body.style.userSelect = '';
+    modalHeader.style.cursor = 'move';
   };
 
   // Add event listeners to document for global mouse events
-  document.addEventListener("mousemove", handleMouseMove);
-  document.addEventListener("mouseup", handleMouseUp);
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', handleMouseUp);
 
   // Store cleanup function for later use
   (modalOverlay as ExtendedHTMLElement)._cleanupDragEvents = () => {
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("mouseup", handleMouseUp);
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
     isDragging = false;
   };
 
@@ -1669,21 +1780,21 @@ function createMemoryModal(
   }
 
   // Update Add to Prompt button click handler
-  addToPromptBtn.addEventListener("click", () => {
+  addToPromptBtn.addEventListener('click', () => {
     // Only add memories that are not already added
     const newMemories = memoryItems
       .filter(memory => !allMemoriesById.has(String(memory.id)) && !memory.removed)
       .map(memory => {
         allMemoriesById.add(String(memory.id));
-        return String(memory.text || "");
+        return String(memory.text || '');
       });
 
-    sendExtensionEvent("memory_injection", {
-      provider: "claude",
-      source: "OPENMEMORY_CHROME_EXTENSION",
+    sendExtensionEvent('memory_injection', {
+      provider: 'claude',
+      source: 'OPENMEMORY_CHROME_EXTENSION',
       browser: getBrowser(),
       injected_all: true,
-      memory_count: newMemories.length
+      memory_count: newMemories.length,
     });
 
     // Add new memories to allMemories (don't replace existing ones)
@@ -1716,7 +1827,7 @@ function updateInputWithMemories() {
   if (!inputElement) {
     inputElement =
       document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
+      document.querySelector('textarea') ||
       document.querySelector('p[data-placeholder="How can I help you today?"]') ||
       document.querySelector('p[data-placeholder="Reply to Claude..."]');
   }
@@ -1726,22 +1837,22 @@ function updateInputWithMemories() {
     const headerText = OPENMEMORY_PROMPTS.memory_header_text;
 
     // Check if ProseMirror editor
-    if (inputElement.classList.contains("ProseMirror")) {
+    if (inputElement.classList.contains('ProseMirror')) {
       // First check if the header already exists
-      const headerExists = Array.from(inputElement.querySelectorAll("p strong")).some(el =>
-        (el.textContent || "").includes("Here is some of my memories")
+      const headerExists = Array.from(inputElement.querySelectorAll('p strong')).some(el =>
+        (el.textContent || '').includes('Here is some of my memories')
       );
 
       if (headerExists) {
         // Get all existing memory paragraphs
-        const paragraphs = Array.from(inputElement.querySelectorAll("p")) as HTMLElement[];
+        const paragraphs = Array.from(inputElement.querySelectorAll('p')) as HTMLElement[];
         let headerIndex = -1;
         const existingMemories = [];
 
         // Find the index of the header paragraph
         for (let i = 0; i < paragraphs.length; i++) {
-          const strongEl = paragraphs[i]!.querySelector("strong");
-          if (strongEl && (strongEl.textContent || "").includes("Here is some of my memories")) {
+          const strongEl = paragraphs[i]?.querySelector('strong');
+          if (strongEl && (strongEl.textContent || '').includes('Here is some of my memories')) {
             headerIndex = i;
             break;
           }
@@ -1750,9 +1861,12 @@ function updateInputWithMemories() {
         // Collect all existing memories after the header
         if (headerIndex >= 0) {
           for (let i = headerIndex + 1; i < paragraphs.length; i++) {
-            const para = paragraphs[i]!;
-            const text = (para.textContent || "").trim();
-            if (text.startsWith("-")) {
+            const para = paragraphs[i];
+            if (!para) {
+              continue;
+            }
+            const text = (para.textContent || '').trim();
+            if (text.startsWith('-')) {
               existingMemories.push(text.substring(1).trim());
             }
           }
@@ -1761,7 +1875,7 @@ function updateInputWithMemories() {
           const newHTML = Array.from(paragraphs)
             .slice(0, headerIndex + 1)
             .map(p => p.outerHTML)
-            .join("");
+            .join('');
 
           // Combine existing and new memories, avoiding duplicates
           const combinedMemories = [...existingMemories];
@@ -1774,7 +1888,7 @@ function updateInputWithMemories() {
           });
 
           // Add the memories after the header
-          const memoriesHTML = combinedMemories.map(mem => `<p>- ${mem}</p>`).join("");
+          const memoriesHTML = combinedMemories.map(mem => `<p>- ${mem}</p>`).join('');
 
           // Set the new HTML content
           inputElement.innerHTML = newHTML + memoriesHTML;
@@ -1787,14 +1901,14 @@ function updateInputWithMemories() {
         let memoriesContent = `<p><strong>${headerText}</strong></p>`;
 
         // Add all memories to the content with proper paragraph tags
-        memoriesContent += allMemories.map(mem => `<p>- ${mem}</p>`).join("");
+        memoriesContent += allMemories.map(mem => `<p>- ${mem}</p>`).join('');
 
         // If empty, replace the entire content
         if (
           !baseContent ||
-          baseContent.trim() === "" ||
-          (inputElement.querySelectorAll("p").length === 1 &&
-            inputElement.querySelector("p.is-empty") !== null)
+          baseContent.trim() === '' ||
+          (inputElement.querySelectorAll('p').length === 1 &&
+            inputElement.querySelector('p.is-empty') !== null)
         ) {
           inputElement.innerHTML = memoriesContent;
         } else {
@@ -1804,17 +1918,17 @@ function updateInputWithMemories() {
       }
 
       // Dispatch proper events for ProseMirror
-      const inputEvent = new InputEvent("input", {
+      const inputEvent = new InputEvent('input', {
         bubbles: true,
         cancelable: true,
-        inputType: "insertText",
+        inputType: 'insertText',
       });
       inputElement.dispatchEvent(inputEvent);
 
       // Also dispatch a change event
-      const changeEvent = new Event("change", { bubbles: true });
+      const changeEvent = new Event('change', { bubbles: true });
       inputElement.dispatchEvent(changeEvent);
-    } else if (inputElement.tagName.toLowerCase() === "div") {
+    } else if (inputElement.tagName.toLowerCase() === 'div') {
       // For normal contenteditable divs
       // Check if the header already exists
       if (inputElement.innerHTML.includes(headerText)) {
@@ -1825,14 +1939,14 @@ function updateInputWithMemories() {
           const afterHeader = htmlParts[1];
 
           // Extract existing memories from the content after the header
-          const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = afterHeader || "";
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = afterHeader || '';
           const existingMemories: string[] = [];
 
           // Find all paragraphs that start with a dash
-          Array.from(tempDiv.querySelectorAll("p")).forEach(p => {
-            const text = (p.textContent || "").trim();
-            if (text.startsWith("-")) {
+          Array.from(tempDiv.querySelectorAll('p')).forEach(p => {
+            const text = (p.textContent || '').trim();
+            if (text.startsWith('-')) {
               existingMemories.push(text.substring(1).trim());
             }
           });
@@ -1864,32 +1978,32 @@ function updateInputWithMemories() {
           memoriesContent += `<p>- ${mem}</p>`;
         });
 
-        inputElement.innerHTML = `${baseContent}${baseContent ? "<p><br></p>" : ""}${memoriesContent}`;
+        inputElement.innerHTML = `${baseContent}${baseContent ? '<p><br></p>' : ''}${memoriesContent}`;
       }
 
       // Dispatch input event
-      inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
     } else if (
-      inputElement.tagName.toLowerCase() === "p" &&
-      (inputElement.getAttribute("data-placeholder") === "How can I help you today?" ||
-        inputElement.getAttribute("data-placeholder") === "Reply to Claude...")
+      inputElement.tagName.toLowerCase() === 'p' &&
+      (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+        inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')
     ) {
       // For p element placeholders
       // Check if the header already exists
-      if ((inputElement.textContent || "").includes(headerText)) {
+      if ((inputElement.textContent || '').includes(headerText)) {
         // Find the header position and extract existing memories
-        const textParts = (inputElement.textContent || "").split(headerText);
+        const textParts = (inputElement.textContent || '').split(headerText);
         if (textParts.length > 1) {
           const beforeHeader = textParts[0];
           const afterHeader = textParts[1];
 
           // Extract existing memories
           const existingMemories: string[] = [];
-          const memoryLines = (afterHeader || "").split("\n");
+          const memoryLines = (afterHeader || '').split('\n');
 
           memoryLines.forEach(line => {
             const trimmed = line.trim();
-            if (trimmed.startsWith("-")) {
+            if (trimmed.startsWith('-')) {
               existingMemories.push(trimmed.substring(1).trim());
             }
           });
@@ -1906,7 +2020,7 @@ function updateInputWithMemories() {
 
           // Create text with header and all memories
           const newText =
-            beforeHeader + headerText + "\n\n" + combinedMemories.map(mem => `- ${mem}`).join("\n");
+            beforeHeader + headerText + '\n\n' + combinedMemories.map(mem => `- ${mem}`).join('\n');
 
           inputElement.textContent = newText;
         }
@@ -1914,32 +2028,32 @@ function updateInputWithMemories() {
         // Header doesn't exist
         const baseContent = getContentWithoutMemories(undefined);
 
-        inputElement.textContent = `${baseContent}${baseContent ? "\n\n" : ""}${headerText}\n\n${allMemories.map(mem => `- ${mem}`).join("\n")}`;
+        inputElement.textContent = `${baseContent}${baseContent ? '\n\n' : ''}${headerText}\n\n${allMemories.map(mem => `- ${mem}`).join('\n')}`;
       }
 
       // Dispatch various events
-      inputElement.dispatchEvent(new Event("input", { bubbles: true }));
-      inputElement.dispatchEvent(new Event("focus", { bubbles: true }));
-      inputElement.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }));
-      inputElement.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
-      inputElement.dispatchEvent(new Event("change", { bubbles: true }));
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+      inputElement.dispatchEvent(new Event('focus', { bubbles: true }));
+      inputElement.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+      inputElement.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+      inputElement.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
       // For textarea
       // Check if the header already exists
-      if (((inputElement as HTMLTextAreaElement).value || "").includes(headerText)) {
+      if (((inputElement as HTMLTextAreaElement).value || '').includes(headerText)) {
         // Find the header position and extract existing memories
-        const valueParts = ((inputElement as HTMLTextAreaElement).value || "").split(headerText);
+        const valueParts = ((inputElement as HTMLTextAreaElement).value || '').split(headerText);
         if (valueParts.length > 1) {
           const beforeHeader = valueParts[0];
           const afterHeader = valueParts[1];
 
           // Extract existing memories
           const existingMemories: string[] = [];
-          const memoryLines = (afterHeader || "").split("\n");
+          const memoryLines = (afterHeader || '').split('\n');
 
           memoryLines.forEach(line => {
             const trimmed = line.trim();
-            if (trimmed.startsWith("-")) {
+            if (trimmed.startsWith('-')) {
               existingMemories.push(trimmed.substring(1).trim());
             }
           });
@@ -1956,7 +2070,7 @@ function updateInputWithMemories() {
 
           // Create text with header and all memories
           const newValue =
-            beforeHeader + headerText + "\n\n" + combinedMemories.map(mem => `- ${mem}`).join("\n");
+            beforeHeader + headerText + '\n\n' + combinedMemories.map(mem => `- ${mem}`).join('\n');
 
           inputElement.value = newValue;
         }
@@ -1965,11 +2079,11 @@ function updateInputWithMemories() {
         const baseContent = getContentWithoutMemories(undefined);
 
         (inputElement as HTMLTextAreaElement).value =
-          `${baseContent}${baseContent ? "\n\n" : ""}${headerText}\n\n${allMemories.map(mem => `- ${mem}`).join("\n")}`;
+          `${baseContent}${baseContent ? '\n\n' : ''}${headerText}\n\n${allMemories.map(mem => `- ${mem}`).join('\n')}`;
       }
 
       // Dispatch input event
-      inputElement.dispatchEvent(new Event("input", { bubbles: true }));
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     // Focus the input element to ensure the user can continue typing
@@ -1986,36 +2100,36 @@ function getContentWithoutMemories(providedMessage: string | undefined) {
   if (!inputElement) {
     inputElement =
       document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
+      document.querySelector('textarea') ||
       document.querySelector('p[data-placeholder="How can I help you today?"]') ||
       document.querySelector('p[data-placeholder="Reply to Claude..."]');
   }
 
   // If a message is provided, operate on it; otherwise read from DOM
-  let content = "";
+  let content = '';
 
-  if (typeof providedMessage === "string") {
+  if (typeof providedMessage === 'string') {
     content = providedMessage;
   } else {
     if (!inputElement) {
-      return "";
+      return '';
     }
-    if (inputElement.classList.contains("ProseMirror")) {
+    if (inputElement.classList.contains('ProseMirror')) {
       // For ProseMirror, get the innerHTML for proper structure handling
       content = inputElement.innerHTML;
-    } else if (inputElement.tagName.toLowerCase() === "div") {
+    } else if (inputElement.tagName.toLowerCase() === 'div') {
       // For normal contenteditable divs
       content = inputElement.innerHTML;
     } else if (
-      inputElement.tagName.toLowerCase() === "p" &&
-      (inputElement.getAttribute("data-placeholder") === "How can I help you today?" ||
-        inputElement.getAttribute("data-placeholder") === "Reply to Claude...")
+      inputElement.tagName.toLowerCase() === 'p' &&
+      (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+        inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')
     ) {
       // For p element placeholders
-      content = inputElement.innerHTML || inputElement.textContent || "";
+      content = inputElement.innerHTML || inputElement.textContent || '';
     } else {
       // For textarea
-      content = (inputElement as HTMLTextAreaElement).value || "";
+      content = (inputElement as HTMLTextAreaElement).value || '';
     }
   }
 
@@ -2026,15 +2140,17 @@ function getContentWithoutMemories(providedMessage: string | undefined) {
   try {
     const MEM0_HTML = OPENMEMORY_PROMPTS.memory_header_html_regex;
     const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-    content = content.replace(MEM0_HTML, "");
-    content = content.replace(MEM0_PLAIN, "");
-  } catch (_e) {}
+    content = content.replace(MEM0_HTML, '');
+    content = content.replace(MEM0_PLAIN, '');
+  } catch {
+    // Ignore errors when processing memory content
+  }
 
   // Also clean up any empty paragraphs at the end
-  content = content.replace(/<p><br><\/p>$/g, "");
+  content = content.replace(/<p><br><\/p>$/g, '');
   content = content.replace(
     /<p class="is-empty"><br class="ProseMirror-trailingBreak"><\/p>$/g,
-    ""
+    ''
   );
 
   return content.trim();
@@ -2062,9 +2178,9 @@ async function handleMem0Modal(
   setButtonLoadingState(true);
 
   // Hide any tooltip that might be showing
-  const tooltip = document.querySelector("#mem0-tooltip");
+  const tooltip = document.querySelector('#mem0-tooltip');
   if (tooltip) {
-    tooltip.style.display = "none";
+    tooltip.style.display = 'none';
   }
 
   try {
@@ -2087,10 +2203,8 @@ async function handleMem0Modal(
     });
 
     const apiKey = data.apiKey;
-    const userId = data.userId || data.user_id || "chrome-extension-user";
+    const userId = data.userId || data.user_id || 'chrome-extension-user';
     const accessToken = data.access_token;
-    const threshold = data.similarity_threshold !== undefined ? data.similarity_threshold : 0.1;
-    const topK = data.top_k !== undefined ? data.top_k : 10;
 
     if (!apiKey && !accessToken) {
       // Show login popup instead of error message
@@ -2101,24 +2215,17 @@ async function handleMem0Modal(
       return;
     }
 
-    // Now that we know the user is logged in, get the input
-    const inputElement =
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
-      document.querySelector('p[data-placeholder="How can I help you today?"]') ||
-      document.querySelector('p[data-placeholder="Reply to Claude..."]');
-
     let message = getInputValue();
 
-    if (!message || message.trim() === "") {
+    if (!message || message.trim() === '') {
       if (popup) {
         // Hide any existing tooltip first
-        const tooltip = document.querySelector("#mem0-tooltip");
+        const tooltip = document.querySelector('#mem0-tooltip');
         if (tooltip) {
-          tooltip.style.display = "none";
+          tooltip.style.display = 'none';
         }
 
-        showPopup(popup, "Please enter some text first");
+        showPopup(popup, 'Please enter some text first');
       }
 
       isProcessingMem0 = false;
@@ -2132,16 +2239,15 @@ async function handleMem0Modal(
     // Clean the message by removing any existing memory wrappers
     message = getContentWithoutMemories(undefined);
     // Strip HTML tags to ensure clean text for search (fix for <p> tag issue)
-    const tempDiv = document.createElement("div");
+    const tempDiv = document.createElement('div');
     tempDiv.innerHTML = message;
     message = tempDiv.textContent || tempDiv.innerText || message;
     message = message.trim();
 
-
-    sendExtensionEvent("modal_clicked", {
-      provider: "claude",
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      browser: getBrowser()
+    sendExtensionEvent('modal_clicked', {
+      provider: 'claude',
+      source: 'OPENMEMORY_CHROME_EXTENSION',
+      browser: getBrowser(),
     });
 
     const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
@@ -2170,55 +2276,14 @@ async function handleMem0Modal(
       optionalParams.project_id = data.selected_project;
     }
 
-    // Search API call
-    const searchPayload = {
-      query: message,
-      filters: {
-        user_id: userId,
-      },
-      rerank: true,
-      threshold: threshold,
-      top_k: topK,
-      filter_memories: false,
-      // llm_rerank: true,
-      source: "OPENMEMORY_CHROME_EXTENSION",
-      ...optionalParams,
-    };
-
-    const searchResponse = await fetch("https://api.mem0.ai/v2/memories/search/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify(searchPayload),
-    });
-
-    if (!searchResponse.ok) {
-      throw new Error(`API request failed with status ${searchResponse.status}`);
-    }
-
-    const responseData = await searchResponse.json();
-
-    // Extract memories and their categories
-    const memoryItems: MemoryItem[] = (responseData as MemorySearchResponse).map(
-      (item, index: number) => {
-        return {
-          id: item.id || `memory-${Date.now()}-${index}`,
-          text: item.memory,
-          categories: item.categories || [],
-        };
-      }
-    );
-
-    // Update the modal with the retrieved memories
-    createMemoryModal(memoryItems, false, sourceButtonId);
+    currentModalSourceButtonId = sourceButtonId;
+    claudeSearch.runImmediate(message);
 
     // New add memory API call (non-blocking)
-    fetch("https://api.mem0.ai/v1/memories/", {
-      method: "POST",
+    fetch('https://api.mem0.ai/v1/memories/', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: authHeader,
       },
       body: JSON.stringify({
@@ -2226,9 +2291,9 @@ async function handleMem0Modal(
         user_id: userId,
         infer: true,
         metadata: {
-          provider: "Claude",
+          provider: 'Claude',
         },
-        source: "OPENMEMORY_CHROME_EXTENSION",
+        source: 'OPENMEMORY_CHROME_EXTENSION',
         ...optionalParams,
       }),
     })
@@ -2237,12 +2302,12 @@ async function handleMem0Modal(
           // Silent failure for background memory addition
         }
       })
-      .catch(error => {
+      .catch(() => {
         // Silent failure for background memory addition
       });
-  } catch (error) {
+  } catch {
     if (popup) {
-      showPopup(popup, "Failed to send message to Mem0");
+      showPopup(popup, 'Failed to send message to Mem0');
     }
   } finally {
     isProcessingMem0 = false;
@@ -2250,66 +2315,57 @@ async function handleMem0Modal(
   }
 }
 
-// Keep the original handleMem0Click function for backward compatibility
-async function handleMem0Click(
-  popup: HTMLElement,
-  clickSendButton: boolean = false
-): Promise<void> {
-  // Call the new modal handling function
-  await handleMem0Modal(popup, clickSendButton);
-}
-
 function setButtonLoadingState(isLoading: boolean): void {
-  const mem0Button = document.querySelector("#mem0-button");
+  const mem0Button = document.querySelector('#mem0-button');
   if (mem0Button) {
     if (isLoading) {
       (mem0Button as HTMLButtonElement).disabled = true;
-      document.body.style.cursor = "wait";
-      (mem0Button as HTMLButtonElement).style.cursor = "wait";
-      (mem0Button as HTMLButtonElement).style.opacity = "0.7";
+      document.body.style.cursor = 'wait';
+      (mem0Button as HTMLButtonElement).style.cursor = 'wait';
+      (mem0Button as HTMLButtonElement).style.opacity = '0.7';
     } else {
       (mem0Button as HTMLButtonElement).disabled = false;
-      document.body.style.cursor = "default";
-      (mem0Button as HTMLButtonElement).style.cursor = "pointer";
-      (mem0Button as HTMLButtonElement).style.opacity = "1";
+      document.body.style.cursor = 'default';
+      (mem0Button as HTMLButtonElement).style.cursor = 'pointer';
+      (mem0Button as HTMLButtonElement).style.opacity = '1';
     }
   }
 }
 
 function showPopup(popup: HTMLElement, message: string): void {
   // First hide all tooltips and popups
-  const tooltip = document.querySelector("#mem0-tooltip");
+  const tooltip = document.querySelector('#mem0-tooltip');
   if (tooltip) {
-    tooltip.style.display = "none";
+    tooltip.style.display = 'none';
   }
 
   // Also hide any other mem0-popup that might be visible
   const visiblePopups = document.querySelectorAll('.mem0-popup[style*="display: block"]');
   visiblePopups.forEach(p => {
     if (p !== popup) {
-      p.style.display = "none";
+      p.style.display = 'none';
     }
   });
 
   // Create and add the (i) icon
-  const infoIcon = document.createElement("span");
-  infoIcon.textContent = "ⓘ ";
-  infoIcon.style.marginRight = "3px";
+  const infoIcon = document.createElement('span');
+  infoIcon.textContent = 'ⓘ ';
+  infoIcon.style.marginRight = '3px';
 
-  popup.innerHTML = "";
+  popup.innerHTML = '';
   popup.appendChild(infoIcon);
   popup.appendChild(document.createTextNode(message));
 
-  popup.style.display = "block";
+  popup.style.display = 'block';
   setTimeout(() => {
-    popup.style.display = "none";
+    popup.style.display = 'none';
   }, 2000);
 }
 
 function getInputValue(): string | null {
   const inputElement =
     document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea") ||
+    document.querySelector('textarea') ||
     document.querySelector('p[data-placeholder="How can I help you today?"]') ||
     document.querySelector('p[data-placeholder="Reply to Claude..."]');
 
@@ -2319,14 +2375,42 @@ function getInputValue(): string | null {
 
   // For the p element placeholders specifically
   if (
-    inputElement.tagName.toLowerCase() === "p" &&
-    (inputElement.getAttribute("data-placeholder") === "How can I help you today?" ||
-      inputElement.getAttribute("data-placeholder") === "Reply to Claude...")
+    inputElement.tagName.toLowerCase() === 'p' &&
+    (inputElement.getAttribute('data-placeholder') === 'How can I help you today?' ||
+      inputElement.getAttribute('data-placeholder') === 'Reply to Claude...')
   ) {
-    return inputElement.textContent || "";
+    return inputElement.textContent || '';
   }
 
   return inputElement.textContent || (inputElement as HTMLTextAreaElement)?.value || null;
+}
+
+let claudeBackgroundSearchHandler: (() => void) | null = null;
+
+function hookClaudeBackgroundSearchTyping() {
+  const inputElement =
+    document.querySelector('div[contenteditable="true"]') ||
+    document.querySelector('textarea') ||
+    document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+    document.querySelector('p[data-placeholder="Reply to Claude..."]');
+  if (!inputElement) {
+    return;
+  }
+
+  if (!claudeBackgroundSearchHandler) {
+    claudeBackgroundSearchHandler = function () {
+      let text = getInputValue() || '';
+      try {
+        const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+        text = text.replace(MEM0_PLAIN, '').trim();
+      } catch {
+        // Ignore errors during updateNotificationDot
+      }
+      claudeSearch.setText(text);
+    };
+  }
+  inputElement.addEventListener('input', claudeBackgroundSearchHandler);
+  inputElement.addEventListener('keyup', claudeBackgroundSearchHandler);
 }
 
 // Auto-inject support: simple debounce and config
@@ -2361,14 +2445,14 @@ function initializeMem0Integration(): void {
 
     allSendButtons.forEach(sendBtn => {
       if (sendBtn && !sendBtn.dataset.mem0Listener) {
-        sendBtn.dataset.mem0Listener = "true";
+        sendBtn.dataset.mem0Listener = 'true';
 
         // Snapshot current input as early as possible (before Claude clears it)
         sendBtn.addEventListener(
-          "pointerdown",
+          'pointerdown',
           function () {
             const current = getInputValue();
-            if (current && current.trim() !== "") {
+            if (current && current.trim() !== '') {
               lastTyped = current;
             }
             lastSendInitiatedAt = Date.now();
@@ -2378,7 +2462,7 @@ function initializeMem0Integration(): void {
 
         // Use capture-phase click so we run before Claude's handler
         sendBtn.addEventListener(
-          "click",
+          'click',
           function () {
             // Capture and save memory with snapshot fallback
             captureAndStoreMemory(lastTyped);
@@ -2412,7 +2496,7 @@ function initializeMem0Integration(): void {
   if (!(document as ExtendedDocument).__mem0FocusPrimed) {
     (document as ExtendedDocument).__mem0FocusPrimed = true;
     document.addEventListener(
-      "focusin",
+      'focusin',
       e => {
         const target = e.target as Element | null;
         const el =
@@ -2432,11 +2516,11 @@ function initializeMem0Integration(): void {
     );
   }
 
-  document.addEventListener("keydown", function (event) {
-    if (event.ctrlKey && event.key === "m") {
+  document.addEventListener('keydown', function (event) {
+    if (event.ctrlKey && event.key === 'm') {
       event.preventDefault();
       if (memoryEnabled) {
-        const popup = document.querySelector(".mem0-popup");
+        const popup = document.querySelector('.mem0-popup');
         if (popup) {
           (async () => {
             await handleMem0Modal(popup as HTMLElement, false);
@@ -2444,7 +2528,7 @@ function initializeMem0Integration(): void {
         } else {
           // If no popup is available, use the mem0-icon-button as source
           (async () => {
-            await handleMem0Modal(null, false, "mem0-icon-button");
+            await handleMem0Modal(null, false, 'mem0-icon-button');
           })();
         }
       }
@@ -2455,9 +2539,9 @@ function initializeMem0Integration(): void {
   if (!(document as ExtendedDocument).__mem0EnterCapture) {
     (document as ExtendedDocument).__mem0EnterCapture = true;
     document.addEventListener(
-      "keydown",
+      'keydown',
       e => {
-        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
           const v = getInputValue();
           if (v && v.trim()) {
             lastTyped = v;
@@ -2473,8 +2557,8 @@ function initializeMem0Integration(): void {
   if (!(document as ExtendedDocument).__mem0SubmitCapture) {
     (document as ExtendedDocument).__mem0SubmitCapture = true;
     document.addEventListener(
-      "submit",
-      e => {
+      'submit',
+      () => {
         const v = getInputValue();
         if (v && v.trim()) {
           lastTyped = v;
@@ -2487,7 +2571,7 @@ function initializeMem0Integration(): void {
   }
 
   // Observer for main structure changes
-  observer = new MutationObserver(_mutations => {
+  observer = new MutationObserver(() => {
     // Use debounce to avoid excessive calls to addMem0Button
     if (debounceTimer) {
       window.clearTimeout(debounceTimer);
@@ -2498,6 +2582,7 @@ function initializeMem0Integration(): void {
         if (enabled) {
           addMem0Button();
           updateNotificationDot();
+          hookClaudeBackgroundSearchTyping();
         } else {
           removeMemButton();
         }
@@ -2513,12 +2598,13 @@ function initializeMem0Integration(): void {
     getMemoryEnabledState().then(enabled => {
       if (enabled) {
         // Check if we need to add the icon button
-        if (!document.querySelector("#mem0-icon-button")) {
+        if (!document.querySelector('#mem0-icon-button')) {
           addMem0Button();
         }
 
         // Update notification dot on input changes
         updateNotificationDot();
+        hookClaudeBackgroundSearchTyping();
       } else {
         removeMemButton();
       }
@@ -2529,7 +2615,7 @@ function initializeMem0Integration(): void {
   function observeInput() {
     const inputElement =
       document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
+      document.querySelector('textarea') ||
       document.querySelector('p[data-placeholder="How can I help you today?"]') ||
       document.querySelector('p[data-placeholder="Reply to Claude..."]');
 
@@ -2548,17 +2634,18 @@ function initializeMem0Integration(): void {
   observeInput();
 
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === "sync" && changes.memory_enabled) {
+    if (namespace === 'sync' && changes.memory_enabled) {
       updateMemoryEnabled();
     }
   });
 
   // Recheck for elements after page loads
-  window.addEventListener("load", () => {
+  window.addEventListener('load', () => {
     getMemoryEnabledState().then(enabled => {
       if (enabled) {
         addMem0Button();
         updateNotificationDot();
+        hookClaudeBackgroundSearchTyping();
       } else {
         removeMemButton();
       }
@@ -2569,7 +2656,7 @@ function initializeMem0Integration(): void {
   setInterval(() => {
     getMemoryEnabledState().then(enabled => {
       if (enabled) {
-        if (!document.querySelector("#mem0-icon-button")) {
+        if (!document.querySelector('#mem0-icon-button')) {
           addMem0Button();
         }
       } else {
@@ -2580,7 +2667,7 @@ function initializeMem0Integration(): void {
   // Fallback: observe chat thread for newly added user bubbles and post if we missed send
   const ensureThreadObserver = () => {
     const thread = document.querySelector(
-      ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full"
+      '.flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full'
     );
     if (!thread) {
       setTimeout(ensureThreadObserver, 1000);
@@ -2596,22 +2683,28 @@ function initializeMem0Integration(): void {
 
     const observer = new MutationObserver(mutations => {
       for (let i = 0; i < mutations.length; i++) {
-        const m = mutations[i]!;
+        const m = mutations[i];
+        if (!m) {
+          continue;
+        }
         const added = m.addedNodes;
         for (let j = 0; j < added.length; j++) {
-          const n = added[j]!;
+          const n = added[j];
+          if (!n) {
+            continue;
+          }
           const node = (n as ExtendedElement).nodeType === 1 ? (n as Element) : null;
           if (!node) {
             continue;
           }
-          const userEl = (node as ExtendedElement).matches?.(".font-user-message")
+          const userEl = (node as ExtendedElement).matches?.('.font-user-message')
             ? node
-            : (node as ExtendedElement).querySelector?.(".font-user-message");
+            : (node as ExtendedElement).querySelector?.('.font-user-message');
           if (userEl) {
-            const text = (userEl.textContent || "").trim();
+            const text = (userEl.textContent || '').trim();
             if (text) {
               // Create a simple hash of the message to avoid duplicates
-              const messageHash = text.length + "_" + text.substring(0, 50);
+              const messageHash = text.length + '_' + text.substring(0, 50);
 
               // Skip if we've already processed this exact message recently
               if (processedMessages.has(messageHash)) {
@@ -2634,14 +2727,14 @@ function initializeMem0Integration(): void {
                 // For very recent sends, delay slightly to let primary handlers run first
                 setTimeout(() => {
                   // Double-check if we still need to process this message
-                  if (!processedMessages.has(messageHash + "_processed")) {
-                    processedMessages.add(messageHash + "_processed");
+                  if (!processedMessages.has(messageHash + '_processed')) {
+                    processedMessages.add(messageHash + '_processed');
                     captureAndStoreMemory(text);
                   }
                 }, 200);
               } else {
                 // For older messages or when no recent send detected, process immediately
-                processedMessages.add(messageHash + "_processed");
+                processedMessages.add(messageHash + '_processed');
                 captureAndStoreMemory(text);
               }
 
@@ -2661,14 +2754,14 @@ function initializeMem0Integration(): void {
 // Function to show login popup
 function showLoginPopup() {
   // First remove any existing popups
-  const existingPopup = document.querySelector("#mem0-login-popup");
+  const existingPopup = document.querySelector('#mem0-login-popup');
   if (existingPopup) {
     existingPopup.remove();
   }
 
   // Create popup container
-  const popupOverlay = document.createElement("div");
-  popupOverlay.id = "mem0-login-popup";
+  const popupOverlay = document.createElement('div');
+  popupOverlay.id = 'mem0-login-popup';
   popupOverlay.style.cssText = `
     position: fixed;
     top: 0;
@@ -2682,7 +2775,7 @@ function showLoginPopup() {
     z-index: 10001;
   `;
 
-  const popupContainer = document.createElement("div");
+  const popupContainer = document.createElement('div');
   popupContainer.style.cssText = `
     background-color: #1C1C1E;
     border-radius: 12px;
@@ -2694,7 +2787,7 @@ function showLoginPopup() {
   `;
 
   // Close button
-  const closeButton = document.createElement("button");
+  const closeButton = document.createElement('button');
   closeButton.style.cssText = `
     position: absolute;
     top: 16px;
@@ -2705,13 +2798,13 @@ function showLoginPopup() {
     font-size: 16px;
     cursor: pointer;
   `;
-  closeButton.innerHTML = "&times;";
-  closeButton.addEventListener("click", () => {
+  closeButton.innerHTML = '&times;';
+  closeButton.addEventListener('click', () => {
     document.body.removeChild(popupOverlay);
   });
 
   // Logo and heading
-  const logoContainer = document.createElement("div");
+  const logoContainer = document.createElement('div');
   logoContainer.style.cssText = `
     display: flex;
     align-items: center;
@@ -2719,8 +2812,8 @@ function showLoginPopup() {
     margin-bottom: 16px;
   `;
 
-  const logo = document.createElement("img");
-  logo.src = chrome.runtime.getURL("icons/mem0-claude-icon.png");
+  const logo = document.createElement('img');
+  logo.src = chrome.runtime.getURL('icons/mem0-claude-icon.png');
   logo.style.cssText = `
     width: 24px;
     height: 24px;
@@ -2728,8 +2821,8 @@ function showLoginPopup() {
     margin-right: 12px;
   `;
 
-  const logoDark = document.createElement("img");
-  logoDark.src = chrome.runtime.getURL("icons/mem0-icon-black.png");
+  const logoDark = document.createElement('img');
+  logoDark.src = chrome.runtime.getURL('icons/mem0-icon-black.png');
   logoDark.style.cssText = `
     width: 24px;
     height: 24px;
@@ -2737,8 +2830,8 @@ function showLoginPopup() {
     margin-right: 12px;
   `;
 
-  const heading = document.createElement("h2");
-  heading.textContent = "Sign in to OpenMemory";
+  const heading = document.createElement('h2');
+  heading.textContent = 'Sign in to OpenMemory';
   heading.style.cssText = `
     margin: 0;
     font-size: 18px;
@@ -2748,9 +2841,9 @@ function showLoginPopup() {
   logoContainer.appendChild(heading);
 
   // Message
-  const message = document.createElement("p");
+  const message = document.createElement('p');
   message.textContent =
-    "Please sign in to access your memories and personalize your conversations!";
+    'Please sign in to access your memories and personalize your conversations!';
   message.style.cssText = `
     margin-bottom: 24px;
     color: #D4D4D8;
@@ -2760,7 +2853,7 @@ function showLoginPopup() {
   `;
 
   // Sign in button
-  const signInButton = document.createElement("button");
+  const signInButton = document.createElement('button');
   signInButton.style.cssText = `
     display: flex;
     align-items: center;
@@ -2778,23 +2871,23 @@ function showLoginPopup() {
   `;
 
   // Add text in span for better centering
-  const signInText = document.createElement("span");
-  signInText.textContent = "Sign in with Mem0";
+  const signInText = document.createElement('span');
+  signInText.textContent = 'Sign in with Mem0';
 
   signInButton.appendChild(logoDark);
   signInButton.appendChild(signInText);
 
-  signInButton.addEventListener("mouseenter", () => {
-    signInButton.style.backgroundColor = "#f5f5f5";
+  signInButton.addEventListener('mouseenter', () => {
+    signInButton.style.backgroundColor = '#f5f5f5';
   });
 
-  signInButton.addEventListener("mouseleave", () => {
-    signInButton.style.backgroundColor = "white";
+  signInButton.addEventListener('mouseleave', () => {
+    signInButton.style.backgroundColor = 'white';
   });
 
   // Open sign-in page when clicked
-  signInButton.addEventListener("click", () => {
-    window.open("https://app.mem0.ai/login", "_blank");
+  signInButton.addEventListener('click', () => {
+    window.open('https://app.mem0.ai/login', '_blank');
     document.body.removeChild(popupOverlay);
   });
 
@@ -2807,7 +2900,7 @@ function showLoginPopup() {
   popupOverlay.appendChild(closeButton);
 
   // Add click event to close when clicking outside
-  popupOverlay.addEventListener("click", e => {
+  popupOverlay.addEventListener('click', e => {
     if (e.target === popupOverlay) {
       document.body.removeChild(popupOverlay);
     }
@@ -2830,12 +2923,12 @@ async function captureAndStoreMemory(snapshot: string) {
     if (memoryEnabled === false) {
       return; // Don't process memories if disabled
     }
-  } catch (error) {
+  } catch {
     return;
   }
 
   // Use the provided snapshot directly if available, otherwise try to get from input
-  let message = typeof snapshot === "string" && snapshot.trim() !== "" ? snapshot : "";
+  let message = typeof snapshot === 'string' && snapshot.trim() !== '' ? snapshot : '';
 
   if (!message) {
     // Find the input element (prioritizing the ProseMirror div with contenteditable="true")
@@ -2845,7 +2938,7 @@ async function captureAndStoreMemory(snapshot: string) {
     if (!inputElement) {
       inputElement =
         document.querySelector('div[contenteditable="true"]') ||
-        document.querySelector("textarea") ||
+        document.querySelector('textarea') ||
         document.querySelector('p[data-placeholder="How can I help you today?"]') ||
         document.querySelector('p[data-placeholder="Reply to Claude..."]');
     }
@@ -2854,29 +2947,29 @@ async function captureAndStoreMemory(snapshot: string) {
       return;
     }
 
-    if (inputElement.classList.contains("ProseMirror")) {
+    if (inputElement.classList.contains('ProseMirror')) {
       // For ProseMirror, get the textContent for plain text
-      message = inputElement.textContent || "";
-    } else if (inputElement.tagName.toLowerCase() === "div") {
-      message = inputElement.textContent || "";
-    } else if (inputElement.tagName.toLowerCase() === "p") {
-      message = inputElement.textContent || "";
+      message = inputElement.textContent || '';
+    } else if (inputElement.tagName.toLowerCase() === 'div') {
+      message = inputElement.textContent || '';
+    } else if (inputElement.tagName.toLowerCase() === 'p') {
+      message = inputElement.textContent || '';
     } else {
-      message = inputElement.value || "";
+      message = inputElement.value || '';
     }
   }
 
-  if (!message || message.trim() === "") {
+  if (!message || message.trim() === '') {
     return;
   }
 
   // For ProseMirror, the getContentWithoutMemories returns HTML, so we need to extract text
-  if (typeof snapshot !== "string" || !snapshot.trim()) {
+  if (typeof snapshot !== 'string' || !snapshot.trim()) {
     message = getContentWithoutMemories(message);
   }
 
   // Skip if message is empty after processing
-  if (!message || message.trim() === "") {
+  if (!message || message.trim() === '') {
     return;
   }
 
@@ -2904,7 +2997,9 @@ async function captureAndStoreMemory(snapshot: string) {
           if (chrome.runtime && chrome.runtime.lastError) {
             return;
           }
-        } catch (_e) {}
+        } catch {
+          // Ignore errors when checking chrome.runtime.lastError
+        }
         // Skip if memory is disabled or no credentials
         if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
           return;
@@ -2914,7 +3009,7 @@ async function captureAndStoreMemory(snapshot: string) {
           ? `Bearer ${items.access_token}`
           : `Token ${items.apiKey}`;
 
-        const userId = items.userId || items.user_id || "chrome-extension-user";
+        const userId = items.userId || items.user_id || 'chrome-extension-user';
 
         // Get recent messages for context using sliding window
         const contextMessages = getConversationContext(false); // Don't include current message yet
@@ -2930,10 +3025,10 @@ async function captureAndStoreMemory(snapshot: string) {
         }
 
         // Send memory to mem0 API asynchronously without waiting for response
-        fetch("https://api.mem0.ai/v1/memories/", {
-          method: "POST",
+        fetch('https://api.mem0.ai/v1/memories/', {
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
             Authorization: authHeader,
           },
           body: JSON.stringify({
@@ -2941,9 +3036,9 @@ async function captureAndStoreMemory(snapshot: string) {
             user_id: userId,
             infer: true,
             metadata: {
-              provider: "Claude",
+              provider: 'Claude',
             },
-            source: "OPENMEMORY_CHROME_EXTENSION",
+            source: 'OPENMEMORY_CHROME_EXTENSION',
             ...optionalParams,
           }),
         })
@@ -2952,12 +3047,12 @@ async function captureAndStoreMemory(snapshot: string) {
               // Silent failure for background memory addition
             }
           })
-          .catch(error => {
+          .catch(() => {
             // Silent failure for background memory addition
           });
       }
     );
-  } catch (storageError) {
+  } catch {
     // Silent failure for background memory addition
   }
 }
@@ -2965,7 +3060,7 @@ async function captureAndStoreMemory(snapshot: string) {
 // Function to update the notification dot
 function updateNotificationDot() {
   // Find all Mem0 notification dots
-  const notificationDots = document.querySelectorAll("#mem0-notification-dot");
+  const notificationDots = document.querySelectorAll('#mem0-notification-dot');
   if (!notificationDots.length) {
     return;
   }
@@ -2977,7 +3072,7 @@ function updateNotificationDot() {
   if (!inputElement) {
     inputElement =
       document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea") ||
+      document.querySelector('textarea') ||
       document.querySelector('p[data-placeholder="How can I help you today?"]') ||
       document.querySelector('p[data-placeholder="Reply to Claude..."]');
   }
@@ -2991,36 +3086,36 @@ function updateNotificationDot() {
     let hasText = false;
 
     // Check for text based on the input type
-    if (inputElement.classList.contains("ProseMirror")) {
+    if (inputElement.classList.contains('ProseMirror')) {
       // For ProseMirror, check if it has any content other than just a placeholder <p>
-      const paragraphs = inputElement.querySelectorAll("p");
+      const paragraphs = inputElement.querySelectorAll('p');
 
       // Check if there's text content or if there are multiple paragraphs (not just empty placeholder)
-      const textContent = (inputElement.textContent || "").trim();
+      const textContent = (inputElement.textContent || '').trim();
       hasText =
-        textContent !== "" ||
+        textContent !== '' ||
         paragraphs.length > 1 ||
         (paragraphs.length === 1 &&
-          !(paragraphs[0] as HTMLElement | undefined)?.classList?.contains("is-empty"));
-    } else if (inputElement.tagName.toLowerCase() === "p") {
+          !(paragraphs[0] as HTMLElement | undefined)?.classList?.contains('is-empty'));
+    } else if (inputElement.tagName.toLowerCase() === 'p') {
       // For p elements with placeholder
-      hasText = (inputElement.textContent || "").trim() !== "";
-    } else if (inputElement.tagName.toLowerCase() === "div") {
+      hasText = (inputElement.textContent || '').trim() !== '';
+    } else if (inputElement.tagName.toLowerCase() === 'div') {
       // For normal contenteditable divs
-      hasText = (inputElement.textContent || "").trim() !== "";
+      hasText = (inputElement.textContent || '').trim() !== '';
     } else {
       // For textareas
-      hasText = (inputElement.value || "").trim() !== "";
+      hasText = (inputElement.value || '').trim() !== '';
     }
 
     // Update all notification dots
     notificationDots.forEach(notificationDot => {
       if (hasText) {
-        notificationDot.classList.add("active");
-        notificationDot.style.display = "block";
+        notificationDot.classList.add('active');
+        notificationDot.style.display = 'block';
       } else {
-        notificationDot.classList.remove("active");
-        notificationDot.style.display = "none";
+        notificationDot.classList.remove('active');
+        notificationDot.style.display = 'none';
       }
     });
   };
@@ -3032,13 +3127,13 @@ function updateNotificationDot() {
     characterData: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["class"],
+    attributeFilter: ['class'],
   });
 
   // Also listen for direct input events
-  inputElement.addEventListener("input", checkForText);
-  inputElement.addEventListener("keyup", checkForText);
-  inputElement.addEventListener("focus", checkForText);
+  inputElement.addEventListener('input', checkForText);
+  inputElement.addEventListener('keyup', checkForText);
+  inputElement.addEventListener('focus', checkForText);
 
   // Initial check
   checkForText();
@@ -3059,7 +3154,7 @@ function setupEnhancedDOMMonitoring() {
 
   // Enhanced real-time message monitoring with multiple strategies
   function setupRealTimeMessageMonitoring() {
-    const threadSelector = ".flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full";
+    const threadSelector = '.flex-1.flex.flex-col.gap-3.px-4.max-w-3xl.mx-auto.w-full';
 
     // Strategy 1: Monitor for new user message elements
     const messageObserver = new MutationObserver(mutations => {
@@ -3068,9 +3163,9 @@ function setupEnhancedDOMMonitoring() {
           if (node.nodeType === 1) {
             const el = node as Element;
             // Look for user messages
-            const userMessage = el.querySelector(".font-user-message");
+            const userMessage = el.querySelector('.font-user-message');
             if (userMessage) {
-              const text = (userMessage.textContent || "").trim();
+              const text = (userMessage.textContent || '').trim();
               if (text) {
                 // Add to conversation history
                 addToConversationHistory(MessageRole.User, text);
@@ -3088,9 +3183,9 @@ function setupEnhancedDOMMonitoring() {
             // Also check if the node itself is a user message
             if (
               (el as ExtendedElement).classList &&
-              (el as ExtendedElement).classList.contains("font-user-message")
+              (el as ExtendedElement).classList.contains('font-user-message')
             ) {
-              const text = (el.textContent || "").trim();
+              const text = (el.textContent || '').trim();
               if (text) {
                 // Add to conversation history
                 addToConversationHistory(MessageRole.User, text);
@@ -3106,9 +3201,9 @@ function setupEnhancedDOMMonitoring() {
             }
 
             // Also look for Claude's assistant messages
-            const assistantMessage = el.querySelector(".font-claude-message");
+            const assistantMessage = el.querySelector('.font-claude-message');
             if (assistantMessage) {
-              const text = (assistantMessage.textContent || "").trim();
+              const text = (assistantMessage.textContent || '').trim();
               if (text) {
                 // Add to conversation history
                 addToConversationHistory(MessageRole.Assistant, text);
@@ -3118,9 +3213,9 @@ function setupEnhancedDOMMonitoring() {
             // Check if the node itself is an assistant message
             if (
               (el as ExtendedElement).classList &&
-              (el as ExtendedElement).classList.contains("font-claude-message")
+              (el as ExtendedElement).classList.contains('font-claude-message')
             ) {
-              const text = (el.textContent || "").trim();
+              const text = (el.textContent || '').trim();
               if (text) {
                 // Add to conversation history
                 addToConversationHistory(MessageRole.Assistant, text);
@@ -3151,12 +3246,12 @@ function setupEnhancedDOMMonitoring() {
     const inputSelectors = [
       'div[contenteditable="true"].ProseMirror',
       'div[contenteditable="true"]',
-      "textarea",
+      'textarea',
       'p[data-placeholder="How can I help you today?"]',
       'p[data-placeholder="Reply to Claude..."]',
     ];
 
-    let lastInputValue = "";
+    let lastInputValue = '';
     let inputClearingObserver: MutationObserver | undefined;
 
     function findAndObserveInput() {
@@ -3169,7 +3264,7 @@ function setupEnhancedDOMMonitoring() {
           }
 
           inputClearingObserver = new MutationObserver(() => {
-            const currentValue = getInputValue() || "";
+            const currentValue = getInputValue() || '';
 
             // Check if input was cleared (had content, now empty)
             if (lastInputValue.trim() && !currentValue.trim()) {
@@ -3196,8 +3291,8 @@ function setupEnhancedDOMMonitoring() {
           });
 
           // Also listen for input events
-          input.addEventListener("input", () => {
-            lastInputValue = getInputValue() || "";
+          input.addEventListener('input', () => {
+            lastInputValue = getInputValue() || '';
           });
 
           break;
@@ -3235,10 +3330,10 @@ function checkExtensionContext() {
 function detectNavigation() {
   const newUrl = window.location.href;
   if (newUrl !== currentUrl) {
-    const wasNewChat = currentUrl.includes("/new") || currentUrl.includes("/chat/new");
-    const isNewChat = newUrl.includes("/new") || newUrl.includes("/chat/new");
+    const wasNewChat = currentUrl.includes('/new') || currentUrl.includes('/chat/new');
+    const isNewChat = newUrl.includes('/new') || newUrl.includes('/chat/new');
     const isDifferentChat =
-      currentUrl.includes("/chat/") && newUrl.includes("/chat/") && currentUrl !== newUrl;
+      currentUrl.includes('/chat/') && newUrl.includes('/chat/') && currentUrl !== newUrl;
 
     // Clear conversation history when navigating to a new chat or different chat
     if (isNewChat || isDifferentChat || wasNewChat) {
@@ -3274,7 +3369,7 @@ setInterval(() => {
 }, 1000);
 
 // Also listen for browser navigation events for faster detection
-window.addEventListener("popstate", () => {
+window.addEventListener('popstate', () => {
   setTimeout(detectNavigation, 100);
 });
 

@@ -1,13 +1,16 @@
+/** message roles (User, Assistant) */
 export enum MessageRole {
-  User = "user",
-  Assistant = "assistant",
+  User = 'user',
+  Assistant = 'assistant',
 }
 
+/** Message structure with role and content */
 export type ApiMessage = {
   role: string;
   content: string;
 };
 
+/** Request payload for memory API calls */
 export type ApiMemoryRequest = {
   messages: ApiMessage[];
   user_id: string;
@@ -22,6 +25,7 @@ export type ApiMemoryRequest = {
   project_id?: string;
 };
 
+/** Array of memory search results */
 export type MemorySearchResponse = Array<{
   id: string;
   memory: string;
@@ -31,13 +35,16 @@ export type MemorySearchResponse = Array<{
   categories?: string[];
 }>;
 
-export type LoginData = {
-  apiKey?: string;
-  userId?: string;
-  user_id?: string;
-  access_token?: string;
-};
+/** User authentication data structure */
+export type LoginData = Partial<{
+  apiKey: string;
+  userId: string;
+  user_id: string;
+  access_token: string;
+}>;
 
-export const DEFAULT_USER_ID = "chrome-extension-user";
+/** Default user ID constant */
+export const DEFAULT_USER_ID = 'chrome-extension-user';
 
-export const SOURCE = "OPENMEMORY_CHROME_EXTENSION";
+/** Extension source identifier */
+export const SOURCE = 'OPENMEMORY_CHROME_EXTENSION';

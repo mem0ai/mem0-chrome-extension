@@ -1,11 +1,10 @@
-import type { SidebarActionMessage } from "./types/messages";
-import { SidebarAction } from "./types/messages";
-import type { SidebarSettings } from "./types/settings";
-import { StorageKey } from "./types/storage";
-import type { Organization, Project } from "./types/organizations";
-import { DEFAULT_USER_ID } from "./types/api";
-import type { Memory, MemoriesResponse } from "./types/memory";
-import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
+import { DEFAULT_USER_ID } from './types/api';
+import type { MemoriesResponse, Memory } from './types/memory';
+import { SidebarAction, type SidebarActionMessage } from './types/messages';
+import type { Organization, Project } from './types/organizations';
+import type { SidebarSettings } from './types/settings';
+import { StorageKey } from './types/storage';
+import { getBrowser, sendExtensionEvent } from './utils/util_functions';
 
 (function () {
   let sidebarVisible = false;
@@ -13,11 +12,7 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   function initializeMem0Sidebar(): void {
     // Listen for messages from the extension
     chrome.runtime.onMessage.addListener(
-      (
-        request: SidebarActionMessage | { action: SidebarAction.SIDEBAR_SETTINGS },
-        _sender,
-        _sendResponse: () => void
-      ) => {
+      (request: SidebarActionMessage | { action: SidebarAction.SIDEBAR_SETTINGS }) => {
         if (request.action === SidebarAction.TOGGLE_SIDEBAR) {
           chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
             if (data.apiKey || data.access_token) {
@@ -49,39 +44,39 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   function toggleSidebar(): void {
     // Track extension usage when sidebar is toggled
     if (typeof sendExtensionEvent === 'function') {
-      sendExtensionEvent("extension_browser_icon_clicked", {
+      sendExtensionEvent('extension_browser_icon_clicked', {
         browser: getBrowser(),
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        tab_url: window.location.href
+        source: 'OPENMEMORY_CHROME_EXTENSION',
+        tab_url: window.location.href,
       });
     }
-    const sidebar = document.getElementById("mem0-sidebar");
+    const sidebar = document.getElementById('mem0-sidebar');
     if (sidebar) {
       // If sidebar exists, toggle its visibility
       sidebarVisible = !sidebarVisible;
-      sidebar.style.right = sidebarVisible ? "0px" : "-600px";
+      sidebar.style.right = sidebarVisible ? '0px' : '-600px';
 
       // Add or remove click listener based on sidebar visibility
       if (sidebarVisible) {
-        document.addEventListener("click", handleOutsideClick);
-        document.addEventListener("keydown", handleEscapeKey);
+        document.addEventListener('click', handleOutsideClick);
+        document.addEventListener('keydown', handleEscapeKey);
         fetchMemoriesAndCount();
       } else {
-        document.removeEventListener("click", handleOutsideClick);
-        document.removeEventListener("keydown", handleEscapeKey);
+        document.removeEventListener('click', handleOutsideClick);
+        document.removeEventListener('keydown', handleEscapeKey);
       }
     } else {
       // If sidebar doesn't exist, create it
       createSidebar();
       sidebarVisible = true;
-      document.addEventListener("click", handleOutsideClick);
-      document.addEventListener("keydown", handleEscapeKey);
+      document.addEventListener('click', handleOutsideClick);
+      document.addEventListener('keydown', handleEscapeKey);
     }
   }
 
   function handleEscapeKey(event: KeyboardEvent): void {
-    if (event.key === "Escape") {
-      const searchInput = document.querySelector(".search-memory");
+    if (event.key === 'Escape') {
+      const searchInput = document.querySelector('.search-memory');
 
       if (searchInput) {
         closeSearchInput();
@@ -92,31 +87,31 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   }
 
   function handleOutsideClick(event: MouseEvent): void {
-    const sidebar = document.getElementById("mem0-sidebar");
+    const sidebar = document.getElementById('mem0-sidebar');
     if (
       sidebar &&
       !sidebar.contains(event.target as Node) &&
-      !(event.target as HTMLElement)?.closest?.(".mem0-toggle-btn")
+      !(event.target as HTMLElement)?.closest?.('.mem0-toggle-btn')
     ) {
       toggleSidebar();
     }
   }
 
   function createSidebar(): void {
-    if (document.getElementById("mem0-sidebar")) {
+    if (document.getElementById('mem0-sidebar')) {
       return;
     }
 
-    const sidebarContainer = document.createElement("div");
-    sidebarContainer.id = "mem0-sidebar";
+    const sidebarContainer = document.createElement('div');
+    sidebarContainer.id = 'mem0-sidebar';
 
     // Create fixed header
-    const fixedHeader = document.createElement("div");
-    fixedHeader.className = "fixed-header";
+    const fixedHeader = document.createElement('div');
+    fixedHeader.className = 'fixed-header';
     fixedHeader.innerHTML = `
         <div class="header">
           <div class="logo-container">
-            <img src=${chrome.runtime.getURL("icons/mem0-claude-icon.png")} class="openmemory-icon" alt="OpenMemory Logo">
+            <img src=${chrome.runtime.getURL('icons/mem0-claude-icon.png')} class="openmemory-icon" alt="OpenMemory Logo">
             <span class="openmemory-logo">OpenMemory</span>
           </div>
           <div class="header-buttons">
@@ -131,13 +126,13 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
       `;
 
     // Create a container for search inputs
-    const inputContainer = document.createElement("div");
-    inputContainer.className = "input-container";
+    const inputContainer = document.createElement('div');
+    inputContainer.className = 'input-container';
     fixedHeader.appendChild(inputContainer);
 
     // Create tabs
-    const tabsContainer = document.createElement("div");
-    tabsContainer.className = "tabs-container";
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'tabs-container';
     tabsContainer.innerHTML = `
       <div class="tabs">
         <button class="tab-button active" data-tab="memories">Recent Memories</button>
@@ -149,12 +144,12 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     sidebarContainer.appendChild(fixedHeader);
 
     // Create content container
-    const contentContainer = document.createElement("div");
-    contentContainer.className = "content";
+    const contentContainer = document.createElement('div');
+    contentContainer.className = 'content';
 
     // Create memory count display
-    const memoryCountContainer = document.createElement("div");
-    memoryCountContainer.className = "total-memories";
+    const memoryCountContainer = document.createElement('div');
+    memoryCountContainer.className = 'total-memories';
     memoryCountContainer.innerHTML = `
       <div class="total-memories-content">
         <div>
@@ -172,14 +167,14 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     `;
 
     // Create memories tab content
-    const memoriesTabContent = document.createElement("div");
-    memoriesTabContent.className = "tab-content active";
-    memoriesTabContent.id = "memories-tab";
+    const memoriesTabContent = document.createElement('div');
+    memoriesTabContent.className = 'tab-content active';
+    memoriesTabContent.id = 'memories-tab';
     memoriesTabContent.appendChild(memoryCountContainer);
 
     // Add memories section
-    const memoriesSection = document.createElement("div");
-    memoriesSection.className = "section";
+    const memoriesSection = document.createElement('div');
+    memoriesSection.className = 'section';
     memoriesSection.innerHTML = `
       <h2 class="section-title">Recent Memories</h2>
       <div class="memory-cards">
@@ -191,13 +186,13 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     memoriesTabContent.appendChild(memoriesSection);
 
     // Create settings tab content
-    const settingsTabContent = document.createElement("div");
-    settingsTabContent.className = "tab-content";
-    settingsTabContent.id = "settings-tab";
+    const settingsTabContent = document.createElement('div');
+    settingsTabContent.className = 'tab-content';
+    settingsTabContent.id = 'settings-tab';
 
     // Move memory suggestions to settings tab
-    const memoryToggleSection = document.createElement("div");
-    memoryToggleSection.className = "section";
+    const memoryToggleSection = document.createElement('div');
+    memoryToggleSection.className = 'section';
     memoryToggleSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Memory Suggestions</h2>
@@ -211,8 +206,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(memoryToggleSection);
 
     // Track searches toggle section
-    const trackSearchSection = document.createElement("div");
-    trackSearchSection.className = "section";
+    const trackSearchSection = document.createElement('div');
+    trackSearchSection.className = 'section';
     trackSearchSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Track searches</h2>
@@ -226,8 +221,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(trackSearchSection);
 
     // Add user ID input section
-    const userIdSection = document.createElement("div");
-    userIdSection.className = "section";
+    const userIdSection = document.createElement('div');
+    userIdSection.className = 'section';
     userIdSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">User ID</h2>
@@ -244,8 +239,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(userIdSection);
 
     // Add organization select section
-    const orgSection = document.createElement("div");
-    orgSection.className = "section";
+    const orgSection = document.createElement('div');
+    orgSection.className = 'section';
     orgSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Organization</h2>
@@ -257,8 +252,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(orgSection);
 
     // Add project select section
-    const projectSection = document.createElement("div");
-    projectSection.className = "section";
+    const projectSection = document.createElement('div');
+    projectSection.className = 'section';
     projectSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Project</h2>
@@ -270,8 +265,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(projectSection);
 
     // Add Auto-Inject toggle section
-    const autoInjectSection = document.createElement("div");
-    autoInjectSection.className = "section";
+    const autoInjectSection = document.createElement('div');
+    autoInjectSection.className = 'section';
     autoInjectSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Enable Auto-Inject</h2>
@@ -286,8 +281,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     // settingsTabContent.appendChild(autoInjectSection);
 
     // Add threshold slider section
-    const thresholdSection = document.createElement("div");
-    thresholdSection.className = "section";
+    const thresholdSection = document.createElement('div');
+    thresholdSection.className = 'section';
     thresholdSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Threshold</h2>
@@ -306,8 +301,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(thresholdSection);
 
     // Add top k section
-    const topKSection = document.createElement("div");
-    topKSection.className = "section";
+    const topKSection = document.createElement('div');
+    topKSection.className = 'section';
     topKSection.innerHTML = `
       <div class="section-header">
         <h2 class="section-title">Top K</h2>
@@ -318,8 +313,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     settingsTabContent.appendChild(topKSection);
 
     // Add save button section
-    const saveSection = document.createElement("div");
-    saveSection.className = "section";
+    const saveSection = document.createElement('div');
+    saveSection.className = 'section';
     saveSection.innerHTML = `
       <button id="saveSettingsBtn" class="save-button">
         <span class="save-text">Save Settings</span>
@@ -336,8 +331,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     sidebarContainer.appendChild(contentContainer);
 
     // Create footer with shortcut and logout
-    const footerToggle = document.createElement("div");
-    footerToggle.className = "footer";
+    const footerToggle = document.createElement('div');
+    footerToggle.className = 'footer';
     footerToggle.innerHTML = `
       <div class="shortcut">Shortcut : ^ + M</div>
       <button id="logoutBtn" class="logout-button"><span>Logout</span></button>
@@ -356,20 +351,20 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
         StorageKey.TRACK_SEARCHES,
       ],
       function (result) {
-        const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle") as HTMLInputElement;
+        const toggleCheckbox = memoryToggleSection.querySelector('#mem0Toggle') as HTMLInputElement;
         if (toggleCheckbox) {
           toggleCheckbox.checked = result[StorageKey.MEMORY_ENABLED] !== false;
         }
 
         // Load track searches (default: enabled)
         const trackSearchesCheckbox = trackSearchSection.querySelector(
-          "#trackSearchesToggle"
+          '#trackSearchesToggle'
         ) as HTMLInputElement;
         if (trackSearchesCheckbox) {
           trackSearchesCheckbox.checked = result[StorageKey.TRACK_SEARCHES] !== false;
         }
 
-        const userIdInput = userIdSection.querySelector("#userIdInput") as HTMLInputElement;
+        const userIdInput = userIdSection.querySelector('#userIdInput') as HTMLInputElement;
         // Set saved value or keep default value
         if (result[StorageKey.USER_ID] && userIdInput) {
           userIdInput.value = result[StorageKey.USER_ID];
@@ -378,7 +373,7 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
 
         // Load auto-inject setting (default: enabled)
         const autoInjectCheckbox = autoInjectSection.querySelector(
-          "#autoInjectToggle"
+          '#autoInjectToggle'
         ) as HTMLInputElement;
         if (autoInjectCheckbox) {
           autoInjectCheckbox.checked = result[StorageKey.AUTO_INJECT_ENABLED] !== false;
@@ -386,9 +381,9 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
 
         // Load threshold setting (default: 0.1)
         const thresholdSlider = thresholdSection.querySelector(
-          "#thresholdSlider"
+          '#thresholdSlider'
         ) as HTMLInputElement;
-        const thresholdValue = thresholdSection.querySelector(".threshold-value") as HTMLElement;
+        const thresholdValue = thresholdSection.querySelector('.threshold-value') as HTMLElement;
         const threshold =
           result[StorageKey.SIMILARITY_THRESHOLD] !== undefined
             ? result[StorageKey.SIMILARITY_THRESHOLD]
@@ -401,7 +396,7 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
         }
 
         // Load top k setting (default: 10)
-        const topKInput = topKSection.querySelector("#topKInput") as HTMLInputElement;
+        const topKInput = topKSection.querySelector('#topKInput') as HTMLInputElement;
         const topK = result[StorageKey.TOP_K] !== undefined ? result[StorageKey.TOP_K] : 10;
         if (topKInput) {
           topKInput.value = String(topK);
@@ -431,11 +426,11 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
 
     // Slide in the sidebar immediately after creation
     setTimeout(() => {
-      sidebarContainer.style.right = "0";
+      sidebarContainer.style.right = '0';
     }, 0);
 
     // Prevent clicks within the sidebar from closing it
-    sidebarContainer.addEventListener("click", event => {
+    sidebarContainer.addEventListener('click', event => {
       event.stopPropagation();
     });
 
@@ -463,33 +458,33 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   ): void {
     // Show loading state
     saveBtn.disabled = true;
-    saveText.style.display = "none";
-    saveLoader.style.display = "flex";
-    saveMessage.style.display = "none";
+    saveText.style.display = 'none';
+    saveLoader.style.display = 'flex';
+    saveMessage.style.display = 'none';
 
     // Get all the values
-    const userIdInput = userIdSection.querySelector("#userIdInput") as HTMLInputElement;
-    const orgSelect = orgSection.querySelector("#orgSelect") as HTMLSelectElement;
-    const projectSelect = projectSection.querySelector("#projectSelect") as HTMLSelectElement;
-    const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle") as HTMLInputElement;
+    const userIdInput = userIdSection.querySelector('#userIdInput') as HTMLInputElement;
+    const orgSelect = orgSection.querySelector('#orgSelect') as HTMLSelectElement;
+    const projectSelect = projectSection.querySelector('#projectSelect') as HTMLSelectElement;
+    const toggleCheckbox = memoryToggleSection.querySelector('#mem0Toggle') as HTMLInputElement;
     const autoInjectCheckbox = autoInjectSection.querySelector(
-      "#autoInjectToggle"
+      '#autoInjectToggle'
     ) as HTMLInputElement;
-    const thresholdSlider = thresholdSection.querySelector("#thresholdSlider") as HTMLInputElement;
-    const topKInput = topKSection.querySelector("#topKInput") as HTMLInputElement;
+    const thresholdSlider = thresholdSection.querySelector('#thresholdSlider') as HTMLInputElement;
+    const topKInput = topKSection.querySelector('#topKInput') as HTMLInputElement;
     const trackSearchesCheckbox = trackSearchSection.querySelector(
-      "#trackSearchesToggle"
+      '#trackSearchesToggle'
     ) as HTMLInputElement;
 
-    const userId = (userIdInput?.value || "").trim();
-    const selectedOrgId = orgSelect?.value || "";
-    const selectedOrgName = orgSelect?.options[orgSelect.selectedIndex]?.text || "";
-    const selectedProjectId = projectSelect?.value || "";
-    const selectedProjectName = projectSelect?.options[projectSelect.selectedIndex]?.text || "";
+    const userId = (userIdInput?.value || '').trim();
+    const selectedOrgId = orgSelect?.value || '';
+    const selectedOrgName = orgSelect?.options[orgSelect.selectedIndex]?.text || '';
+    const selectedProjectId = projectSelect?.value || '';
+    const selectedProjectName = projectSelect?.options[projectSelect.selectedIndex]?.text || '';
     const memoryEnabled = Boolean(toggleCheckbox?.checked);
     const autoInjectEnabled = Boolean(autoInjectCheckbox?.checked);
-    const similarityThreshold = parseFloat(thresholdSlider?.value || "0.3");
-    const topK = parseInt(topKInput?.value || "10", 10);
+    const similarityThreshold = parseFloat(thresholdSlider?.value || '0.3');
+    const topK = parseInt(topKInput?.value || '10', 10);
 
     // Prepare settings object
     const settings: SidebarSettings = {
@@ -518,14 +513,14 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
       chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
         const headers = getHeaders(data.apiKey, data.access_token);
         fetch(`https://api.mem0.ai/v1/extension/`, {
-          method: "POST",
+          method: 'POST',
           headers: headers,
           body: JSON.stringify({
-            event_type: "extension_toggle_button",
+            event_type: 'extension_toggle_button',
             additional_data: { status: memoryEnabled },
           }),
         }).catch(error => {
-          console.error("Error sending toggle event:", error);
+          console.error('Error sending toggle event:', error);
         });
       });
 
@@ -538,15 +533,15 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
       // Show success message
       setTimeout(() => {
         saveBtn.disabled = false;
-        saveText.style.display = "inline";
-        saveLoader.style.display = "none";
-        saveMessage.style.display = "block";
-        saveMessage.className = "save-message success";
-        saveMessage.textContent = "Settings saved successfully!";
+        saveText.style.display = 'inline';
+        saveLoader.style.display = 'none';
+        saveMessage.style.display = 'block';
+        saveMessage.className = 'save-message success';
+        saveMessage.textContent = 'Settings saved successfully!';
 
         // Hide message after 3 seconds
         setTimeout(() => {
-          saveMessage.style.display = "none";
+          saveMessage.style.display = 'none';
         }, 3000);
 
         // Refresh memories with new settings
@@ -570,48 +565,46 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     trackSearchSection: HTMLElement
   ): void {
     // Close button
-    const closeBtn = sidebarContainer.querySelector("#closeBtn") as HTMLButtonElement;
-    closeBtn?.addEventListener("click", toggleSidebar);
+    const closeBtn = sidebarContainer.querySelector('#closeBtn') as HTMLButtonElement;
+    closeBtn?.addEventListener('click', toggleSidebar);
 
     // Tab switching
-    const tabButtons = sidebarContainer.querySelectorAll<HTMLButtonElement>(".tab-button");
-    const tabContents = sidebarContainer.querySelectorAll<HTMLElement>(".tab-content");
+    const tabButtons = sidebarContainer.querySelectorAll<HTMLButtonElement>('.tab-button');
+    const tabContents = sidebarContainer.querySelectorAll<HTMLElement>('.tab-content');
 
     tabButtons.forEach(button => {
-      button.addEventListener("click", function (this: HTMLButtonElement) {
-        const targetTab = this.getAttribute("data-tab");
+      button.addEventListener('click', function (this: HTMLButtonElement) {
+        const targetTab = this.getAttribute('data-tab');
 
         // Remove active class from all tabs and contents
-        tabButtons.forEach(btn => btn.classList.remove("active"));
-        tabContents.forEach(content => content.classList.remove("active"));
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
 
         // Add active class to clicked tab and corresponding content
-        this.classList.add("active");
-        document.getElementById(`${targetTab}-tab`)?.classList.add("active");
+        this.classList.add('active');
+        document.getElementById(`${targetTab}-tab`)?.classList.add('active');
       });
     });
 
     // Dashboard button
     const openDashboardBtn = memoryCountContainer.querySelector(
-      "#openDashboardBtn"
+      '#openDashboardBtn'
     ) as HTMLButtonElement;
-    openDashboardBtn?.addEventListener("click", openDashboard);
+    openDashboardBtn?.addEventListener('click', openDashboard);
 
     // Logout button
-    const logoutBtn = footerToggle.querySelector("#logoutBtn") as HTMLButtonElement;
-    logoutBtn?.addEventListener("click", logout);
+    const logoutBtn = footerToggle.querySelector('#logoutBtn') as HTMLButtonElement;
+    logoutBtn?.addEventListener('click', logout);
 
-    // Memory toggle (no automatic saving, handled by save button)
-    const toggleCheckbox = memoryToggleSection.querySelector("#mem0Toggle");
     // Toggle functionality is now handled by the save button
 
     // Organization select (for loading projects only)
-    const orgSelect = orgSection.querySelector("#orgSelect") as HTMLSelectElement;
-    orgSelect?.addEventListener("change", function (this: HTMLSelectElement) {
+    const orgSelect = orgSection.querySelector('#orgSelect') as HTMLSelectElement;
+    orgSelect?.addEventListener('change', function (this: HTMLSelectElement) {
       const selectedOrgId = this.value;
 
       // Reset project selection
-      const projectSelect = projectSection.querySelector("#projectSelect") as HTMLSelectElement;
+      const projectSelect = projectSection.querySelector('#projectSelect') as HTMLSelectElement;
       if (projectSelect) {
         projectSelect.innerHTML = '<option value="">Loading projects...</option>';
       }
@@ -627,27 +620,27 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     });
 
     // User dashboard link button
-    const userDashboardBtn = userIdSection.querySelector("#userDashboardBtn") as HTMLButtonElement;
-    userDashboardBtn?.addEventListener("click", function () {
+    const userDashboardBtn = userIdSection.querySelector('#userDashboardBtn') as HTMLButtonElement;
+    userDashboardBtn?.addEventListener('click', function () {
       chrome.runtime.sendMessage({
         action: SidebarAction.OPEN_DASHBOARD,
-        url: "https://app.mem0.ai/dashboard/users",
+        url: 'https://app.mem0.ai/dashboard/users',
       });
     });
 
     // Threshold slider event listener
-    const thresholdSlider = thresholdSection.querySelector("#thresholdSlider") as HTMLInputElement;
-    const thresholdValue = thresholdSection.querySelector(".threshold-value") as HTMLElement;
+    const thresholdSlider = thresholdSection.querySelector('#thresholdSlider') as HTMLInputElement;
+    const thresholdValue = thresholdSection.querySelector('.threshold-value') as HTMLElement;
 
-    thresholdSlider?.addEventListener("input", function (this: HTMLInputElement) {
+    thresholdSlider?.addEventListener('input', function (this: HTMLInputElement) {
       if (thresholdValue) {
         thresholdValue.textContent = parseFloat(this.value).toFixed(1);
       }
     });
 
     // Top K input validation
-    const topKInput = topKSection.querySelector("#topKInput") as HTMLInputElement;
-    topKInput?.addEventListener("input", function (this: HTMLInputElement) {
+    const topKInput = topKSection.querySelector('#topKInput') as HTMLInputElement;
+    topKInput?.addEventListener('input', function (this: HTMLInputElement) {
       const value = parseInt(this.value, 10);
       if (value < 1) {
         this.value = String(1);
@@ -657,12 +650,12 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     });
 
     // Save button
-    const saveBtn = saveSection.querySelector("#saveSettingsBtn") as HTMLButtonElement;
-    const saveText = saveSection.querySelector(".save-text") as HTMLElement;
-    const saveLoader = saveSection.querySelector(".save-loader") as HTMLElement;
-    const saveMessage = saveSection.querySelector("#saveMessage") as HTMLElement;
+    const saveBtn = saveSection.querySelector('#saveSettingsBtn') as HTMLButtonElement;
+    const saveText = saveSection.querySelector('.save-text') as HTMLElement;
+    const saveLoader = saveSection.querySelector('.save-loader') as HTMLElement;
+    const saveMessage = saveSection.querySelector('#saveMessage') as HTMLElement;
 
-    saveBtn?.addEventListener("click", function () {
+    saveBtn?.addEventListener('click', function () {
       if (!saveBtn || !saveText || !saveLoader || !saveMessage) {
         return;
       }
@@ -687,19 +680,19 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       if (data.apiKey || data.access_token) {
         const headers = getHeaders(data.apiKey, data.access_token);
-        fetch("https://api.mem0.ai/api/v1/orgs/organizations/", {
-          method: "GET",
+        fetch('https://api.mem0.ai/api/v1/orgs/organizations/', {
+          method: 'GET',
           headers: headers,
         })
           .then(response => response.json())
           .then((orgs: Organization[]) => {
-            const orgSelect = document.getElementById("orgSelect") as HTMLSelectElement;
+            const orgSelect = document.getElementById('orgSelect') as HTMLSelectElement;
             if (orgSelect) {
               orgSelect.innerHTML = '<option value="">Select an organization</option>';
             }
 
             orgs.forEach(org => {
-              const option = document.createElement("option");
+              const option = document.createElement('option');
               option.value = org.org_id;
               option.textContent = org.name;
               orgSelect?.appendChild(option);
@@ -709,32 +702,32 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
             chrome.storage.sync.get([StorageKey.SELECTED_ORG], function (result) {
               if (result.selected_org) {
                 if (orgSelect) {
-                  orgSelect.value = String(result.selected_org ?? "");
+                  orgSelect.value = String(result.selected_org ?? '');
                 }
                 const projectSelectEl = document.getElementById(
-                  "projectSelect"
+                  'projectSelect'
                 ) as HTMLSelectElement;
                 const orgIdStr =
-                  typeof result.selected_org === "string"
+                  typeof result.selected_org === 'string'
                     ? result.selected_org
-                    : String(result.selected_org || "");
+                    : String(result.selected_org || '');
                 fetchProjects(orgIdStr, projectSelectEl);
               } else if (orgs.length > 0) {
                 // Select first org by default (but don't save until user clicks save)
                 const firstOrg = orgs[0];
                 if (orgSelect) {
-                  orgSelect.value = String(firstOrg?.org_id ?? "");
+                  orgSelect.value = String(firstOrg?.org_id ?? '');
                 }
                 const projectSelectEl = document.getElementById(
-                  "projectSelect"
+                  'projectSelect'
                 ) as HTMLSelectElement;
-                fetchProjects(String(firstOrg?.org_id ?? ""), projectSelectEl);
+                fetchProjects(String(firstOrg?.org_id ?? ''), projectSelectEl);
               }
             });
           })
           .catch(error => {
-            console.error("Error fetching organizations:", error);
-            const orgSelect = document.getElementById("orgSelect") as HTMLSelectElement;
+            console.error('Error fetching organizations:', error);
+            const orgSelect = document.getElementById('orgSelect') as HTMLSelectElement;
             if (orgSelect) {
               orgSelect.innerHTML = '<option value="">Error loading organizations</option>';
             }
@@ -748,7 +741,7 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
       if (data.apiKey || data.access_token) {
         const headers = getHeaders(data.apiKey, data.access_token);
         fetch(`https://api.mem0.ai/api/v1/orgs/organizations/${orgId}/projects/`, {
-          method: "GET",
+          method: 'GET',
           headers: headers,
         })
           .then(response => response.json())
@@ -759,7 +752,7 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
             projectSelect.innerHTML = '<option value="">Select a project</option>';
 
             projects.forEach(project => {
-              const option = document.createElement("option");
+              const option = document.createElement('option');
               option.value = project.project_id;
               option.textContent = project.name;
               projectSelect.appendChild(option);
@@ -771,15 +764,15 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
                 return;
               }
               if (result.selected_project) {
-                projectSelect.value = String(result.selected_project ?? "");
+                projectSelect.value = String(result.selected_project ?? '');
               } else if (projects.length > 0) {
                 // Select first project by default (but don't save until user clicks save)
-                projectSelect.value = String(projects[0]?.project_id ?? "");
+                projectSelect.value = String(projects[0]?.project_id ?? '');
               }
             });
           })
           .catch(error => {
-            console.error("Error fetching projects:", error);
+            console.error('Error fetching projects:', error);
             if (projectSelect) {
               projectSelect.innerHTML = '<option value="">Error loading projects</option>';
             }
@@ -804,20 +797,20 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
           // Build query parameters
           const params = new URLSearchParams();
           const userId = data.user_id || DEFAULT_USER_ID;
-          params.append("user_id", userId);
-          params.append("page", "1");
-          params.append("page_size", "20");
+          params.append('user_id', userId);
+          params.append('page', '1');
+          params.append('page_size', '20');
 
           if (data.selected_org) {
-            params.append("org_id", data.selected_org);
+            params.append('org_id', data.selected_org);
           }
 
           if (data.selected_project) {
-            params.append("project_id", data.selected_project);
+            params.append('project_id', data.selected_project);
           }
 
           fetch(`https://api.mem0.ai/v1/memories/?${params.toString()}`, {
-            method: "GET",
+            method: 'GET',
             headers: headers,
           })
             .then(response => response.json())
@@ -827,73 +820,73 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
               displayMemories(data.results || []);
             })
             .catch(error => {
-              console.error("Error fetching memories:", error);
-              updateMemoryCount("Error");
+              console.error('Error fetching memories:', error);
+              updateMemoryCount('Error');
               displayErrorMessage();
             });
         } else {
-          updateMemoryCount("Login required");
-          displayErrorMessage("Login required to view memories");
+          updateMemoryCount('Login required');
+          displayErrorMessage('Login required to view memories');
         }
       }
     );
   }
 
   function updateMemoryCount(count: number | string): void {
-    const countDisplay = document.querySelector(".memory-count") as HTMLElement;
+    const countDisplay = document.querySelector('.memory-count') as HTMLElement;
     if (countDisplay) {
-      countDisplay.classList.remove("loading");
+      countDisplay.classList.remove('loading');
       countDisplay.textContent =
-        typeof count === "number" ? new Intl.NumberFormat().format(count) + " Memories" : count;
+        typeof count === 'number' ? new Intl.NumberFormat().format(count) + ' Memories' : count;
     }
   }
 
   function getHeaders(apiKey?: string, accessToken?: string): Record<string, string> {
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     };
     if (apiKey) {
-      headers["Authorization"] = `Token ${apiKey}`;
+      headers['Authorization'] = `Token ${apiKey}`;
     } else if (accessToken) {
-      headers["Authorization"] = `Bearer ${accessToken}`;
+      headers['Authorization'] = `Bearer ${accessToken}`;
     }
     return headers;
   }
 
   function closeSearchInput(): void {
-    const inputContainer = document.querySelector(".input-container") as HTMLElement;
-    const existingSearchInput = inputContainer?.querySelector(".search-memory");
-    const searchBtn = document.getElementById("searchBtn") as HTMLElement;
+    const inputContainer = document.querySelector('.input-container') as HTMLElement;
+    const existingSearchInput = inputContainer?.querySelector('.search-memory');
+    const searchBtn = document.getElementById('searchBtn') as HTMLElement;
 
     if (existingSearchInput) {
       existingSearchInput.remove();
-      searchBtn?.classList.remove("active");
+      searchBtn?.classList.remove('active');
       // Remove filter when search is closed
-      filterMemories("");
+      filterMemories('');
     }
   }
 
   function filterMemories(searchTerm: string): void {
-    const memoryItems = document.querySelectorAll<HTMLElement>(".memory-item");
+    const memoryItems = document.querySelectorAll<HTMLElement>('.memory-item');
 
     memoryItems.forEach(item => {
-      const memoryText = item.querySelector(".memory-text")?.textContent?.toLowerCase() || "";
+      const memoryText = item.querySelector('.memory-text')?.textContent?.toLowerCase() || '';
       if (memoryText.includes(searchTerm)) {
-        item.style.display = "flex";
+        item.style.display = 'flex';
       } else {
-        item.style.display = "none";
+        item.style.display = 'none';
       }
     });
 
     // Add this line to maintain the width of the sidebar
-    const sb = document.getElementById("mem0-sidebar") as HTMLElement;
+    const sb = document.getElementById('mem0-sidebar') as HTMLElement;
     if (sb) {
-      sb.style.width = "400px";
+      sb.style.width = '400px';
     }
   }
 
   function addStyles() {
-    const style = document.createElement("style");
+    const style = document.createElement('style');
     style.textContent = `
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         
@@ -1565,30 +1558,29 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   function logout() {
     chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       const headers = getHeaders(data.apiKey, data.access_token);
-      fetch("https://api.mem0.ai/v1/extension/", {
-        method: "POST",
+      fetch('https://api.mem0.ai/v1/extension/', {
+        method: 'POST',
         headers: headers,
         body: JSON.stringify({
-          event_type: "extension_logout",
+          event_type: 'extension_logout',
         }),
       }).catch(error => {
-        console.error("Error sending logout event:", error);
+        console.error('Error sending logout event:', error);
       });
     });
     chrome.storage.sync.remove(
       [StorageKey.API_KEY, StorageKey.USER_ID_CAMEL, StorageKey.ACCESS_TOKEN],
       function () {
-        const sidebar = document.getElementById("mem0-sidebar");
+        const sidebar = document.getElementById('mem0-sidebar');
         if (sidebar) {
-          sidebar.style.right = "-500px";
+          sidebar.style.right = '-500px';
         }
       }
     );
   }
 
   function openDashboard() {
-    chrome.storage.sync.get([StorageKey.USER_ID], function (data) {
-      const userId = data.user_id || DEFAULT_USER_ID;
+    chrome.storage.sync.get([StorageKey.USER_ID], function () {
       chrome.runtime.sendMessage({
         action: SidebarAction.OPEN_DASHBOARD,
         url: `https://app.mem0.ai/dashboard/requests`,
@@ -1598,14 +1590,14 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
 
   // Add function to display memories
   function displayMemories(memories: Memory[]): void {
-    const memoryCardsContainer = document.querySelector(".memory-cards") as HTMLElement;
+    const memoryCardsContainer = document.querySelector('.memory-cards') as HTMLElement;
 
     if (!memoryCardsContainer) {
       return;
     }
 
     // Clear loading indicator
-    memoryCardsContainer.innerHTML = "";
+    memoryCardsContainer.innerHTML = '';
 
     if (!memories || memories.length === 0) {
       memoryCardsContainer.innerHTML = '<p class="no-memories">No memories found</p>';
@@ -1615,21 +1607,21 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     // Add memory cards
     memories.forEach(memory => {
       // Extract memory content from the new format
-      const memoryContent = memory.memory || "";
+      const memoryContent = memory.memory || '';
 
       // Truncate long text
       const truncatedContent =
-        memoryContent.length > 120 ? memoryContent.substring(0, 120) + "..." : memoryContent;
+        memoryContent.length > 120 ? memoryContent.substring(0, 120) + '...' : memoryContent;
 
       // Get categories if available
       const categories = memory.categories || [];
       const categoryTags =
         categories.length > 0
-          ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join("")}</div>`
-          : "";
+          ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join('')}</div>`
+          : '';
 
-      const memoryCard = document.createElement("div");
-      memoryCard.className = "memory-card";
+      const memoryCard = document.createElement('div');
+      memoryCard.className = 'memory-card';
       memoryCard.innerHTML = `
         <div class="memory-content">
           <p class="memory-text">${truncatedContent}</p>
@@ -1639,7 +1631,7 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
           <button class="memory-action-button copy-button" title="Copy Memory" data-content="${encodeURIComponent(memoryContent)}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
           </button>
-          <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ""}">
+          <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ''}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
@@ -1649,40 +1641,40 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
     });
 
     // Add event listener for the copy button
-    document.querySelectorAll<HTMLButtonElement>(".copy-button").forEach(button => {
-      button.addEventListener("click", function (this: HTMLButtonElement, e) {
+    document.querySelectorAll<HTMLButtonElement>('.copy-button').forEach(button => {
+      button.addEventListener('click', function (this: HTMLButtonElement, e) {
         e.stopPropagation();
-        const content = decodeURIComponent(this.getAttribute("data-content") || "");
+        const content = decodeURIComponent(this.getAttribute('data-content') || '');
 
         // Copy to clipboard
         navigator.clipboard
           .writeText(content)
           .then(() => {
             // Visual feedback for copy
-            const originalTitle = this.getAttribute("title") || "";
-            this.setAttribute("title", "Copied!");
-            this.classList.add("copied");
+            const originalTitle = this.getAttribute('title') || '';
+            this.setAttribute('title', 'Copied!');
+            this.classList.add('copied');
 
             // Reset after a short delay
             setTimeout(() => {
-              this.setAttribute("title", originalTitle);
-              this.classList.remove("copied");
+              this.setAttribute('title', originalTitle);
+              this.classList.remove('copied');
             }, 2000);
           })
           .catch(err => {
-            console.error("Failed to copy: ", err);
+            console.error('Failed to copy: ', err);
           });
       });
     });
 
     // Add event listener for the view button
-    document.querySelectorAll<HTMLButtonElement>(".view-button").forEach(button => {
-      button.addEventListener("click", function (this: HTMLButtonElement, e) {
+    document.querySelectorAll<HTMLButtonElement>('.view-button').forEach(button => {
+      button.addEventListener('click', function (this: HTMLButtonElement, e) {
         e.stopPropagation();
-        const memoryId = this.getAttribute("data-id");
+        const memoryId = this.getAttribute('data-id');
         if (memoryId) {
           chrome.storage.sync.get([StorageKey.USER_ID], function (data) {
-            const userId = data.user_id || "chrome-extension-user";
+            const userId = data.user_id || 'chrome-extension-user';
             chrome.runtime.sendMessage({
               action: SidebarAction.OPEN_DASHBOARD,
               url: `https://app.mem0.ai/dashboard/user/${userId}?memoryId=${memoryId}`,
@@ -1694,8 +1686,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   }
 
   // Add function to display error message
-  function displayErrorMessage(message = "Error loading memories") {
-    const memoryCardsContainer = document.querySelector(".memory-cards");
+  function displayErrorMessage(message = 'Error loading memories') {
+    const memoryCardsContainer = document.querySelector('.memory-cards');
 
     if (!memoryCardsContainer) {
       return;
@@ -1705,8 +1697,8 @@ import { sendExtensionEvent, getBrowser } from "./utils/util_functions";
   }
 
   // Initialize the listener when the script loads
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initializeMem0Sidebar);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeMem0Sidebar);
   } else {
     initializeMem0Sidebar();
   }

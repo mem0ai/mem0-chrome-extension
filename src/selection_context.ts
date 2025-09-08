@@ -1,9 +1,10 @@
-import type {
-  SelectionContextMessage,
-  SendResponse,
-  SelectionContextPayload,
-} from "./types/messages";
-import { MessageType, ToastVariant } from "./types/messages";
+import {
+  MessageType,
+  type SelectionContextMessage,
+  type SelectionContextPayload,
+  type SendResponse,
+  ToastVariant,
+} from './types/messages';
 
 (function () {
   chrome.runtime.onMessage.addListener(
@@ -12,7 +13,7 @@ import { MessageType, ToastVariant } from "./types/messages";
         try {
           const payload: SelectionContextPayload = {
             selection: getSelectedText(),
-            title: document.title || "",
+            title: document.title || '',
             url: location.href,
           };
           sendResponse({ type: MessageType.SELECTION_CONTEXT, payload });
@@ -24,7 +25,7 @@ import { MessageType, ToastVariant } from "./types/messages";
 
       if (msg && msg.type === MessageType.TOAST) {
         const { message, variant = ToastVariant.SUCCESS } = msg.payload || {};
-        showToast(message || "", variant);
+        showToast(message || '', variant);
       }
     }
   );
@@ -32,22 +33,22 @@ import { MessageType, ToastVariant } from "./types/messages";
   function getSelectedText(): string {
     try {
       const sel = window.getSelection && window.getSelection();
-      const text = sel ? sel.toString().trim() : "";
+      const text = sel ? sel.toString().trim() : '';
       return text;
     } catch {
-      return "";
+      return '';
     }
   }
 
   function showToast(message: string, variant: ToastVariant = ToastVariant.SUCCESS): void {
     try {
-      const id = "mem0-context-toast";
+      const id = 'mem0-context-toast';
       const existing = document.getElementById(id);
       if (existing) {
         existing.remove();
       }
 
-      const el = document.createElement("div");
+      const el = document.createElement('div');
       el.id = id;
       el.textContent = message;
       el.style.cssText = `
@@ -55,7 +56,7 @@ import { MessageType, ToastVariant } from "./types/messages";
             top: 16px;
             right: 16px;
             z-index: 2147483647;
-            background: ${variant === ToastVariant.ERROR ? "#7f1d1d" : "#14532d"};
+            background: ${variant === ToastVariant.ERROR ? '#7f1d1d' : '#14532d'};
             color: #fff;
             padding: 10px 12px;
             border-radius: 8px;

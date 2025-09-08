@@ -1,14 +1,16 @@
-export type UserSettings = {
-  apiKey?: string;
-  accessToken?: string;
-  userId?: string;
-  memoryEnabled?: boolean;
-  selectedOrg?: string;
-  selectedProject?: string;
-  similarityThreshold?: number;
-  topK?: number;
-};
+/** User preference structure with API keys, memory settings, and thresholds */
+export type UserSettings = Partial<{
+  apiKey: string;
+  accessToken: string;
+  userId: string;
+  memoryEnabled: boolean;
+  selectedOrg: string;
+  selectedProject: string;
+  similarityThreshold: number;
+  topK: number;
+}>;
 
+/** Sidebar-specific settings with organization and project info */
 export type SidebarSettings = {
   user_id?: string;
   selected_org?: string;
@@ -22,7 +24,7 @@ export type SidebarSettings = {
   track_searches: boolean;
 };
 
-// For compatibility with existing code
+/** Legacy settings structure for compatibility */
 export type Settings = {
   hasCreds: boolean;
   apiKey: string | null;

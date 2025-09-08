@@ -1,9 +1,8 @@
-import type { Settings } from "./types/settings";
-import type { OnCommittedDetails } from "./types/browser";
-import type { ApiMemoryRequest } from "./types/api";
-import { Provider, Category } from "./types/providers";
-import { SOURCE, DEFAULT_USER_ID, MessageRole } from "./types/api";
-import { StorageKey } from "./types/storage";
+import { type ApiMemoryRequest, DEFAULT_USER_ID, MessageRole, SOURCE } from './types/api';
+import type { OnCommittedDetails } from './types/browser';
+import { Category, Provider } from './types/providers';
+import type { Settings } from './types/settings';
+import { StorageKey } from './types/storage';
 
 function getSettings(): Promise<Settings> {
   return new Promise(resolve => {
@@ -32,13 +31,13 @@ function getSettings(): Promise<Settings> {
 }
 
 async function addMemory(content: string, settings: Settings, pageUrl: string): Promise<boolean> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (settings.accessToken) {
     headers.Authorization = `Bearer ${settings.accessToken}`;
   } else if (settings.apiKey) {
     headers.Authorization = `Token ${settings.apiKey}`;
   } else {
-    throw new Error("Missing credentials");
+    throw new Error('Missing credentials');
   }
 
   const body: ApiMemoryRequest = {
@@ -47,7 +46,7 @@ async function addMemory(content: string, settings: Settings, pageUrl: string): 
     metadata: {
       provider: Provider.DirectURL,
       category: Category.NAVIGATION,
-      page_url: pageUrl || "",
+      page_url: pageUrl || '',
     },
     source: SOURCE,
   };
@@ -61,8 +60,8 @@ async function addMemory(content: string, settings: Settings, pageUrl: string): 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch("https://api.mem0.ai/v1/memories/", {
-      method: "POST",
+    const res = await fetch('https://api.mem0.ai/v1/memories/', {
+      method: 'POST',
       headers,
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -77,16 +76,16 @@ function shouldTrackTyped(details: OnCommittedDetails): boolean {
   if (!details || details.frameId !== 0) {
     return false;
   }
-  const url = details.url || "";
+  const url = details.url || '';
   if (!/^https?:\/\//i.test(url)) {
     return false;
   }
-  const type = details.transitionType || "";
+  const type = details.transitionType || '';
   const qualifiers = details.transitionQualifiers || [];
-  if (type === "typed") {
+  if (type === 'typed') {
     return true;
   }
-  if (qualifiers && qualifiers.includes("from_address_bar")) {
+  if (qualifiers && qualifiers.includes('from_address_bar')) {
     return true;
   }
   return false;
@@ -129,11 +128,11 @@ export function initDirectUrlTracking(): void {
           try {
             return new URL(url).hostname;
           } catch {
-            return "";
+            return '';
           }
         })();
         const ts = formatTimestamp();
-        const content = `User visited ${url}${hostname ? ` (${hostname})` : ""} on ${ts.date} at ${ts.time}`;
+        const content = `User visited ${url}${hostname ? ` (${hostname})` : ''} on ${ts.date} at ${ts.time}`;
         await addMemory(content, settings, url);
       } catch {
         // no-op
@@ -147,32 +146,32 @@ export function initDirectUrlTracking(): void {
 function isSearchResultsUrl(urlString: string): boolean {
   try {
     const u = new URL(urlString);
-    const host = u.hostname || "";
-    const path = u.pathname || "";
+    const host = u.hostname || '';
+    const path = u.pathname || '';
     const params = u.searchParams || new URLSearchParams();
 
     if (
-      (/^.*\.google\.[^\/]+$/.test(host) ||
-        host === "google.com" ||
-        host.endsWith(".google.com")) &&
-      path.startsWith("/search")
+      (/^.*\.google\.[^\\/]+$/.test(host) ||
+        host === 'google.com' ||
+        host.endsWith('.google.com')) &&
+      path.startsWith('/search')
     ) {
-      if (params.get("q")) {
+      if (params.get('q')) {
         return true;
       }
     }
-    if (host.endsWith("bing.com") && (path === "/search" || path === "/")) {
-      if (params.get("q")) {
+    if (host.endsWith('bing.com') && (path === '/search' || path === '/')) {
+      if (params.get('q')) {
         return true;
       }
     }
-    if (host === "search.brave.com" && (path === "/search" || path === "/images")) {
-      if (params.get("q")) {
+    if (host === 'search.brave.com' && (path === '/search' || path === '/images')) {
+      if (params.get('q')) {
         return true;
       }
     }
-    if (host === "search.arc.net" && path.startsWith("/search")) {
-      if (params.get("q") || params.get("query")) {
+    if (host === 'search.arc.net' && path.startsWith('/search')) {
+      if (params.get('q') || params.get('query')) {
         return true;
       }
     }
@@ -186,13 +185,13 @@ function formatTimestamp(): { date: string; time: string } {
   try {
     const now = new Date();
     const date = now.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     });
     const time = now.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
+      hour: 'numeric',
+      minute: '2-digit',
     });
     return { date, time };
   } catch {

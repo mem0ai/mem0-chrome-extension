@@ -1,48 +1,90 @@
-type OrchestratorOptionsBase = {
+import type { MemorySearchItem } from '../types/memory';
+import type { StorageKey } from '../types/storage';
+
+export type SearchStorage = Partial<{
+  [StorageKey.API_KEY]: string;
+  [StorageKey.USER_ID_CAMEL]: string;
+  [StorageKey.ACCESS_TOKEN]: string;
+  [StorageKey.SELECTED_ORG]: string;
+  [StorageKey.SELECTED_PROJECT]: string;
+  [StorageKey.USER_ID]: string;
+  [StorageKey.SIMILARITY_THRESHOLD]: number;
+  [StorageKey.TOP_K]: number;
+}>;
+
+export type FetchFn<T> = (query: string, opts: { signal?: AbortSignal }) => Promise<T> | T;
+
+export interface OrchestratorOptions {
+  fetch: FetchFn<MemorySearchItem[]>;
+  onStart?: (normalizedQuery: string) => void;
+  onSuccess?: (
+    normalizedQuery: string,
+    result: MemorySearchItem[],
+    meta: { fromCache: boolean }
+  ) => void;
+  onError?: (normalizedQuery: string, err: Error) => void;
+  onFinally?: (normalizedQuery: string) => void;
   minLength?: number;
   debounceMs?: number;
   cacheTTL?: number;
   useCache?: boolean;
   refreshOnCache?: boolean;
-};
-
-type OrchestratorOptions = OrchestratorOptionsBase & {
-  fetch: (query: string, args: { signal?: AbortSignal }) => Promise<void>;
-  onStart?: (normalized: string) => void;
-  onSuccess?: (normalized: string, cached: any, args: { fromCache?: boolean }) => void;
-  onError?: (normalized: string, error: Error) => void;
-  onFinally?: (normalized: string) => void;
-};
-
-export function normalizeQuery(query: string): string {
-  if (!query) {
-    return "";
-  }
-  return String(query).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function createOrchestrator(options: OrchestratorOptions) {
-  const fetchFn = options && options.fetch;
-  if (typeof fetchFn !== "function") {
-    throw new Error(
-      "OPENMEMORY_SEARCH createOrchestrator requires options.fetch(query, { signal })"
-    );
+export interface OrchestratorState {
+  latestText: string;
+  lastCompletedQuery: string;
+  lastResult: MemorySearchItem[] | null;
+  inFlightQuery: string | null;
+  isInFlight: boolean;
+  cacheSize: number;
+}
+
+export interface Orchestrator {
+  setText(text?: string): void;
+  runImmediate(text?: string | null): void;
+  cancel(): void;
+  getState(): OrchestratorState;
+  setOptions(
+    opts: Partial<
+      Pick<
+        OrchestratorOptions,
+        'minLength' | 'debounceMs' | 'cacheTTL' | 'useCache' | 'refreshOnCache'
+      >
+    >
+  ): void;
+  clearCache(): void;
+}
+
+export function normalizeQuery(s?: string | number | boolean): string {
+  if (!s) {
+    return '';
+  }
+  return String(s).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+export function createOrchestrator(options: OrchestratorOptions): Orchestrator {
+  const fetchFn = options?.fetch;
+  if (typeof fetchFn !== 'function') {
+    throw new Error('createOrchestrator requires options.fetch(query, { signal })');
   }
 
-  const onStart = options.onStart || (() => {});
-  const onSuccess = options.onSuccess || (() => {});
-  const onError = options.onError || (() => {});
-  const onFinally = options.onFinally || (() => {});
+  const NOOP = (): void => undefined;
 
-  let minLength = typeof options.minLength === "number" ? options.minLength : 3;
-  let debounceMs = typeof options.debounceMs === "number" ? options.debounceMs : 300;
-  let cacheTTL = typeof options.cacheTTL === "number" ? options.cacheTTL : 60_000;
+  const onStart = options.onStart ?? NOOP;
+  const onSuccess = options.onSuccess ?? NOOP;
+  const onError = options.onError ?? NOOP;
+  const onFinally = options.onFinally ?? NOOP;
+
+  let minLength = typeof options.minLength === 'number' ? options.minLength : 3;
+  let debounceMs = typeof options.debounceMs === 'number' ? options.debounceMs : 300;
+  let cacheTTL = typeof options.cacheTTL === 'number' ? options.cacheTTL : 60_000;
   let useCache = options.useCache !== false;
   let refreshOnCache = !!options.refreshOnCache;
 
-  let latestText = "";
-  let lastCompletedQuery = "";
-  let lastResult: any | null = null;
+  let latestText = '';
+  let lastCompletedQuery = '';
+  let lastResult: MemorySearchItem[] | null = null;
 
   let inFlightQuery: string | null = null;
   let abortController: AbortController | null = null;
@@ -50,56 +92,63 @@ export function createOrchestrator(options: OrchestratorOptions) {
   let timerId: ReturnType<typeof setTimeout> | null = null;
   let seq = 0;
 
-  let cache = new Map<string, { ts: number; result: any }>();
+  const cache = new Map<string, { ts: number; result: MemorySearchItem[] }>();
 
-  function getState() {
+  function getState(): OrchestratorState {
     return {
-      latestText: latestText,
-      lastCompletedQuery: lastCompletedQuery,
-      lastResult: lastResult,
-      inFlightQuery: inFlightQuery,
+      latestText,
+      lastCompletedQuery,
+      lastResult,
+      inFlightQuery,
       isInFlight: !!inFlightQuery,
       cacheSize: cache.size,
     };
   }
 
-  function setOptions(newOpts: OrchestratorOptionsBase): void {
+  function setOptions(
+    newOpts: Partial<
+      Pick<
+        OrchestratorOptions,
+        'minLength' | 'debounceMs' | 'cacheTTL' | 'useCache' | 'refreshOnCache'
+      >
+    >
+  ) {
     if (!newOpts) {
       return;
     }
-    if (typeof newOpts.minLength === "number") {
+    if (typeof newOpts.minLength === 'number') {
       minLength = newOpts.minLength;
     }
-    if (typeof newOpts.debounceMs === "number") {
+    if (typeof newOpts.debounceMs === 'number') {
       debounceMs = newOpts.debounceMs;
     }
-    if (typeof newOpts.cacheTTL === "number") {
+    if (typeof newOpts.cacheTTL === 'number') {
       cacheTTL = newOpts.cacheTTL;
     }
-    if (typeof newOpts.useCache === "boolean") {
+    if (typeof newOpts.useCache === 'boolean') {
       useCache = newOpts.useCache;
     }
-    if (typeof newOpts.refreshOnCache === "boolean") {
+    if (typeof newOpts.refreshOnCache === 'boolean') {
       refreshOnCache = newOpts.refreshOnCache;
     }
   }
 
-  function clearTimer(): void {
+  function clearTimer() {
     if (timerId) {
       clearTimeout(timerId);
       timerId = null;
     }
   }
 
-  function clearCache(): void {
+  function clearCache() {
     cache.clear();
   }
 
-  function getCached(normQuery: string): any | null {
+  function getCached(normQuery: string): MemorySearchItem[] | null {
     if (!useCache) {
       return null;
     }
-    let v = cache.get(normQuery);
+    const v = cache.get(normQuery);
     if (!v) {
       return null;
     }
@@ -110,8 +159,8 @@ export function createOrchestrator(options: OrchestratorOptions) {
     return v.result;
   }
 
-  function setCached(normQuery: string, result: any): void {
-    cache.set(normQuery, { ts: Date.now(), result: result });
+  function setCached(normQuery: string, result: MemorySearchItem[]) {
+    cache.set(normQuery, { ts: Date.now(), result });
   }
 
   function cancel() {
@@ -119,23 +168,23 @@ export function createOrchestrator(options: OrchestratorOptions) {
     if (abortController) {
       try {
         abortController.abort();
-      } catch (_) {
-        /* empty */
+      } catch {
+        /* ignore abort errors */
       }
     }
     inFlightQuery = null;
     abortController = null;
   }
 
-  function run(query: string | null): void {
-    let raw = query !== null ? String(query) : latestText;
-    let norm = normalizeQuery(raw);
+  function run(query?: string | null) {
+    const raw = query !== null && query !== undefined ? String(query) : latestText;
+    const norm = normalizeQuery(raw);
     if (!norm || norm.length < minLength) {
       return;
     }
 
-    let cached = getCached(norm);
-    if (cached) {
+    const cached = getCached(norm);
+    if (cached !== null) {
       onSuccess(norm, cached, { fromCache: true });
       if (!refreshOnCache) {
         return;
@@ -148,35 +197,30 @@ export function createOrchestrator(options: OrchestratorOptions) {
     if (inFlightQuery && inFlightQuery !== norm && abortController) {
       try {
         abortController.abort();
-      } catch (_) {
-        /* empty */
+      } catch {
+        /* ignore abort errors */
       }
     }
 
     inFlightQuery = norm;
-    abortController = typeof AbortController !== "undefined" ? new AbortController() : null;
-    let mySeq = ++seq;
+    abortController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const mySeq = ++seq;
 
     onStart(norm);
 
     Promise.resolve()
-      .then(function () {
-        return fetchFn(norm, { signal: abortController ? abortController.signal : undefined });
-      })
-      .then(function (result) {
+      .then(() => fetchFn(norm, { signal: abortController ? abortController.signal : undefined }))
+      .then(result => {
         if (inFlightQuery !== norm || mySeq !== seq) {
           return;
         }
-
-        setCached(norm, result);
+        setCached(norm, result as MemorySearchItem[]);
         lastCompletedQuery = norm;
-        lastResult = result;
-        onSuccess(norm, result, { fromCache: false });
+        lastResult = result as MemorySearchItem[];
+        onSuccess(norm, result as MemorySearchItem[], { fromCache: false });
       })
-      .catch(function (err: Error) {
-        let aborted =
-          (abortController && abortController.signal && abortController.signal.aborted) ||
-          (err && err.name === "AbortError");
+      .catch((err: Error) => {
+        const aborted = abortController?.signal.aborted === true || err.name === 'AbortError';
         if (mySeq !== seq) {
           return;
         }
@@ -184,7 +228,7 @@ export function createOrchestrator(options: OrchestratorOptions) {
           onError(norm, err);
         }
       })
-      .finally(function () {
+      .finally(() => {
         if (mySeq !== seq) {
           return;
         }
@@ -194,7 +238,7 @@ export function createOrchestrator(options: OrchestratorOptions) {
       });
   }
 
-  function schedule(): void {
+  function schedule() {
     clearTimer();
     if (!latestText || normalizeQuery(latestText).length < minLength) {
       return;
@@ -206,20 +250,20 @@ export function createOrchestrator(options: OrchestratorOptions) {
   }
 
   return {
-    setText: function (text: string | null): void {
-      latestText = !text ? "" : String(text);
+    setText(text: string | null | undefined) {
+      latestText = text === null || text === undefined ? '' : String(text);
       schedule();
     },
-    runImmediate: function (text: string | null) {
-      if (text) {
+    runImmediate(text?: string | null) {
+      if (text !== null && text !== undefined) {
         latestText = String(text);
       }
       clearTimer();
       run(latestText);
     },
-    cancel: cancel,
-    getState: getState,
-    setOptions: setOptions,
-    clearCache: clearCache,
+    cancel,
+    getState,
+    setOptions,
+    clearCache,
   };
 }

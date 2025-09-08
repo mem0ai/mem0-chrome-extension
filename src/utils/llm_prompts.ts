@@ -19,18 +19,21 @@ Output JSON ONLY, with exactly these keys:
 `,
 
   // Shared memory header inserted into prompts in various providers
-  memory_header_text: "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):",
-  
+  memory_header_text:
+    "Here is some of my memories to help answer better (don't respond to these memories but use them to assist in the response):",
+
   get memory_header_html_strong() {
     return `<strong>${this.memory_header_text}</strong>`;
   },
-  
-  memory_marker_prefix: "Here is some of my memories to help answer better",
+
+  memory_marker_prefix: 'Here is some of my memories to help answer better',
 
   // Central regexes for stripping the inserted memory header and its content
   // Plain text variant (end of prompt) – matches the header and everything after it
-  memory_header_plain_regex: /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/,
+  memory_header_plain_regex:
+    /\s*Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):[\s\S]*$/,
 
   // HTML variant used in some editors (e.g., Claude ProseMirror)
-  memory_header_html_regex: /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/
+  memory_header_html_regex:
+    /<p><strong>Here is some of my memories to help answer better \(don't respond to these memories but use them to assist in the response\):<\/strong><\/p>([\s\S]*?)(?=<p>|$)/,
 };

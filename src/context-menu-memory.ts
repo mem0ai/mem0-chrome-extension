@@ -1,71 +1,79 @@
-import type { Settings } from "./types/settings";
-import { StorageKey } from "./types/storage";
-import { Provider, Category } from "./types/providers";
-import { MessageRole } from "./types/api";
-import { SOURCE, DEFAULT_USER_ID } from "./types/api";
-import type { ToastMessage, SelectionContextResponse } from "./types/messages";
-import type { ApiMemoryRequest } from "./types/api";
-import { MessageType, ToastVariant } from "./types/messages";
+import { type ApiMemoryRequest, DEFAULT_USER_ID, MessageRole, SOURCE } from './types/api';
+import {
+  MessageType,
+  type SelectionContextResponse,
+  type ToastMessage,
+  ToastVariant,
+} from './types/messages';
+import { Category, Provider } from './types/providers';
+import type { Settings } from './types/settings';
+import { StorageKey } from './types/storage';
 
 export function initContextMenuMemory(): void {
   try {
     chrome.contextMenus.create(
       {
-        id: "mem0.saveSelection",
-        title: "Save to OpenMemory",
-        contexts: ["selection"],
+        id: 'mem0.saveSelection',
+        title: 'Save to OpenMemory',
+        contexts: ['selection'],
       },
       () => {
         /* no-op */
       }
     );
-  } catch (e) {
+  } catch {
     // ignore
   }
 
   chrome.contextMenus.onClicked.addListener(
     async (info: chrome.contextMenus.OnClickData, tab?: chrome.tabs.Tab) => {
-      if (!tab || tab.id == null || info.menuItemId !== "mem0.saveSelection") {
+      if (
+        !tab ||
+        tab.id === null ||
+        tab.id === undefined ||
+        info.menuItemId !== 'mem0.saveSelection'
+      ) {
         return;
       }
 
-      const selection = String(info.selectionText || "").trim();
+      const tabId = tab.id; // Type narrowing - we know tab.id is not null or undefined here
+
+      const selection = String(info.selectionText || '').trim();
       if (!selection) {
-        toast(tab.id, "Select text first", ToastVariant.ERROR);
+        toast(tabId, 'Select text first', ToastVariant.ERROR);
         return;
       }
 
       const settings = await getSettings();
       if (!settings.hasCreds) {
-        toast(tab.id, "Sign in required", ToastVariant.ERROR);
+        toast(tabId, 'Sign in required', ToastVariant.ERROR);
         return;
       }
       if (settings.memoryEnabled === false) {
-        toast(tab.id, "Memory is disabled in settings", ToastVariant.ERROR);
+        toast(tabId, 'Memory is disabled in settings', ToastVariant.ERROR);
         return;
       }
 
-      const title = tab.title || "";
-      const url = info.pageUrl || tab.url || "";
+      const title = tab.title || '';
+      const url = info.pageUrl || tab.url || '';
 
-      let ctx = await requestSelectionContext(tab.id);
+      let ctx = await requestSelectionContext(tabId);
       if (ctx && ctx.error) {
-        await tryInjectSelectionScript(tab.id);
-        ctx = await requestSelectionContext(tab.id);
+        await tryInjectSelectionScript(tabId);
+        ctx = await requestSelectionContext(tabId);
       }
       const content = composeBasic({ selection, title, url });
 
       try {
         const ok = await addMemory(content, settings);
         toast(
-          tab.id,
-          ok ? "Saved to OpenMemory" : "Failed to save",
+          tabId,
+          ok ? 'Saved to OpenMemory' : 'Failed to save',
           ok ? ToastVariant.SUCCESS : ToastVariant.ERROR
         );
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to add memory:", err);
-        toast(tab.id, "Failed to save", ToastVariant.ERROR);
+        console.error('Failed to add memory:', err);
+        toast(tabId, 'Failed to save', ToastVariant.ERROR);
       }
     }
   );
@@ -75,13 +83,13 @@ function toast(tabId: number, message: string, variant: ToastVariant = ToastVari
   try {
     const msg: ToastMessage = { type: MessageType.TOAST, payload: { message, variant } };
     chrome.tabs.sendMessage(tabId, msg);
-  } catch (e) {
+  } catch {
     // Best effort only
   }
 }
 
 function normalize(text: string): string {
-  return (text || "").replace(/\s+/g, " ").trim();
+  return (text || '').replace(/\s+/g, ' ').trim();
 }
 
 function clamp(text: string, max: number): string {
@@ -91,18 +99,10 @@ function clamp(text: string, max: number): string {
   if (text.length <= max) {
     return text;
   }
-  return text.slice(0, max - 1).trimEnd() + "…";
+  return text.slice(0, max - 1).trimEnd() + '…';
 }
 
-function composeBasic({
-  selection,
-  title,
-  url,
-}: {
-  selection: string;
-  title: string;
-  url: string;
-}): string {
+function composeBasic({ selection }: { selection: string; title: string; url: string }): string {
   const s = clamp(normalize(selection), 700);
   // Return raw selection only (no prefixes). We keep title/url only in metadata.
   return s;
@@ -116,7 +116,7 @@ function requestSelectionContext(tabId: number): Promise<SelectionContextRespons
         { type: MessageType.GET_SELECTION_CONTEXT },
         undefined,
         (resp?: SelectionContextResponse) => {
-          resolve(resp || { error: "no-response" });
+          resolve(resp || { error: 'no-response' });
         }
       );
     } catch (e) {
@@ -132,10 +132,10 @@ async function tryInjectSelectionScript(tabId: number): Promise<boolean> {
     }
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["selection_context.ts"],
+      files: ['selection_context.ts'],
     });
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -167,13 +167,13 @@ function getSettings(): Promise<Settings> {
 }
 
 async function addMemory(content: string, settings: Settings): Promise<boolean> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (settings.accessToken) {
     headers.Authorization = `Bearer ${settings.accessToken}`;
   } else if (settings.apiKey) {
     headers.Authorization = `Token ${settings.apiKey}`;
   } else {
-    throw new Error("Missing credentials");
+    throw new Error('Missing credentials');
   }
 
   const body: ApiMemoryRequest = {
@@ -195,8 +195,8 @@ async function addMemory(content: string, settings: Settings): Promise<boolean> 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch("https://api.mem0.ai/v1/memories/", {
-      method: "POST",
+    const res = await fetch('https://api.mem0.ai/v1/memories/', {
+      method: 'POST',
       headers,
       body: JSON.stringify(body),
       signal: controller.signal,

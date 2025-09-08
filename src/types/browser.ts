@@ -1,4 +1,4 @@
-// WebNavigation
+/** Web navigation event details */
 export type OnCommittedDetails = {
   tabId: number;
   url: string;
@@ -14,10 +14,14 @@ export type OnCommittedDetails = {
   frameType: chrome.extensionTypes.FrameType;
 };
 
-// JSON types
+/** JSON primitive value types */
 export type JsonPrimitive = string | number | boolean | null;
+/** Recursive JSON value type */
 export type JsonValue = JsonPrimitive | JsonValue[] | { [k: string]: JsonValue };
+/** JSON object structure */
+export type JsonObject = { [k: string]: JsonValue };
 
-// Browser history
-export type HistoryStateData = Record<string, unknown> | null;
+/** Browser history state data */
+export type HistoryStateData = JsonObject | null;
+/** Browser history URL type */
 export type HistoryUrl = string | URL | null;

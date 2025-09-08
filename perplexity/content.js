@@ -355,31 +355,172 @@ async function addMem0Button() {
     return;
   }
 
-  // Find a suitable container on Perplexity near the submit/composer controls
-  let buttonContainer = null;
+  // Prefer OPENMEMORY_UI mounts; if available, use them instead of manual injection
+  if (window.OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus) {
+    try {
+      if (!document.getElementById('mem0-icon-button')) {
+        OPENMEMORY_UI.resolveCachedAnchor({ learnKey: location.host + ':' + location.pathname }, null, 24*60*60*1000)
+          .then(function(hit){
+            if (!hit || !hit.el) return;
+            var hs = OPENMEMORY_UI.createShadowRootHost('mem0-root');
+            var host = hs.host, shadow = hs.shadow; host.id = 'mem0-icon-button';
+            var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity) ? SITE_CONFIG.perplexity : null;
+            var placement = (hit.placement || (cfg && cfg.placement)) || { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' };
+            OPENMEMORY_UI.applyPlacement({ container: host, anchor: hit.el, placement: placement });
+            var style = document.createElement('style');
+            style.textContent = `
+              :host { position: relative; }
+              .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+              .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+              .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+              :host([data-has-text="1"]) .dot { display:block; }
+            `;
+            var btn = document.createElement('button'); btn.className = 'mem0-btn';
+            var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+            var dot = document.createElement('div'); dot.className = 'dot';
+            btn.appendChild(img); shadow.append(style, btn, dot);
+            btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+            if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
 
-  // Prefer the parent of the Submit button if available
-  const submitButton = document.querySelector('button[aria-label="Submit"]');
-  if (submitButton && submitButton.parentElement) {
-    buttonContainer = submitButton.parentElement;
-  }
+            try {
+              var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity) ? SITE_CONFIG.perplexity : null;
+              var modelSel = cfg && cfg.modelButtonSelector;
+              var sendSel = cfg && cfg.sendButtonSelector;
+              var modelBtn = modelSel ? document.querySelector(modelSel) : null;
+              var anchorBtn = modelBtn || (sendSel ? document.querySelector(sendSel) : null);
+              if (anchorBtn) {
+                var container = anchorBtn.parentElement || anchorBtn;
+                var probe = container; var hops = 0;
+                while (probe && hops < 5) {
+                  var cs = getComputedStyle(probe);
+                  if (cs.display === 'flex' && cs.flexDirection !== 'column') { container = probe; break; }
+                  probe = probe.parentElement; hops++;
+                }
+                if (modelBtn) {
+                  container.insertBefore(host, anchorBtn.nextSibling);
+                } else {
+                  if (host.parentElement !== container || host !== container.firstElementChild) {
+                    container.insertBefore(host, container.firstElementChild || anchorBtn);
+                  }
+                }
+                host.style.marginLeft = '0';
+                host.style.marginRight = '0';
+                if (window.OPENMEMORY_UI && OPENMEMORY_UI.saveAnchorHint) {
+                  try { OPENMEMORY_UI.saveAnchorHint({ learnKey: location.host + ':' + location.pathname, persistCache: true }, container, { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' }, true); } catch(_) {}
+                }
+              }
+            } catch (_) {}
+          });
+      }
+    } catch (_) {}
 
-  // Fallbacks: use containers near the input element
-  if (!buttonContainer) {
-    const inputEl = getTextarea();
-    if (inputEl) {
-      buttonContainer = inputEl.closest('form') || inputEl.closest('[class*="flex"]') || inputEl.parentElement;
-    }
-  }
+    OPENMEMORY_UI.mountOnEditorFocus({
+      existingHostSelector: '#mem0-icon-button, .mem0-root',
+      editorSelector: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity && SITE_CONFIG.perplexity.editorSelector) ? SITE_CONFIG.perplexity.editorSelector : 'textarea, [contenteditable], input[type="text"]',
+      deriveAnchor: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity && typeof SITE_CONFIG.perplexity.deriveAnchor === 'function') ? SITE_CONFIG.perplexity.deriveAnchor : function(editor){ return editor.closest('form') || editor.parentElement; },
+      placement: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity && SITE_CONFIG.perplexity.placement) ? SITE_CONFIG.perplexity.placement : { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
+      render: function(shadow, host){
+        host.id = 'mem0-icon-button';
+        var style = document.createElement('style');
+        style.textContent = `
+          :host { position: relative; }
+          .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+          .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+          .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+          :host([data-has-text="1"]) .dot { display:block; }
+        `;
+        var btn = document.createElement('button'); btn.className = 'mem0-btn';
+        var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+        var dot = document.createElement('div'); dot.className = 'dot';
+        btn.appendChild(img); shadow.append(style, btn, dot);
+        btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+        if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
 
-  if (!buttonContainer) {
-    // If a container isn't found yet, retry after a short delay
-    setTimeout(addMem0Button, 500);
-    return;
-  }
-  
-  // Check if our button already exists to avoid duplicates
-  if (document.querySelector('.mem0-claude-btn')) {
+        try {
+          // Dedupe existing hosts, keep the current one
+          Array.from(document.querySelectorAll('#mem0-icon-button, .mem0-root'))
+            .filter(function(n){ return n !== host; })
+            .forEach(function(n){ try { n.remove(); } catch(_) {} });
+          var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity) ? SITE_CONFIG.perplexity : null;
+          var modelSel = cfg && cfg.modelButtonSelector;
+          var sendSel = cfg && cfg.sendButtonSelector;
+          var modelBtn = modelSel ? document.querySelector(modelSel) : null;
+          var anchorBtn = modelBtn || (sendSel ? document.querySelector(sendSel) : null);
+          if (anchorBtn) {
+            var container = anchorBtn.parentElement || anchorBtn;
+            var probe = container; var hops = 0;
+            while (probe && hops < 5) {
+              var cs = getComputedStyle(probe);
+              if (cs.display === 'flex' && cs.flexDirection !== 'column') { container = probe; break; }
+              probe = probe.parentElement; hops++;
+            }
+            // Always place as the left-most icon in the group
+            var first = container.firstElementChild || anchorBtn;
+            if (host.parentElement !== container || host !== first) {
+              container.insertBefore(host, first);
+            }
+            var gap = getComputedStyle(container).gap; if (!gap || gap === 'normal') gap = '8px';
+            host.style.marginLeft = gap;
+            host.style.marginRight = '0';
+          }
+        } catch (_) {}
+      },
+      fallback: function(){
+        var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity) ? SITE_CONFIG.perplexity : null;
+        return OPENMEMORY_UI.mountResilient({
+          anchors: [{ find: function(){ var sel = (cfg && cfg.editorSelector) || 'textarea, [contenteditable], input[type="text"]'; var ed = document.querySelector(sel); if (!ed) return null; try { return (cfg && typeof cfg.deriveAnchor === 'function') ? cfg.deriveAnchor(ed) : (ed.closest('form') || ed.parentElement); } catch(_) { return ed.closest('form') || ed.parentElement; } } }],
+          placement: (cfg && cfg.placement) || { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
+          enableFloatingFallback: true,
+          render: function(shadow, host){
+            host.id = 'mem0-icon-button';
+            var style = document.createElement('style');
+            style.textContent = `
+              :host { position: relative; }
+              .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+              .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+              .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+              :host([data-has-text="1"]) .dot { display:block; }
+            `;
+            var btn = document.createElement('button'); btn.className = 'mem0-btn';
+            var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+            var dot = document.createElement('div'); dot.className = 'dot';
+            btn.appendChild(img); shadow.append(style, btn, dot);
+            btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+            if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+
+            try {
+              Array.from(document.querySelectorAll('#mem0-icon-button, .mem0-root'))
+                .filter(function(n){ return n !== host; })
+                .forEach(function(n){ try { n.remove(); } catch(_) {} });
+              var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity) ? SITE_CONFIG.perplexity : null;
+              var modelSel = cfg && cfg.modelButtonSelector;
+              var sendSel = cfg && cfg.sendButtonSelector;
+              var modelBtn = modelSel ? document.querySelector(modelSel) : null;
+              var anchorBtn = modelBtn || (sendSel ? document.querySelector(sendSel) : null);
+              if (anchorBtn) {
+                var container = anchorBtn.parentElement || anchorBtn;
+                var probe = container; var hops = 0;
+                while (probe && hops < 5) {
+                  var cs = getComputedStyle(probe);
+                  if (cs.display === 'flex' && cs.flexDirection !== 'column') { container = probe; break; }
+                  probe = probe.parentElement; hops++;
+                }
+                if (modelBtn) {
+                  container.insertBefore(host, anchorBtn.nextSibling);
+                } else {
+                  if (host.parentElement !== container || host.nextSibling !== anchorBtn) {
+                    container.insertBefore(host, anchorBtn);
+                  }
+                }
+                var gap = getComputedStyle(container).gap; if (!gap || gap === 'normal') gap = '8px';
+                host.style.marginLeft = gap;
+                host.style.marginRight = '0';
+              }
+            } catch (_) {}
+          }
+        });
+      }
+    });
     return;
   }
   
@@ -489,7 +630,15 @@ async function addMem0Button() {
   
   // Try to find the right-side icons container near the submit button and prepend there
   let iconsContainer = null;
+  let modelBtn = null;
   try {
+    // Prefer explicit model button from site config
+    try {
+      var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.perplexity) ? SITE_CONFIG.perplexity : null;
+      var modelSel = cfg && cfg.modelButtonSelector;
+      if (modelSel) modelBtn = document.querySelector(modelSel);
+    } catch(_) {}
+
     // 1) Exact class combo (from screenshot) – Tailwind classes require escaping ':'
     iconsContainer = document.querySelector(
       'div.bg-raised.dark\\:bg-offset.flex.items-center.justify-self-end.rounded-full'
@@ -527,9 +676,24 @@ async function addMem0Button() {
     }
   } catch (_) {}
 
-  // If we found the icons container, insert as the left-most icon there, otherwise use the broader container
-  const targetContainer = iconsContainer || buttonContainer;
-  targetContainer.insertBefore(mem0ButtonWrapper, targetContainer.firstChild);
+  // If model button found, insert right after it; else, insert at start of icon group
+  if (modelBtn && modelBtn.parentElement) {
+    var container = modelBtn.parentElement;
+    // If the immediate parent is not a horizontal flex, walk up a few levels to find one
+    try {
+      var probe = container; var hops = 0;
+      while (probe && hops < 5) {
+        var cs = getComputedStyle(probe);
+        if (cs.display === 'flex' && cs.flexDirection !== 'column') { container = probe; break; }
+        probe = probe.parentElement; hops++;
+      }
+    } catch(_) {}
+    // Place as the first icon in the group
+    container.insertBefore(mem0ButtonWrapper, container.firstElementChild);
+  } else {
+    const targetContainer = iconsContainer || buttonContainer;
+    targetContainer.insertBefore(mem0ButtonWrapper, targetContainer.firstChild);
+  }
 
   // Add the button to the wrapper
   mem0ButtonWrapper.appendChild(mem0Button);
@@ -622,50 +786,25 @@ async function addMem0Button() {
 // Function to update the notification dot based on input content
 function updateNotificationDot() {
   const textarea = getTextarea();
-  const notificationDot = document.querySelector('#mem0-notification-dot');
-  
-  if (!textarea || !notificationDot) {
-    // If elements aren't found yet, try again after a short delay
-    setTimeout(updateNotificationDot, 500);
-    return;
-  }
-  
-  // Function to check if input has text
-  const checkForText = () => {
-    const inputText = getInputText(textarea);
+  const host = document.getElementById('mem0-icon-button');
+  if (!textarea || !host) { setTimeout(updateNotificationDot, 500); return; }
+
+  const applyState = () => {
+    const inputText = getInputText(textarea) || '';
     const hasText = inputText.trim() !== '';
-    
-    if (hasText) {
-      notificationDot.classList.add('active');
-      // Force display style
-      notificationDot.style.display = 'block';
-    } else {
-      notificationDot.classList.remove('active');
-      notificationDot.style.display = 'none';
-    }
+    try { host.setAttribute('data-has-text', hasText ? '1' : '0'); } catch(_) {}
   };
-  
-  // Set up an observer to watch for changes to the input field
-  const inputChangeObserver = new MutationObserver(checkForText);
-  
-  // Start observing the input element
-  inputChangeObserver.observe(textarea, { 
-    attributes: true,
-    childList: true,
-    characterData: true,
-    subtree: true 
-  });
-  
-  // Also check on input and keyup events
-  textarea.addEventListener('input', checkForText);
-  textarea.addEventListener('keyup', checkForText);
-  textarea.addEventListener('focus', checkForText);
-  
-  // Initial check
-  checkForText();
-  
-  // Force check after a small delay
-  setTimeout(checkForText, 500);
+
+  // Observe and listen for changes
+  try {
+    const mo = new MutationObserver(applyState);
+    mo.observe(textarea, { attributes: true, childList: true, characterData: true, subtree: true });
+  } catch(_) {}
+  textarea.addEventListener('input', applyState);
+  textarea.addEventListener('keyup', applyState);
+  textarea.addEventListener('focus', applyState);
+  applyState();
+  setTimeout(applyState, 300);
 }
 
 // Function to create memory modal
@@ -693,35 +832,18 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   } else {
     // Different positioning based on which button triggered the modal
     if (sourceButtonId === 'mem0-icon-button') {
-      // Position relative to the mem0 button (in the input area)
-      const iconButton = document.querySelector('.mem0-claude-btn');
+      // Anchor to the Mem0 host/button in the right icon group when present
+      const iconButton = document.querySelector('#mem0-icon-button') || document.querySelector('.mem0-claude-btn');
       if (iconButton) {
         const buttonRect = iconButton.getBoundingClientRect();
-        
-        // Determine if there's enough space above the button
-        const spaceAbove = buttonRect.top;
         const viewportHeight = window.innerHeight;
         
-        // Calculate position - for icon button, prefer to show ABOVE
-        leftPosition = buttonRect.left - modalWidth + buttonRect.width;
+        // Place the modal immediately to the left of the icon group
+        leftPosition = Math.max(10, buttonRect.left - modalWidth - 10);
         
-        // Make sure modal doesn't go off-screen to the left
-        leftPosition = Math.max(leftPosition, 10);
-        
-        // For icon button, show above if enough space, otherwise below
-        if (spaceAbove >= modalHeight + 10) {
-          // Place above
-          topPosition = buttonRect.top - modalHeight - 10;
-        } else {
-          // Not enough space above, place below
-          topPosition = buttonRect.bottom + 10;
-          
-          // Check if it's in the lower half of the screen
-          if (buttonRect.bottom > viewportHeight / 2) {
-            modalHeight = 300; // Reduced height
-            memoriesPerPage = 2; // Show only 2 memories
-          }
-        }
+        // Vertically center relative to the icon height, but keep on-screen
+        topPosition = buttonRect.top + (buttonRect.height / 2) - (modalHeight / 2);
+        topPosition = Math.max(10, Math.min(topPosition, viewportHeight - modalHeight - 10));
       } else {
         // Fallback to default positioning
         positionDefault();
@@ -734,38 +856,40 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   
   // Helper function for default positioning
   function positionDefault() {
-    // Find the mem0 button to position the modal relative to it
-    const mem0Button = document.querySelector('.mem0-claude-btn');
-    
-    if (!mem0Button) {
-      console.error("Mem0 button not found");
+    // Prefer the actual Mem0 host if present; otherwise, try to use the right icon group container
+    let anchor = document.querySelector('#mem0-icon-button') || document.querySelector('.mem0-claude-btn');
+    if (!anchor) {
+      // Heuristics to find the right-side icon group near the submit button
+      try {
+        anchor = document.querySelector('div.bg-raised.dark\\:bg-offset.flex.items-center.justify-self-end.rounded-full') ||
+                 document.querySelector('div.bg-raised.flex.items-center.rounded-full') ||
+                 document.querySelector('div[class*="bg-raised"][class*="items-center"][class*="rounded-full"]');
+        if (!anchor) {
+          const submitBtn = document.querySelector('button[aria-label="Submit"]');
+          if (submitBtn && submitBtn.parentElement) {
+            const sibling = submitBtn.parentElement.previousElementSibling;
+            if (sibling && sibling.querySelectorAll('button').length > 0) anchor = sibling;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!anchor) {
+      console.error("Mem0 anchor not found for positioning");
+      // As a last resort, place near center
+      leftPosition = Math.max(10, (window.innerWidth - modalWidth) / 2);
+      topPosition = Math.max(10, (window.innerHeight - modalHeight) / 2);
       return;
     }
-    
-    // Get the position and dimensions of the mem0 button
-    const buttonRect = mem0Button.getBoundingClientRect();
-    
-    // Determine if there's enough space below the button
+
+    const rect = anchor.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
-    const spaceBelow = viewportHeight - buttonRect.bottom;
-    
-    // Decide whether to place modal above or below based on available space
-    // Prefer below if there's enough space
-    const placeBelow = spaceBelow >= modalHeight; 
-    
-    // Position the modal centered below the button
-    leftPosition = buttonRect.left - (modalWidth / 2) + (buttonRect.width / 2);
-    
-    if (placeBelow) {
-      // Place below the button
-      topPosition = buttonRect.bottom + 10;
-    } else {
-      // Place above the button if not enough space below
-      topPosition = buttonRect.top - modalHeight - 10;
-    }
-    
-    // Ensure the modal stays on screen
-    leftPosition = Math.max(Math.min(leftPosition, window.innerWidth - modalWidth - 10), 10);
+
+    // Place the modal immediately to the left of the anchor/group
+    leftPosition = Math.max(10, rect.left - modalWidth - 10);
+    // Vertically center relative to the group, clamped to viewport
+    topPosition = rect.top + (rect.height / 2) - (modalHeight / 2);
+    topPosition = Math.max(10, Math.min(topPosition, viewportHeight - modalHeight - 10));
   }
   
   // Create modal overlay
@@ -2069,6 +2193,15 @@ async function handleMem0Processing(capturedText, clickSendButton = false, sourc
   } finally {
     isProcessingMem0 = false;
   }
+}
+
+// Thin wrapper to trigger memory flow from the UI button
+function handleMem0Modal(sourceButtonId = null) {
+  try {
+    const textarea = getTextarea();
+    const captured = textarea ? (getInputText(textarea) || '').trim() : '';
+    handleMem0Processing(captured, false, sourceButtonId);
+  } catch (_) {}
 }
 
 function setInputValue(inputElement, value) {

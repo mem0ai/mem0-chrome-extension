@@ -32,8 +32,16 @@ var claudeSearch = OPENMEMORY_SEARCH.createOrchestrator({
     if (data.selected_org) optionalParams.org_id = data.selected_org;
     if (data.selected_project) optionalParams.project_id = data.selected_project;
 
+    // Clean query by stripping any appended memory header/content (debounced path)
+    const cleanQuery = (function() {
+      try {
+        const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+        return String(query).replace(MEM0_PLAIN, "").trim();
+      } catch (_e) { return query; }
+    })();
+
     const payload = {
-      query,
+      query: cleanQuery,
       filters: { user_id: userId },
       rerank: true,
       threshold,
@@ -2181,8 +2189,22 @@ async function handleMem0Modal(popup, clickSendButton = false, sourceButtonId = 
       optionalParams.project_id = data.selected_project;
     }
 
+    // Use raw input for search key to match typing cache; cleaning happens in fetch
     currentModalSourceButtonId = sourceButtonId; 
-    claudeSearch.runImmediate(message); 
+    try {
+      const rawInput = (function(){
+        const el = document.querySelector('div[contenteditable="true"]') ||
+                    document.querySelector("textarea") ||
+                    document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+                    document.querySelector('p[data-placeholder="Reply to Claude..."]');
+        if (!el) return message;
+        const val = (el.textContent || el.value || '').trim();
+        return val || message;
+      })();
+      claudeSearch.runImmediate(rawInput);
+    } catch (_) {
+      claudeSearch.runImmediate(message);
+    }
 
     // New add memory API call (non-blocking)
     fetch("https://api.mem0.ai/v1/memories/", {
@@ -2303,10 +2325,6 @@ function hookClaudeBackgroundSearchTyping() {
   if (!claudeBackgroundSearchHandler) {
     claudeBackgroundSearchHandler = function () {
       let text = getInputValue() || "";
-      try {
-        const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
-        text = text.replace(MEM0_PLAIN, "").trim();
-      } catch (_e) {}
       claudeSearch.setText(text);
     };
   }
@@ -2330,7 +2348,9 @@ async function updateMemoryEnabled() {
 
 function initializeMem0Integration() {
   updateMemoryEnabled();
-  addMem0Button();
+  if (!(window.OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus)) {
+    addMem0Button();
+  }
 
   // Prime the cache so the very first send is captured
   const _initVal = getInputValue();
@@ -2421,6 +2441,68 @@ function initializeMem0Integration() {
     }
   });
 
+  // Cache-first mount for Claude (left/bottom placement relative to textarea)
+  try {
+    if (!document.getElementById('mem0-icon-button') && window.OPENMEMORY_UI) {
+      OPENMEMORY_UI.resolveCachedAnchor({ learnKey: location.host + ':' + location.pathname }, null, 24*60*60*1000)
+        .then(function(hit){
+          if (!hit || !hit.el) return;
+          var hs = OPENMEMORY_UI.createShadowRootHost('mem0-root');
+          var host = hs.host, shadow = hs.shadow;
+          host.id = 'mem0-icon-button';
+          var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.claude) ? SITE_CONFIG.claude : null;
+          var placement = (hit.placement || (cfg && cfg.placement)) || { strategy: 'dock', container: 'form', side: 'bottom', align: 'start', gap: 8 };
+          OPENMEMORY_UI.applyPlacement({ container: host, anchor: hit.el, placement: placement });
+
+          var style = document.createElement('style');
+          style.textContent = `
+            :host { position: relative; }
+            .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+            .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+            .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+            :host([data-has-text="1"]) .dot { display:block; }
+          `;
+          var btn = document.createElement('button');
+          btn.className = 'mem0-btn';
+          var img = document.createElement('img');
+          img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+          var dot = document.createElement('div'); dot.className = 'dot';
+          btn.appendChild(img);
+          shadow.append(style, btn, dot);
+          btn.addEventListener('click', function () { handleMem0Modal(null, false, 'mem0-icon-button'); });
+          if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+        });
+    }
+  } catch (_) {}
+
+  // Focus-driven mount for Claude
+  if (window.OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus) {
+    OPENMEMORY_UI.mountOnEditorFocus({
+      existingHostSelector: '#mem0-icon-button',
+      editorSelector: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.claude && SITE_CONFIG.claude.editorSelector) ? SITE_CONFIG.claude.editorSelector : 'div[contenteditable="true"], textarea, p[data-placeholder], [contenteditable="true"]',
+      deriveAnchor: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.claude && typeof SITE_CONFIG.claude.deriveAnchor === 'function') ? SITE_CONFIG.claude.deriveAnchor : function(editor){ return editor.closest('form') || editor.parentElement; },
+      placement: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.claude && SITE_CONFIG.claude.placement) ? SITE_CONFIG.claude.placement : { strategy: 'dock', container: 'form', side: 'bottom', align: 'start', gap: 8 },
+      render: function(shadow, host){
+        host.id = 'mem0-icon-button';
+        var style = document.createElement('style');
+        style.textContent = `
+          :host { position: relative; }
+          .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; }
+          .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+          .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+          :host([data-has-text="1"]) .dot { display:block; }
+        `;
+        var btn = document.createElement('button');
+        btn.className = 'mem0-btn';
+        var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+        var dot = document.createElement('div'); dot.className = 'dot';
+        btn.appendChild(img); shadow.append(style, btn, dot);
+        btn.addEventListener('click', function(){ handleMem0Modal(null, false, 'mem0-icon-button'); });
+        if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+      }
+    });
+  }
+
   // Global early keydown capture for Enter to snapshot the very first send
   if (!document.__mem0EnterCapture) {
     document.__mem0EnterCapture = true;
@@ -2448,45 +2530,6 @@ function initializeMem0Integration() {
     }, true);
   }
 
-  // Observer for main structure changes
-  observer = new MutationObserver((mutations) => {
-    // Use debounce to avoid excessive calls to addMem0Button
-    clearTimeout(observer.debounceTimeout);
-    observer.debounceTimeout = setTimeout(() => {
-      // Check memory enabled state before adding button
-      getMemoryEnabledState().then(enabled => {
-        if (enabled) {
-          addMem0Button();
-          updateNotificationDot();
-          hookClaudeBackgroundSearchTyping(); 
-        } else {
-          removeMemButton();
-        }
-      });
-    }, 300);
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  // Add an additional observer specifically for the input elements
-  const inputObserver = new MutationObserver(() => {
-    // Check if memory is enabled before adding button
-    getMemoryEnabledState().then(enabled => {
-      if (enabled) {
-        // Check if we need to add the icon button
-        if (!document.querySelector('#mem0-icon-button')) {
-          addMem0Button();
-        }
-        
-        // Update notification dot on input changes
-        updateNotificationDot();
-        hookClaudeBackgroundSearchTyping()
-      } else {
-        removeMemButton();
-      }
-    });
-  });
-  
   // Find the input element and observe it
   function observeInput() {
     const inputElement = document.querySelector('div[contenteditable="true"]') || 
@@ -2506,7 +2549,7 @@ function initializeMem0Integration() {
     }
   }
   
-  observeInput();
+  
 
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === "sync" && changes.memory_enabled) {
@@ -2514,31 +2557,7 @@ function initializeMem0Integration() {
     }
   });
   
-  // Recheck for elements after page loads
-  window.addEventListener('load', () => {
-    getMemoryEnabledState().then(enabled => {
-      if (enabled) {
-        addMem0Button();
-        updateNotificationDot();
-        hookClaudeBackgroundSearchTyping(); 
-      } else {
-        removeMemButton();
-      }
-    });
-  });
   
-  // Also check periodically
-  setInterval(() => {
-    getMemoryEnabledState().then(enabled => {
-      if (enabled) {
-        if (!document.querySelector('#mem0-icon-button')) {
-          addMem0Button();
-        }
-      } else {
-        removeMemButton();
-      }
-    });
-  }, 5000);
 
   // Fallback: observe chat thread for newly added user bubbles and post if we missed send
   const ensureThreadObserver = () => {
@@ -3181,7 +3200,9 @@ function detectNavigation() {
       initializeConversationHistoryFromDOM();
       
       // Re-add buttons and listeners
-      addMem0Button();
+      if (!(window.OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus)) {
+        addMem0Button();
+      }
       
       // Re-setup enhanced DOM monitoring for new page
       setupEnhancedDOMMonitoring();

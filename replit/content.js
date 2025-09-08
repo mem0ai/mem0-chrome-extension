@@ -613,7 +613,84 @@ function initializeMem0Integration() {
     setupInputObserver();
     try { hookReplitBackgroundSearchTyping(); } catch (e) {}
     
-    injectMem0Button();
+    if (window.OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus) {
+      try {
+        if (!document.getElementById('mem0-icon-button')) {
+          OPENMEMORY_UI.resolveCachedAnchor({ learnKey: location.host + ':' + location.pathname }, null, 24*60*60*1000)
+          .then(function(hit){
+            if (!hit || !hit.el) return;
+            var hs = OPENMEMORY_UI.createShadowRootHost('mem0-root');
+            var host = hs.host, shadow = hs.shadow; host.id = 'mem0-icon-button';
+            var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.replit) ? SITE_CONFIG.replit : null;
+            var placement = (hit.placement || (cfg && cfg.placement)) || { strategy: 'float', placement: 'right-center', gap: 12 };
+            OPENMEMORY_UI.applyPlacement({ container: host, anchor: hit.el, placement: placement });
+            var style = document.createElement('style');
+            style.textContent = `
+              :host { position: relative; }
+              .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; box-shadow: 0 6px 16px rgba(0,0,0,0.3); background:#1C1C1E; }
+              .mem0-btn img { width:20px; height:20px; border-radius:50%; }
+              .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+              :host([data-has-text="1"]) .dot { display:block; }
+            `;
+            var btn = document.createElement('button'); btn.className = 'mem0-btn';
+            var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+            var dot = document.createElement('div'); dot.className = 'dot';
+            btn.appendChild(img); shadow.append(style, btn, dot);
+            btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+            if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+          });
+        }
+      } catch (_) {}
+
+      OPENMEMORY_UI.mountOnEditorFocus({
+        existingHostSelector: '#mem0-icon-button',
+        editorSelector: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.replit && SITE_CONFIG.replit.editorSelector) ? SITE_CONFIG.replit.editorSelector : 'textarea, [contenteditable="true"], input[type="text"]',
+        deriveAnchor: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.replit && typeof SITE_CONFIG.replit.deriveAnchor === 'function') ? SITE_CONFIG.replit.deriveAnchor : function(editor){ return editor.closest('form') || editor.parentElement || document.body; },
+        placement: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.replit && SITE_CONFIG.replit.placement) ? SITE_CONFIG.replit.placement : { strategy: 'float', placement: 'right-center', gap: 12 },
+        render: function(shadow, host){
+          host.id = 'mem0-icon-button';
+          var style = document.createElement('style');
+          style.textContent = `
+            :host { position: relative; }
+            .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; box-shadow: 0 6px 16px rgba(0,0,0,0.3); background:#1C1C1E; }
+            .mem0-btn img { width:20px; height:20px; border-radius:50%; }
+            .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+            :host([data-has-text="1"]) .dot { display:block; }
+          `;
+          var btn = document.createElement('button'); btn.className = 'mem0-btn';
+          var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+          var dot = document.createElement('div'); dot.className = 'dot';
+          btn.appendChild(img); shadow.append(style, btn, dot);
+          btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+          if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+        },
+        fallback: function(){
+          var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.replit) ? SITE_CONFIG.replit : null;
+          return OPENMEMORY_UI.mountResilient({
+            anchors: [{ find: function(){ var sel = (cfg && cfg.editorSelector) || 'textarea, [contenteditable="true"], input[type="text"]'; var ed = document.querySelector(sel); if (!ed) return null; try { return (cfg && typeof cfg.deriveAnchor === 'function') ? cfg.deriveAnchor(ed) : (ed.closest('form') || ed.parentElement || document.body); } catch(_) { return ed.closest('form') || ed.parentElement || document.body; } } }],
+            placement: (cfg && cfg.placement) || { strategy: 'float', placement: 'right-center', gap: 12 },
+            enableFloatingFallback: true,
+            render: function(shadow, host){
+              host.id = 'mem0-icon-button';
+              var style = document.createElement('style');
+              style.textContent = `
+                :host { position: relative; }
+                .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; border-radius:50%; box-shadow: 0 6px 16px rgba(0,0,0,0.3); background:#1C1C1E; }
+                .mem0-btn img { width:20px; height:20px; border-radius:50%; }
+                .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+                :host([data-has-text="1"]) .dot { display:block; }
+              `;
+              var btn = document.createElement('button'); btn.className = 'mem0-btn';
+              var img = document.createElement('img'); img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+              var dot = document.createElement('div'); dot.className = 'dot';
+              btn.appendChild(img); shadow.append(style, btn, dot);
+              btn.addEventListener('click', function(){ handleMem0Modal('mem0-icon-button'); });
+              if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+            }
+          });
+        }
+      });
+    }
     
     addSendButtonListener();
     
@@ -634,10 +711,7 @@ function initializeMem0Integration() {
        // Check memory state first
        const memoryEnabled = await getMemoryEnabledState();
        
-       // Only inject the button if memory is enabled and not already injected
-       if (memoryEnabled && !document.querySelector('button[aria-label="Mem0"]')) {
-         injectMem0Button();
-       } else if (!memoryEnabled) {
+       if (!memoryEnabled) {
          // Remove the button if memory is disabled
          const existingButton = document.querySelector('button[aria-label="Mem0"]');
          if (existingButton && existingButton.parentElement) {
@@ -677,18 +751,15 @@ function initializeMem0Integration() {
     attributeFilter: ['class', 'style']
   });
   
-  // Replace the aggressive setInterval with a less frequent check
+  // Replace periodic button injection checks; OPENMEMORY_UI handles mounting
   const memoryStateCheckInterval = setInterval(async () => {
     const memoryEnabled = await getMemoryEnabledState();
     const buttonExists = document.querySelector('button[aria-label="Mem0"]');
-    
     if (!memoryEnabled && buttonExists) {
       buttonExists.parentElement?.remove();
       buttonInjected = false;
-    } else if (memoryEnabled && !buttonExists && !buttonInjected) {
-      injectMem0Button();
     }
-  }, 10000); // Check every 10 seconds instead of 5
+  }, 10000);
 
   // Store interval reference for cleanup if needed
   mainObserver.memoryStateInterval = memoryStateCheckInterval;
@@ -705,23 +776,10 @@ if (document.readyState === 'loading') {
 }
 
 // Also try to initialize after a delay as a fallback
-setTimeout(() => {
-  if (!isInitialized) {
-    initializeMem0Integration();
-  } else {
-    // Even if initialized, check if button needs to be injected
-    if (!document.querySelector('button[aria-label="Mem0"]')) {
-      injectMem0Button();
-    }
-  }
-}, 2000);
+setTimeout(() => { if (!isInitialized) initializeMem0Integration(); }, 2000);
 
 // Add another retry after 5 seconds
-setTimeout(() => {
-  if (!document.querySelector('button[aria-label="Mem0"]')) {
-    injectMem0Button();
-  }
-}, 5000);
+setTimeout(() => {}, 5000);
 
 // Add a function to apply just the current memory to the input
 function applyMemoryToInput(memoryText) {
@@ -1017,7 +1075,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
     topPosition = Math.max(0, Math.min(topPosition, maxY));
   } else {
     // Position relative to the Mem0 button (original logic)
-    const mem0Button = document.querySelector('#mem0-floating-button');
+    const mem0Button = document.querySelector('#mem0-icon-button');
     
     if (mem0Button) {
       const buttonRect = mem0Button.getBoundingClientRect();
@@ -1919,139 +1977,7 @@ function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null
   }
 }
 
-function injectMem0Button() {
-  // Prevent duplicate button injection
-  if (buttonInjected || document.querySelector('#mem0-floating-button')) {
-    return;
-  }
-
-  // Function to add the button
-  async function tryAddButton() {
-    // First check if memory is enabled
-    const memoryEnabled = await getMemoryEnabledState();
-    
-    // Remove existing button if memory is disabled
-    if (!memoryEnabled) {
-      const existingButton = document.querySelector('#mem0-floating-button');
-      if (existingButton) {
-        existingButton.remove();
-        buttonInjected = false;
-      }
-      return;
-    }
-    
-    // Check if our button already exists
-    if (document.querySelector('#mem0-floating-button')) {
-      buttonInjected = true;
-      return;
-    }
-    
-    
-    // Create floating button container
-    const floatingButton = document.createElement('div');
-    floatingButton.id = 'mem0-floating-button';
-    floatingButton.style.cssText = `
-      position: fixed !important;
-      bottom: 10px !important;
-      left: 10px !important;
-      width: 28px !important;
-      height: 28px !important;
-      border-radius: 50% !important;
-      background: linear-gradient(135deg,rgb(59, 59, 59) 0%,rgb(0, 0, 0) 100%) !important;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
-      cursor: pointer !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      z-index: 9999 !important;
-      transition: all 0.3s ease !important;
-      border: none !important;
-      user-select: none !important;
-    `;
-    
-    // Create notification dot
-    const notificationDot = document.createElement('div');
-    notificationDot.id = 'mem0-notification-dot';
-    notificationDot.style.cssText = `
-      position: absolute;
-      top: -2px;
-      right: -2px;
-      width: 8px;
-      height: 8px;
-      background-color: #34a853;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      display: none;
-      z-index: 10000;
-      pointer-events: none;
-    `;
-    
-    // Add icon to button
-    const iconImg = document.createElement('img');
-    iconImg.src = chrome.runtime.getURL('icons/mem0-claude-icon.png');
-    iconImg.style.cssText = `
-      width: 14px !important;
-      height: 14px !important;
-      border-radius: 50% !important;
-      pointer-events: none !important;
-    `;
-    
-    floatingButton.appendChild(iconImg);
-    floatingButton.appendChild(notificationDot);
-    
-    // Add hover effects
-    floatingButton.addEventListener('mouseenter', () => {
-      floatingButton.style.transform = 'scale(1.1)';
-      floatingButton.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.4)';
-    });
-    
-    floatingButton.addEventListener('mouseleave', () => {
-      floatingButton.style.transform = 'scale(1)';
-      floatingButton.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
-    });
-    
-    // Add click event
-    floatingButton.addEventListener('click', function() {
-      getMemoryEnabledState().then(memoryEnabled => {
-        if (memoryEnabled) {
-          handleMem0Modal('mem0-floating-button');
-        } else {
-          chrome.runtime.sendMessage({ action: 'openOptions' });
-        }
-      });
-    });
-    
-    // Add keyframe animation for the dot (only once)
-    if (!document.getElementById('notification-dot-animation')) {
-      const style = document.createElement('style');
-      style.id = 'notification-dot-animation';
-      style.innerHTML = `
-        @keyframes popIn {
-          0% { transform: scale(0); }
-          50% { transform: scale(1.2); }
-          100% { transform: scale(1); }
-        }
-        
-        #mem0-notification-dot.active {
-          display: block !important;
-          animation: popIn 0.3s ease-out forwards;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    // Add to body
-    document.body.appendChild(floatingButton);
-    
-    buttonInjected = true;
-    
-    // Update notification dot based on input content
-    updateNotificationDot();
-  }
-  
-  // Start trying to add the button
-  tryAddButton();
-}
+function injectMem0Button() {}
 
 // Function to update notification dot visibility based on text in the input
 function updateNotificationDot() {

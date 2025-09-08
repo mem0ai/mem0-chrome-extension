@@ -29,15 +29,15 @@
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "claude/content.js"]
+      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "claude/content.js"]
     },
     {
       "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "chatgpt/content.js"]
+      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "chatgpt/content.js"]
     },
     {
       "matches": ["https://www.perplexity.ai/*", "https://perplexity.ai/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "perplexity/content.js"]
+      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "perplexity/content.js"]
     },
     {
       "matches": ["https://app.mem0.ai/*"],
@@ -45,15 +45,15 @@
     },
     {
       "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "grok/content.js"]
+      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "grok/content.js"]
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "deepseek/content.js"]
+      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "deepseek/content.js"]
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "gemini/content.js"]
+      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "gemini/content.js"]
     },
     {
       "matches": ["https://replit.com/*"],

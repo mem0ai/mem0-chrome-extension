@@ -20,72 +20,72 @@ let inputValueCopy = "";
 
 let currentModalSourceButtonId = null; 
 
-  var chatgptSearch = OPENMEMORY_SEARCH.createOrchestrator({
-    fetch: async function(query, opts) {
-      const data = await new Promise((resolve) => {
-        chrome.storage.sync.get(
-          ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
-          function (items) { resolve(items); }
-        );
-      });
-  
-      const apiKey = data.apiKey;
-      const accessToken = data.access_token;
-      if (!apiKey && !accessToken) return [];
-  
-      const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
-      const userId = data.userId || data.user_id || "chrome-extension-user";
-      const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
-      const topK = (data.top_k !== undefined) ? data.top_k : 10;
-  
-      const optionalParams = {};
-      if (data.selected_org) optionalParams.org_id = data.selected_org;
-      if (data.selected_project) optionalParams.project_id = data.selected_project;
-  
-      const payload = {
-        query,
-        filters: { user_id: userId },
-        rerank: true,
-        threshold: threshold,
-        top_k: topK,
-        filter_memories: false,
-        source: "OPENMEMORY_CHROME_EXTENSION",
-        ...optionalParams,
-      };
-  
-      const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: authHeader,
-        },
-        body: JSON.stringify(payload),
-        signal: opts && opts.signal
-      });
-  
-      if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
-      return await res.json();
-    },
-  
-    // Don’t render on prefetch. When modal is open, update it.
-    onSuccess: function(normQuery, responseData) {
-      if (!memoryModalShown) return;
-      const memoryItems = (responseData || []).map(item => ({
-        id: item.id,
-        text: item.memory,
-        categories: item.categories || []
-      }));
-      createMemoryModal(memoryItems, false, currentModalSourceButtonId);
-    },
-  
-    onError: function() {
-      if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
-    },
-  
-    minLength: 3,
-    debounceMs: 150,
-    cacheTTL: 60000
-  });
+var chatgptSearch = OPENMEMORY_SEARCH.createOrchestrator({
+  fetch: async function(query, opts) {
+    const data = await new Promise((resolve) => {
+      chrome.storage.sync.get(
+        ["apiKey", "userId", "access_token", "selected_org", "selected_project", "user_id", "similarity_threshold", "top_k"],
+        function (items) { resolve(items); }
+      );
+    });
+
+    const apiKey = data.apiKey;
+    const accessToken = data.access_token;
+    if (!apiKey && !accessToken) return [];
+
+    const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
+    const userId = data.userId || data.user_id || "chrome-extension-user";
+    const threshold = (data.similarity_threshold !== undefined) ? data.similarity_threshold : 0.1;
+    const topK = (data.top_k !== undefined) ? data.top_k : 10;
+
+    const optionalParams = {};
+    if (data.selected_org) optionalParams.org_id = data.selected_org;
+    if (data.selected_project) optionalParams.project_id = data.selected_project;
+
+    const payload = {
+      query,
+      filters: { user_id: userId },
+      rerank: true,
+      threshold: threshold,
+      top_k: topK,
+      filter_memories: false,
+      source: "OPENMEMORY_CHROME_EXTENSION",
+      ...optionalParams,
+    };
+
+    const res = await fetch("https://api.mem0.ai/v2/memories/search/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    });
+
+    if (!res.ok) throw new Error(`API request failed with status ${res.status}`);
+    return await res.json();
+  },
+
+  // Don’t render on prefetch. When modal is open, update it.
+  onSuccess: function(normQuery, responseData) {
+    if (!memoryModalShown) return;
+    const memoryItems = (responseData || []).map(item => ({
+      id: item.id,
+      text: item.memory,
+      categories: item.categories || []
+    }));
+    createMemoryModal(memoryItems, false, currentModalSourceButtonId);
+  },
+
+  onError: function() {
+    if (memoryModalShown) createMemoryModal([], false, currentModalSourceButtonId);
+  },
+
+  minLength: 3,
+  debounceMs: 150,
+  cacheTTL: 60000
+});
 
 function createMemoryModal(memoryItems, isLoading = false, sourceButtonId = null) {
   // Close existing modal if it exists
@@ -1274,485 +1274,27 @@ function captureAndStoreMemory() {
   );
 }
 
-// Function to add the Mem0 button next to the mic icon
-async function addMem0IconButton() {
-  // Check if memory is enabled
-  const memoryEnabled = await getMemoryEnabledState();
-  if (!memoryEnabled) {
-    // If memory is disabled, remove the button if it exists
-    const existingButton = document.querySelector('#mem0-icon-button');
-    if (existingButton && existingButton.parentNode) {
-      existingButton.parentNode.remove();
-    }
-    // Also remove floating container if it exists
-    const floatingContainer = document.querySelector('#mem0-floating-container');
-    if (floatingContainer) {
-      floatingContainer.remove();
-    }
-    return;
-  }
-
-  // Strategy 1: Look specifically for the microphone button area
-  let buttonContainer = null;
-  let referenceButton = null;
-  let microphoneButton = null;
-  
-  // First, find the microphone button specifically
-  microphoneButton = document.querySelector('button[aria-label="Dictate button"]') ||
-    document.querySelector('button[aria-label*="voice"], button[aria-label*="Voice"], button[aria-label*="Dictate"], button[aria-label*="mic"], button[aria-label*="Mic"]') ||
-    Array.from(document.querySelectorAll('button')).find(btn => {
-      // Check if this button has the microphone icon structure
-      const rect = btn.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return false; // Skip invisible buttons
-      
-      const svg = btn.querySelector('svg');
-      if (svg) {
-        const paths = svg.querySelectorAll('path');
-        // Look for microphone-like SVG paths (common patterns)
-        for (const path of paths) {
-          const d = path.getAttribute('d');
-          if (d && (
-            d.includes('M12 1a') || 
-            d.includes('m12 2a') || 
-            d.includes('M12 14c') || 
-            d.includes('microphone') ||
-            d.includes('M8 3a3') || // Common mic path pattern
-            d.includes('M12 1c') ||
-            d.toLowerCase().includes('mic')
-          )) {
-            return true;
-          }
-        }
-        
-        // Also check for microphone-related viewBox or class names
-        if (svg.getAttribute('viewBox') && btn.className.includes('mic')) {
-          return true;
-        }
-      }
-      
-      // Check the button's position - microphone is usually on the right side
-      const inputElement = document.querySelector('#prompt-textarea') ||
-        document.querySelector('div[contenteditable="true"]') ||
-        document.querySelector("textarea");
-      if (inputElement) {
-        const inputRect = inputElement.getBoundingClientRect();
-        // Microphone button should be to the right of the input
-        return rect.left > inputRect.right - 200 && rect.left < inputRect.right + 50;
-      }
-      
-      return false;
-    });
-  
-  if (microphoneButton) {
-    // Look for the proper container - the Dictate button is nested within spans
-    let container = microphoneButton.parentElement;
-    
-    // Walk up the DOM to find the flex container that holds all the buttons
-    while (container && container !== document.body) {
-      // Look for the container with gap classes that holds multiple buttons
-      if (container.className && (
-        container.className.includes('gap-1.5') || 
-        container.className.includes('gap-2') ||
-        container.className.includes('items-center') && container.className.includes('flex')
-      )) {
-        // Check if this container has multiple button-like elements
-        const buttonElements = container.querySelectorAll('button, [role="button"]');
-        if (buttonElements.length > 0 || container.children.length > 1) {
-          buttonContainer = container;
-          referenceButton = microphoneButton;
-          break;
-        }
-      }
-      container = container.parentElement;
-    }
-    
-    // Fallback to immediate parent if no suitable container found
-    if (!buttonContainer) {
-      buttonContainer = microphoneButton.parentElement;
-      referenceButton = microphoneButton;
-    }
-  }
-  
-  // Fallback: Look for composer trailing actions if microphone not found
-  if (!buttonContainer) {
-    const composerTrailing = document.querySelector('div[data-testid="composer-trailing-actions"]');
-    if (composerTrailing) {
-      // Look for button containers within composer trailing actions
-      const containers = composerTrailing.querySelectorAll('div');
-      for (const container of containers) {
-        const buttons = container.querySelectorAll('button');
-        if (buttons.length > 0) {
-          buttonContainer = container;
-          referenceButton = buttons[buttons.length - 1]; // Use last button as reference
-          break;
-        }
-      }
-    }
-  }
-  
-  // Strategy 2: Look for buttons near the input element  
-  if (!buttonContainer) {
-    const inputElement = document.querySelector('#prompt-textarea') ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-    
-    if (inputElement) {
-      // Search up the DOM tree for button containers
-      let parent = inputElement.parentElement;
-      let level = 0;
-      while (parent && level < 5 && !buttonContainer) {
-        const buttons = parent.querySelectorAll('button');
-        if (buttons.length > 0) {
-          // Look for buttons that might be action buttons (not just text buttons)
-          for (const btn of buttons) {
-            const rect = btn.getBoundingClientRect();
-            // Check if button is visible and reasonable size
-            if (rect.width > 0 && rect.height > 0 && rect.width < 100) {
-              buttonContainer = parent;
-              referenceButton = btn;
-              break;
-            }
-          }
-        }
-        parent = parent.parentElement;
-        level++;
-      }
-    }
-  }
-  
-  // Strategy 3: Fallback - create our own container
-  if (!buttonContainer && inputElement) {
-    // Find the closest form or container element
-    let formContainer = inputElement.closest('form') || 
-                       inputElement.closest('div[role="group"]') ||
-                       inputElement.parentElement;
-    
-    if (formContainer) {
-      buttonContainer = formContainer;
-      // Try to find any existing button as reference
-      referenceButton = formContainer.querySelector('button');
-    }
-  }
-  
-  // Final fallback: Create a floating button if no container found
-  if (!buttonContainer) {
-    const inputElement = document.querySelector('#prompt-textarea') ||
-      document.querySelector('div[contenteditable="true"]') ||
-      document.querySelector("textarea");
-      
-    if (inputElement) {
-      // Create a custom floating container
-      buttonContainer = document.createElement('div');
-      buttonContainer.id = 'mem0-floating-container';
-      buttonContainer.style.cssText = `
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        z-index: 1000;
-        display: flex;
-        gap: 4px;
-      `;
-      document.body.appendChild(buttonContainer);
-    }
-  }
-  
-  if (buttonContainer && !document.querySelector('#mem0-icon-button')) {
-    // Use microphone button styles if available, otherwise use reference button styles
-    let buttonStyles = 'btn relative btn-primary btn-small flex items-center justify-center rounded-full border border-token-border-default p-1 text-token-text-secondary focus-visible:outline-black dark:text-token-text-secondary dark:focus-visible:outline-white bg-transparent dark:bg-transparent can-hover:hover:bg-token-main-surface-secondary dark:hover:bg-transparent dark:hover:opacity-100 h-9 min-h-9 w-9';
-    
-    if (microphoneButton) {
-      buttonStyles = microphoneButton.className;
-    } else if (referenceButton) {
-      buttonStyles = referenceButton.className;
-    }
-    
-    if (true) { // Always execute the button creation now that we have a container
-      const mem0ButtonContainer = document.createElement('span');
-      mem0ButtonContainer.className = '';
-      mem0ButtonContainer.dataset.state = 'closed';
-      mem0ButtonContainer.style.position = 'relative'; // Add position relative for popover positioning
-      
-      // Match the structure of the Dictate button if we found it
-      if (microphoneButton && microphoneButton.getAttribute('aria-label') === 'Dictate button') {
-        // Copy the exact class structure from the Dictate button's container
-        const dictateContainer = microphoneButton.closest('span[data-state="closed"]');
-        if (dictateContainer && dictateContainer.className) {
-          mem0ButtonContainer.className = dictateContainer.className;
-        }
-      }
-      
-      // Additional styling only if we haven't already copied from Dictate button container
-      if (!mem0ButtonContainer.className && microphoneButton && microphoneButton.parentElement) {
-        const micContainer = microphoneButton.parentElement;
-        if (micContainer.className) {
-          // Only copy safe styling classes, avoid layout-affecting ones
-          const safeClasses = micContainer.className.split(' ').filter(cls => 
-            !cls.includes('flex') && 
-            !cls.includes('grid') && 
-            !cls.includes('absolute') && 
-            !cls.includes('relative') &&
-            !cls.includes('fixed') &&
-            !cls.includes('w-') &&
-            !cls.includes('h-') &&
-            !cls.includes('m-') &&
-            !cls.includes('p-')
-          );
-          if (safeClasses.length > 0) {
-            mem0ButtonContainer.className = safeClasses.join(' ');
-          }
-        }
-      }
-      
-      const mem0Button = document.createElement('button');
-      mem0Button.id = 'mem0-icon-button';
-      mem0Button.className = buttonStyles;
-      mem0Button.setAttribute('aria-label', 'OpenMemory button');
-      mem0Button.type = 'button';
-      
-      // Ensure consistent button styling regardless of inherited classes
-      mem0Button.style.cssText = `
-        ${mem0Button.style.cssText}
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        min-width: 32px !important;
-        min-height: 32px !important;
-        border-radius: 50% !important;
-        flex-shrink: 0 !important;
-        position: relative !important;
-      `;
-      
-      // Create notification dot
-      const notificationDot = document.createElement('div');
-      notificationDot.id = 'mem0-notification-dot';
-      notificationDot.style.cssText = `
-        position: absolute;
-        top: -3px;
-        right: -3px;
-        width: 10px;
-        height: 10px;
-        background-color:rgb(128, 221, 162);
-        border-radius: 50%;
-        border: 2px solid #1C1C1E;
-        display: none;
-        z-index: 1001;
-        pointer-events: none;
-      `;
-      
-      // Add keyframe animation for the dot
-      if (!document.getElementById('notification-dot-animation')) {
-        const style = document.createElement('style');
-        style.id = 'notification-dot-animation';
-        style.innerHTML = `
-          @keyframes popIn {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-          }
-          
-          #mem0-notification-dot.active {
-            display: block !important;
-            animation: popIn 0.3s ease-out forwards;
-          }
-        `;
-        document.head.appendChild(style);
-      }
-      
-      // Create popover element (hidden by default)
-      const popover = document.createElement('div');
-      popover.className = 'mem0-button-popover';
-      popover.style.cssText = `
-        position: absolute;
-        bottom: 48px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: #1C1C1E;
-        border: 1px solid #27272A;
-        color: white;
-        padding: 8px 12px;
-        border-radius: 6px;
-        font-size: 12px;
-        white-space: nowrap;
-        z-index: 10001;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        display: none;
-        transition: opacity 0.2s;
-      `;
-      popover.textContent = 'Add memories to your prompt';
-      
-      // Add arrow
-      const arrow = document.createElement('div');
-      arrow.style.cssText = `
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        transform: translateX(-50%) rotate(45deg);
-        width: 10px;
-        height: 10px;
-        background-color: #1C1C1E;
-        border-right: 1px solid #27272A;
-        border-bottom: 1px solid #27272A;
-      `;
-      popover.appendChild(arrow);
-      mem0ButtonContainer.appendChild(popover);
-      
-      const iconContainer = document.createElement('div');
-      iconContainer.className = 'flex items-center justify-center';
-      
-      const icon = document.createElement('img');
-      icon.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
-      icon.className = 'h-[18px] w-[18px]';
-      icon.style.borderRadius = '50%';
-      
-      iconContainer.appendChild(icon);
-      mem0Button.appendChild(iconContainer);
-      mem0Button.appendChild(notificationDot);
-      mem0ButtonContainer.appendChild(mem0Button);
-      
-      // Insert the button container with proper positioning and spacing
-      if (microphoneButton && buttonContainer.contains(microphoneButton)) {
-        // For Dictate button, we need to find the right insertion point
-        // The button is nested: container > span[data-state] > button
-        let insertionTarget = microphoneButton;
-        let insertionParent = buttonContainer;
-        
-        // If the microphone button is nested in spans, find the top-level span in our container
-        let currentElement = microphoneButton.parentElement;
-        while (currentElement && currentElement !== buttonContainer && currentElement.parentElement === buttonContainer) {
-          insertionTarget = currentElement;
-          break;
-        }
-        while (currentElement && currentElement !== buttonContainer) {
-          if (currentElement.parentElement === buttonContainer) {
-            insertionTarget = currentElement;
-            break;
-          }
-          currentElement = currentElement.parentElement;
-        }
-        
-        // Insert BEFORE the target element (to the left of the microphone)
-        insertionParent.insertBefore(mem0ButtonContainer, insertionTarget);
-        
-        // Add proper spacing to match other elements in the container
-        mem0ButtonContainer.style.marginRight = '0px'; // Let the container handle spacing
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      } else if (referenceButton && buttonContainer.contains(referenceButton)) {
-        // Insert next to the reference button  
-        if (referenceButton.nextSibling) {
-          buttonContainer.insertBefore(mem0ButtonContainer, referenceButton.nextSibling);
-        } else {
-          buttonContainer.appendChild(mem0ButtonContainer);
-        }
-        mem0ButtonContainer.style.marginLeft = '4px';
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      } else {
-        // Insert at the end of the button container with fallback styling
-        buttonContainer.appendChild(mem0ButtonContainer);
-        mem0ButtonContainer.style.marginLeft = '4px';
-        mem0ButtonContainer.style.display = 'inline-flex';
-        mem0ButtonContainer.style.alignItems = 'center';
-      }
-      
-      // Add hover event for popover
-      mem0ButtonContainer.addEventListener('mouseenter', () => {
-        // Close any existing button popup first
-        const existingPopup = document.querySelector('.mem0-button-popup');
-        if (existingPopup) {
-          existingPopup.remove();
-        }
-        
-        popover.style.display = 'block';
-        setTimeout(() => popover.style.opacity = '1', 10);
-      });
-      
-      mem0ButtonContainer.addEventListener('mouseleave', () => {
-        popover.style.opacity = '0';
-        setTimeout(() => popover.style.display = 'none', 200);
-      });
-      
-      // Add click event listener
-      mem0Button.addEventListener('click', async () => {
-        try {
-          const memoryEnabled = await getMemoryEnabledState();
-          if (memoryEnabled) {
-            // Call handleMem0Modal with button ID
-            await handleMem0Modal('mem0-icon-button');
-          }
-        } catch (error) {
-          console.error('Error handling Mem0 button click:', error);
-        }
-      });
-      
-      // Update notification dot based on input content
-      updateNotificationDot();
-      
-      // Ensure notification dot is updated after DOM is fully loaded
-      setTimeout(updateNotificationDot, 500);
-    }
-  }
-  
-  // Add send button listener
-  addSendButtonListener();
-}
-
 async function updateNotificationDot() {
-  // Check if memory is enabled
   const memoryEnabled = await getMemoryEnabledState();
-  if (!memoryEnabled) {
-    return; // Don't update notification dot if memory is disabled
-  }
+  if (!memoryEnabled) return;
 
-  const inputElement = document.querySelector('#prompt-textarea') ||
-    document.querySelector('div[contenteditable="true"]') ||
-    document.querySelector("textarea");
-  
-  const notificationDot = document.querySelector('#mem0-notification-dot');
-  
-  if (inputElement && notificationDot) {
-    
-    // Function to check if input has text
-    const checkForText = () => {
-      const inputText = inputElement.textContent || inputElement.value || '';
-      const hasText = inputText.trim() !== '';
-      
-      
-      if (hasText) {
-        notificationDot.classList.add('active');
-        // Force display style
-        notificationDot.style.display = 'block';
+  const input = document.querySelector('#prompt-textarea') ||
+                document.querySelector('div[contenteditable="true"]') ||
+                document.querySelector('textarea');
+  const host = document.getElementById('mem0-icon-button'); // shadow host
+  if (!input || !host) { setTimeout(updateNotificationDot, 1000); return; }
 
-      } else {
-        notificationDot.classList.remove('active');
-        notificationDot.style.display = 'none';
-      }
-    };
-    
-    // Set up an observer to watch for changes to the input field
-    const inputObserver = new MutationObserver(checkForText);
-    
-    // Start observing the input element
-    inputObserver.observe(inputElement, { 
-      childList: true, 
-      characterData: true, 
-      subtree: true 
-    });
-    
-    // Also check on input and keyup events
-    inputElement.addEventListener('input', checkForText);
-    inputElement.addEventListener('keyup', checkForText);
-    inputElement.addEventListener('focus', checkForText);
-    
-    // Initial check
-    checkForText();
-    
-    // Force check after a small delay to ensure DOM is fully loaded
-    setTimeout(checkForText, 500);
-  } else {
-    // If elements aren't found immediately, try again after a short delay
-    setTimeout(updateNotificationDot, 1000);
-  }
+  const set = () => {
+    const txt = input.textContent || input.value || '';
+    host.setAttribute('data-has-text', txt.trim() ? '1' : '0');
+  };
+
+  const mo = new MutationObserver(set);
+  mo.observe(input, { childList: true, characterData: true, subtree: true });
+  input.addEventListener('input', set);
+  input.addEventListener('keyup', set);
+  input.addEventListener('focus', set);
+  set();
 }
 
 // Modified function to handle Mem0 modal instead of direct injection
@@ -1868,8 +1410,12 @@ async function handleMem0Modal(sourceButtonId = null) {
 
 // Function to show a small popup message near the button
 function showButtonPopup(button, message) {
+  var host = button || document.getElementById('mem0-icon-button');
+  if (!host) return;
+  var root = host.shadowRoot || host;
+
   // Remove any existing popups
-  const existingPopup = document.querySelector('.mem0-button-popup');
+  const existingPopup = root.querySelector('.mem0-button-popup');
   if (existingPopup) {
     existingPopup.remove();
   }
@@ -1917,17 +1463,23 @@ function showButtonPopup(button, message) {
   `;
   
   popup.appendChild(arrow);
+
+  root.appendChild(popup); 
+
+  setTimeout(function () {
+    if (popup.isConnected) popup.remove();
+  }, 3000); 
   
   // Position relative to button
-  button.style.position = 'relative';
-  button.appendChild(popup);
+  // button.style.position = 'relative';
+  // button.appendChild(popup);
   
-  // Auto-remove after 3 seconds
-  setTimeout(() => {
-    if (document.body.contains(popup)) {
-      popup.remove();
-    }
-  }, 3000);
+  // // Auto-remove after 3 seconds
+  // setTimeout(() => {
+  //   if (document.body.contains(popup)) {
+  //     popup.remove();
+  //   }
+  // }, 3000);
 }
 
 // Safe no-op to prevent ReferenceError if auto-inject prefetch isn't defined elsewhere
@@ -1937,6 +1489,197 @@ function setupAutoInjectPrefetch() {
     // Inline hint handles lightweight suggestion awareness.
   } catch (_e) {}
 }
+
+(function () {
+  if (!window.OPENMEMORY_UI || !OPENMEMORY_UI.mountOnEditorFocus) return;
+
+  // 1) Try to mount immediately from cached anchor on page load (before focus)
+  try {
+    // Skip if already mounted (e.g., hot reload / rapid SPA replace)
+    if (!document.getElementById('mem0-icon-button')) {
+      OPENMEMORY_UI.resolveCachedAnchor({ learnKey: location.host + ':' + location.pathname }, null, 24*60*60*1000)
+      .then(function(hit){
+        if (!hit || !hit.el) return;
+        // Reuse the same render and placement as the focus-driven path
+        var hs = OPENMEMORY_UI.createShadowRootHost('mem0-root');
+        var host = hs.host, shadow = hs.shadow;
+        host.id = 'mem0-icon-button';
+        var unplace = OPENMEMORY_UI.applyPlacement({ container: host, anchor: hit.el, placement: hit.placement || { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' } });
+
+        var style = document.createElement('style');
+        style.textContent = `
+          :host { position: relative; }
+          .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center;
+            justify-content:center; width:32px; height:32px; border-radius:50%; }
+          .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+          .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px;
+            background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+          :host([data-has-text="1"]) .dot { display:block; }
+        `;
+        var btn = document.createElement('button');
+        btn.className = 'mem0-btn';
+        var img = document.createElement('img');
+        img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+        var dot = document.createElement('div');
+        dot.className = 'dot';
+        btn.appendChild(img);
+        shadow.append(style, btn, dot);
+
+        // Nudge to the left of mic if present in same anchor
+        try {
+          var mic = hit.el && (hit.el.querySelector('button[aria-label="Dictate button"]') ||
+                               hit.el.querySelector('button[aria-label*="mic" i]') ||
+                               hit.el.querySelector('button[aria-label*="voice" i]'));
+          if (mic) {
+            var child = mic; while (child && child.parentElement !== hit.el) child = child.parentElement;
+            if (child && child.parentElement === hit.el) hit.el.insertBefore(host, child);
+          }
+        } catch (_) {}
+
+        btn.addEventListener('click', function () { handleMem0Modal('mem0-icon-button'); });
+        if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+
+        // If the anchor disappears, allow normal focus flow to re-mount
+        var removal = new MutationObserver(function () {
+          if (!document.contains(hit.el) || !document.contains(host)) {
+            try { unplace(); } catch(_) {}
+            try { removal.disconnect(); } catch(_) {}
+          }
+        });
+        removal.observe(document.documentElement, { childList: true, subtree: true });
+      })
+      .catch(function(){});
+    }
+  } catch (_) {}
+
+  // 2) Standard focus-driven mount
+  OPENMEMORY_UI.mountOnEditorFocus({
+    existingHostSelector: '#mem0-icon-button',
+    editorSelector: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.chatgpt && SITE_CONFIG.chatgpt.editorSelector) ? SITE_CONFIG.chatgpt.editorSelector : 'textarea, [contenteditable="true"], input[type="text"]',
+    deriveAnchor: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.chatgpt && typeof SITE_CONFIG.chatgpt.deriveAnchor === 'function') ? SITE_CONFIG.chatgpt.deriveAnchor : function (editor) { return editor.closest('form') || editor.parentElement; },
+    placement: (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.chatgpt && SITE_CONFIG.chatgpt.placement) ? SITE_CONFIG.chatgpt.placement : { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
+    render: function (shadow, host, anchor) {
+      host.id = 'mem0-icon-button'; // existing code relies on this
+      var style = document.createElement('style');
+      style.textContent = `
+        :host { position: relative; }
+        .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center;
+          justify-content:center; width:32px; height:32px; border-radius:50%; }
+        .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+        .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px;
+          background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+        :host([data-has-text="1"]) .dot { display:block; }
+      `;
+      var btn = document.createElement('button');
+      btn.className = 'mem0-btn';
+      var img = document.createElement('img');
+      img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+      var dot = document.createElement('div');
+      dot.className = 'dot';
+      btn.appendChild(img);
+      shadow.append(style, btn, dot);
+      
+      try {
+        var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.chatgpt) ? SITE_CONFIG.chatgpt : null;
+        var mic = null;
+        if (cfg && Array.isArray(cfg.adjacentTargets)) {
+          for (var i = 0; i < cfg.adjacentTargets.length; i++) {
+            var sel = cfg.adjacentTargets[i];
+            mic = anchor && anchor.querySelector(sel);
+            if (mic) break;
+          }
+        }
+        if (mic) {
+          var child = mic;
+          while (child && child.parentElement !== anchor) child = child.parentElement;
+          if (child && child.parentElement === anchor) anchor.insertBefore(host, child);
+          host.style.marginRight = ''; // rely on container gap
+          host.style.marginLeft = '';
+        } else {
+          host.style.marginLeft = '4px'; // mild fallback spacing
+        }
+      } catch (_e) {}
+
+      btn.addEventListener('click', function () { handleMem0Modal('mem0-icon-button'); });
+
+      if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0); 
+    },
+    // Optional safety net if deriveAnchor fails
+    fallback: function () {
+      var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.chatgpt) ? SITE_CONFIG.chatgpt : null;
+      OPENMEMORY_UI.mountResilient({
+        anchors: [
+          {
+            find: function () {
+              var sel = (cfg && cfg.editorSelector) || 'textarea, [contenteditable="true"], input[type="text"]';
+              var ed = document.querySelector(sel);
+              if (!ed) return null;
+              try {
+                return (cfg && typeof cfg.deriveAnchor === 'function') ? cfg.deriveAnchor(ed) : (ed.closest('form') || ed.parentElement);
+              } catch (_) {
+                return ed.closest('form') || ed.parentElement;
+              }
+            }
+          }
+        ],
+        placement: (cfg && cfg.placement) || { strategy: 'inline', where: 'beforeend', inlineAlign: 'end' },
+        enableFloatingFallback: true,
+        render: function (shadow, host, anchor) {
+          host.id = 'mem0-icon-button'; // host is the shadow root container
+          var style = document.createElement('style');
+          style.textContent = `
+            :host { position: relative; }
+            .mem0-btn { all: initial; cursor: pointer; display:inline-flex; align-items:center;
+              justify-content:center; width:32px; height:32px; border-radius:50%; }
+            .mem0-btn img { width:18px; height:18px; border-radius:50%; }
+            .dot { position:absolute; top:-2px; right:-2px; width:8px; height:8px;
+              background:#80DDA2; border-radius:50%; border:2px solid #1C1C1E; display:none; }
+            :host([data-has-text="1"]) .dot { display:block; }
+          `;
+          var btn = document.createElement('button');
+          btn.className = 'mem0-btn';
+          var img = document.createElement('img');
+          img.src = chrome.runtime.getURL('icons/mem0-claude-icon-p.png');
+          var dot = document.createElement('div');
+          dot.className = 'dot';
+          btn.appendChild(img);
+          shadow.append(style, btn, dot);
+          btn.addEventListener('click', function () { handleMem0Modal('mem0-icon-button'); });
+    
+          // Move host to the left of the mic inside the same toolbar container
+          try {
+            var cfg = (typeof SITE_CONFIG !== 'undefined' && SITE_CONFIG.chatgpt) ? SITE_CONFIG.chatgpt : null;
+            var mic = null;
+            if (cfg && Array.isArray(cfg.adjacentTargets)) {
+              for (var i = 0; i < cfg.adjacentTargets.length; i++) {
+                var sel = cfg.adjacentTargets[i];
+                mic = anchor && anchor.querySelector(sel);
+                if (mic) break;
+              }
+            } else {
+              mic = anchor && (anchor.querySelector('button[aria-label="Dictate button"]') ||
+                               anchor.querySelector('button[aria-label*="mic" i]') ||
+                               anchor.querySelector('button[aria-label*="voice" i]'));
+            }
+            if (mic) {
+              var child = mic;
+              while (child && child.parentElement !== anchor) child = child.parentElement;
+              if (child && child.parentElement === anchor) anchor.insertBefore(host, child);
+              host.style.marginRight = ''; // rely on container gap
+              host.style.marginLeft = '';
+            } else {
+              host.style.marginLeft = '4px'; // mild fallback spacing
+            }
+          } catch (_e) {}
+    
+          if (typeof updateNotificationDot === 'function') setTimeout(updateNotificationDot, 0);
+        },
+      });
+    },
+    persistCache: true,
+    cacheTtlMs: 24*60*60*1000
+  });
+})();
 
 
 function getLastMessages(count) {
@@ -2364,9 +2107,9 @@ function getMemoryEnabledState() {
 function initializeMem0Integration() {
   document.addEventListener("DOMContentLoaded", () => {
     addSyncButton();
-    (async () => await addMem0IconButton())();
+    // (async () => await addMem0IconButton())();
     addSendButtonListener();
-    (async () => await updateNotificationDot())();
+    // (async () => await updateNotificationDot())();
     hookBackgroundSearchTyping(); 
     setupAutoInjectPrefetch();
   });
@@ -2384,9 +2127,9 @@ function initializeMem0Integration() {
 
   observer = new MutationObserver(() => {
     addSyncButton();
-    (async () => await addMem0IconButton())();
+    // (async () => await addMem0IconButton())();
     addSendButtonListener();
-    (async () => await updateNotificationDot())();
+    // (async () => await updateNotificationDot())();
     hookBackgroundSearchTyping(); 
     setupAutoInjectPrefetch();
   });
@@ -2395,9 +2138,9 @@ function initializeMem0Integration() {
 
   // Add a MutationObserver to watch for changes in the DOM but don't intercept Enter key
   const observerForUI = new MutationObserver(() => {
-    (async () => await addMem0IconButton())();
+    // (async () => await addMem0IconButton())();
     addSendButtonListener();
-    (async () => await updateNotificationDot())();
+    // (async () => await updateNotificationDot())();
     hookBackgroundSearchTyping(); 
     setupAutoInjectPrefetch();
   });
@@ -2597,9 +2340,9 @@ function chatgptDetectNavigation() {
     setTimeout(() => {
       try {
         addSyncButton();
-        (async () => await addMem0IconButton())();
+        // (async () => await addMem0IconButton())();
         addSendButtonListener();
-        (async () => await updateNotificationDot())();
+        // (async () => await updateNotificationDot())();
       } catch (_e) {}
     }, 300);
   }

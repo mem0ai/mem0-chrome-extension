@@ -1,3 +1,4 @@
+import { APP_EXTENSION, APP_LOGIN_EXTENSION } from './consts/api';
 import { DEFAULT_USER_ID } from './types/api';
 import { SidebarAction } from './types/messages';
 import { StorageKey } from './types/storage';
@@ -22,9 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     googleSignInButton.addEventListener('click', () => {
       chrome.storage.sync.set({ [StorageKey.USER_ID_CAMEL]: DEFAULT_USER_ID });
       chrome.storage.sync.get([StorageKey.USER_LOGGED_IN], data => {
-        const url = data[StorageKey.USER_LOGGED_IN]
-          ? 'https://app.mem0.ai/extension?source=chrome-extension'
-          : 'https://app.mem0.ai/login?source=chrome-extension';
+        const url = data[StorageKey.USER_LOGGED_IN] ? APP_EXTENSION : APP_LOGIN_EXTENSION;
         chrome.tabs.create({ url }, () => {
           window.close();
         });

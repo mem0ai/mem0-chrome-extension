@@ -25,3 +25,6 @@ export type JsonObject = { [k: string]: JsonValue };
 export type HistoryStateData = JsonObject | null;
 /** Browser history URL type */
 export type HistoryUrl = string | URL | null;
+
+/** Browser type */
+export type BrowserType = 'Edge' | 'Opera' | 'Chrome' | 'Firefox' | 'Safari' | 'Unknown';

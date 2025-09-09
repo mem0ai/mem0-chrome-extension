@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OpenMemory",
-  "version": "1.3.17",
+  "version": "1.3.18",
   "description": "🧠 OpenMemory keeps your conversations in sync. 🔄 No more repeating yourself—just seamless AI collaboration! ✨",
   "icons": {
     "16": "icons/icon16.png",
@@ -10,12 +10,12 @@
   },
   "permissions": ["storage", "activeTab", "contextMenus", "scripting", "webNavigation"],
   "host_permissions": [
-    "https://api.mem0.ai/*", 
+    "https://api.mem0.ai/*",
     "https://app.mem0.ai/*",
     "https://claude.ai/*"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -23,57 +23,57 @@
     }
   },
   "background": {
-    "service_worker": "background.js",
+    "service_worker": "src/background.ts",
     "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "claude/content.js"]
+      "js": ["src/claude/content.ts"]
     },
     {
       "matches": ["https://chat.openai.com/*", "https://chatgpt.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "chatgpt/content.js"]
+      "js": ["src/chatgpt/content.ts"]
     },
     {
-      "matches": ["https://www.perplexity.ai/*", "https://perplexity.ai/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "perplexity/content.js"]
+      "matches": ["https://www.perplexity.ai/*"],
+      "js": ["src/perplexity/content.ts"]
     },
     {
       "matches": ["https://app.mem0.ai/*"],
-      "js": ["utils/util_functions.js", "mem0/content.js"]
+      "js": ["src/mem0/content.ts"]
     },
     {
       "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "grok/content.js"]
+      "js": ["src/grok/content.ts"]
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "deepseek/content.js"]
+      "js": ["src/deepseek/content.ts"]
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "utils/util_positioning.js", "utils/site_config.js", "gemini/content.js"]
+      "js": ["src/gemini/content.ts"]
     },
     {
       "matches": ["https://replit.com/*"],
-      "js": ["utils/llm_prompts.js", "utils/background_search.js", "replit/content.js"]
+      "js": ["src/replit/content.ts"]
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["utils/util_functions.js", "sidebar.js"],
+      "js": ["src/sidebar.ts"],
       "run_at": "document_end"
     }, 
     {
       "matches": ["<all_urls>"], 
-      "js": ["selection_context.js"], 
+      "js": ["src/selection_context.ts"], 
       "run_at": "document_idle",
       "all_frames": true
     }
     ,
     {
       "matches": ["<all_urls>"],
-      "js": ["search_tracker.js"],
+      "js": ["src/search_tracker.ts"],
       "run_at": "document_idle"
     }
   ],

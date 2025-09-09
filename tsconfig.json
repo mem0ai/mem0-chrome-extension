@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "useDefineForClassFields": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+
+    "allowJs": false,
+    "checkJs": false,
+
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["chrome-types"]
+  },
+  "include": ["**/*.ts", "manifest.json"],
+  "exclude": ["node_modules", "icons/**", "**/*.min.js", "**/dist/**"]
+}

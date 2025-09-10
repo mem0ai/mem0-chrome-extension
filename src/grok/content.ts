@@ -129,7 +129,7 @@ const grokSearch = createOrchestrator({
   },
 
   minLength: 3,
-  debounceMs: 150,
+  debounceMs: 75,
   cacheTTL: 60000,
 });
 
@@ -152,23 +152,29 @@ function getTextarea(): HTMLTextAreaElement | null {
   return null;
 }
 
-// let grokBackgroundSearchHandler: (() => void) | null = null;
+let grokBackgroundSearchHandler: (() => void) | null = null;
 
-// function hookGrokBackgroundSearchTyping() {
-//   const textarea = getTextarea();
-//   if (!textarea) {
-//     return;
-//   }
+function hookGrokBackgroundSearchTyping() {
+  const textarea = getTextarea();
+  if (!textarea) {
+    return;
+  }
 
-//   if (!grokBackgroundSearchHandler) {
-//     grokBackgroundSearchHandler = function () {
-//       let text = textarea.value || '';
-//       (grokSearch as { setText: (text: string) => void }).setText(text);
-//     };
-//   }
-//   textarea.addEventListener('input', grokBackgroundSearchHandler);
-//   textarea.addEventListener('keyup', grokBackgroundSearchHandler);
-// }
+  if (textarea.dataset.grokBackgroundHooked) {
+    return; 
+  }
+
+  textarea.dataset.grokBackgroundHooked = 'true'; 
+
+  if (!grokBackgroundSearchHandler) {
+    grokBackgroundSearchHandler = function () {
+      let text = textarea.value || '';
+      (grokSearch as { setText: (text: string) => void }).setText(text);
+    };
+  }
+  textarea.addEventListener('input', grokBackgroundSearchHandler);
+  textarea.addEventListener('keyup', grokBackgroundSearchHandler);
+}
 
 function setupInputObserver(): void {
   const textarea = getTextarea();
@@ -176,6 +182,8 @@ function setupInputObserver(): void {
     setTimeout(setupInputObserver, 500);
     return;
   }
+
+  hookGrokBackgroundSearchTyping(); 
 }
 
 function setInputValue(inputElement: HTMLTextAreaElement | null, value: string): void {
@@ -310,6 +318,7 @@ function setInputValue(inputElement: HTMLTextAreaElement | null, value: string):
 
 function initializeMem0Integration(): void {
   setupInputObserver();
+  hookGrokBackgroundSearchTyping(); 
 
   // Set up mutation observer to reinject elements when DOM changes
   // Cache-first mount (before focus)
@@ -730,12 +739,15 @@ function updateNotificationDot(): void {
     // Observe and listen for changes
     const mo = new MutationObserver(checkForText);
     mo.observe(textarea, { characterData: true, subtree: true });
-    textarea.addEventListener('input', checkForText);
-    textarea.addEventListener('keyup', checkForText);
-    textarea.addEventListener('focus', checkForText);
 
+    if (!textarea.dataset.grokCheckTextHooked) {
+      textarea.dataset.grokCheckTextHooked = 'true'; 
+      textarea.addEventListener('input', checkForText);
+      textarea.addEventListener('keyup', checkForText);
+      textarea.addEventListener('focus', checkForText);
+    }
+    
     checkForText();
-
     setTimeout(checkForText, 500);
   } else {
     setTimeout(updateNotificationDot, 1000);

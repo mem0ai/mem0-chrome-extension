@@ -118,7 +118,7 @@ const perplexitySearch = createOrchestrator({
   },
 
   minLength: 3,
-  debounceMs: 150,
+  debounceMs: 75,
   cacheTTL: 60000,
 });
 
@@ -128,6 +128,12 @@ function hookPerplexityBackgroundSearchTyping() {
   if (!textarea) {
     return;
   }
+
+  if (textarea.dataset.perplexityBackgroundHooked) {
+    return;
+  }
+  textarea.dataset.perplexityBackgroundHooked = 'true';
+
   if (!perplexityBackgroundSearchHandler) {
     perplexityBackgroundSearchHandler = function () {
       const text = getInputText(textarea).trim();
@@ -1056,9 +1062,13 @@ function updateNotificationDot() {
   } catch (_) {
     // Ignore errors during re-initialization
   }
-  textarea.addEventListener('input', applyState);
-  textarea.addEventListener('keyup', applyState);
-  textarea.addEventListener('focus', applyState);
+
+  if (!textarea.dataset.perplexityApplyStateHooked) {
+    textarea.dataset.perplexityApplyStateHooked = 'true';
+    textarea.addEventListener('input', applyState);
+    textarea.addEventListener('keyup', applyState);
+    textarea.addEventListener('focus', applyState);
+  }
   applyState();
   setTimeout(applyState, 300);
 }

@@ -708,7 +708,7 @@ const deepseekSearch = createOrchestrator({
   },
 
   minLength: 3,
-  debounceMs: 150,
+  debounceMs: 75,
   cacheTTL: 60000,
 });
 
@@ -718,6 +718,12 @@ function hookDeepseekBackgroundSearchTyping() {
   if (!inputEl) {
     return;
   }
+
+  if (inputEl.dataset.deepseekBackgroundHooked) {
+    return;
+  }
+  inputEl.dataset.deepseekBackgroundHooked = 'true';
+
   if (!deepseekBackgroundSearchHandler) {
     deepseekBackgroundSearchHandler = function () {
       const text = getInputElementValue() || '';
@@ -2897,8 +2903,10 @@ function updateNotificationDot() {
       attributeFilter: ['value'],
     });
 
-    // Also check on input events
-    inputElement.addEventListener('input', checkForText);
+    if (!inputElement.dataset.deepseekNotificationHooked) {
+      inputElement.dataset.deepseekNotificationHooked = 'true';
+      inputElement.addEventListener('input', checkForText);
+    }
 
     // Initial check
     checkForText();

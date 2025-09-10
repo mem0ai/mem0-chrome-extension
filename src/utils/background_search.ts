@@ -77,7 +77,7 @@ export function createOrchestrator(options: OrchestratorOptions): Orchestrator {
   const onFinally = options.onFinally ?? NOOP;
 
   let minLength = typeof options.minLength === 'number' ? options.minLength : 3;
-  let debounceMs = typeof options.debounceMs === 'number' ? options.debounceMs : 300;
+  let debounceMs = typeof options.debounceMs === 'number' ? options.debounceMs : 75;
   let cacheTTL = typeof options.cacheTTL === 'number' ? options.cacheTTL : 60_000;
   let useCache = options.useCache !== false;
   let refreshOnCache = !!options.refreshOnCache;

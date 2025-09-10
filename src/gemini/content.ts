@@ -131,7 +131,7 @@ const geminiSearch = createOrchestrator({
   },
 
   minLength: 3,
-  debounceMs: 150,
+  debounceMs: 75,
   cacheTTL: 60000,
 });
 
@@ -141,6 +141,12 @@ function hookGeminiBackgroundSearchTyping() {
   if (!textarea) {
     return;
   }
+
+  if (textarea.dataset.geminiBackgroundHooked) {
+    return;
+  }
+  textarea.dataset.geminiBackgroundHooked = 'true';
+
   if (!geminiBackgroundSearchHandler) {
     geminiBackgroundSearchHandler = function () {
       const text = (textarea.textContent || textarea.innerText || '').trim();
@@ -886,10 +892,12 @@ function updateNotificationDot(): void {
       childList: true,
     });
 
-    // Also check on input and keyup events
-    textarea.addEventListener('input', checkForText);
-    textarea.addEventListener('keyup', checkForText);
-    textarea.addEventListener('focus', checkForText);
+    if (!textarea.dataset.geminiNotificationHooked) {
+      textarea.dataset.geminiNotificationHooked = 'true';
+      textarea.addEventListener('input', checkForText);
+      textarea.addEventListener('keyup', checkForText);
+      textarea.addEventListener('focus', checkForText);
+    }
 
     // Initial check
     checkForText();

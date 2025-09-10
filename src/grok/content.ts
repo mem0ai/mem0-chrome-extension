@@ -750,8 +750,7 @@ function captureAndStoreMemorySnapshot(raw?: string): void {
       const userId =
         items[StorageKey.USER_ID_CAMEL] || items[StorageKey.USER_ID] || DEFAULT_USER_ID;
 
-      const msgs = [{ role: MessageRole.User, content: message }];
-      msgs.push({ role: MessageRole.User, content: message });
+      const messages = [{ role: MessageRole.User, content: message }];
 
       const optionalParams: OptionalApiParams = {};
       if (items[StorageKey.SELECTED_ORG]) {
@@ -762,7 +761,7 @@ function captureAndStoreMemorySnapshot(raw?: string): void {
       }
 
       const payload = {
-        messages: msgs,
+        messages,
         user_id: userId,
         infer: true,
         metadata: { provider: 'Grok' },

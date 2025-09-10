@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build:chrome": "vite build -c vite.chrome.config.ts",
+    "build:firefox": "vite build -c vite.firefox.config.ts",
     "lint": "eslint src --ext .ts,.tsx --fix",
     "lint:check": "eslint src --ext .ts,.tsx",
     "format": "prettier --write src/**/*.{ts,html}",

@@ -1,3 +1,5 @@
+import { API_EXTENSION } from '../consts/api';
+import type { BrowserType } from '../types/browser';
 import { StorageKey, type StorageData } from '../types/storage';
 
 type EventType = string;
@@ -14,8 +16,6 @@ type ExtensionEventPayload = {
     [key: string]: unknown;
   };
 };
-
-type BrowserType = 'Edge' | 'Opera' | 'Chrome' | 'Firefox' | 'Safari' | 'Unknown';
 
 /**
  * Utility function to send extension events to PostHog via mem0 API
@@ -63,7 +63,7 @@ export const sendExtensionEvent = (
       console.log('eventType', eventType);
       console.log('payload', payload);
 
-      fetch('https://api.mem0.ai/v1/extension/', {
+      fetch(API_EXTENSION, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(payload),

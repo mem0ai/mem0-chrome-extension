@@ -1,3 +1,13 @@
+/* eslint-disable no-console */
+import {
+  API_EXTENSION,
+  API_MEMORIES,
+  API_ORGANIZATIONS,
+  API_PROJECTS,
+  APP_DASHBOARD_REQUESTS,
+  APP_DASHBOARD_USER_MEMORY,
+  APP_DASHBOARD_USERS,
+} from './consts/api';
 import { DEFAULT_USER_ID } from './types/api';
 import type { MemoriesResponse, Memory } from './types/memory';
 import { SidebarAction, type SidebarActionMessage } from './types/messages';
@@ -512,7 +522,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
       // Send toggle event to API
       chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
         const headers = getHeaders(data.apiKey, data.access_token);
-        fetch(`https://api.mem0.ai/v1/extension/`, {
+        fetch(API_EXTENSION, {
           method: 'POST',
           headers: headers,
           body: JSON.stringify({
@@ -624,7 +634,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
     userDashboardBtn?.addEventListener('click', function () {
       chrome.runtime.sendMessage({
         action: SidebarAction.OPEN_DASHBOARD,
-        url: 'https://app.mem0.ai/dashboard/users',
+        url: APP_DASHBOARD_USERS,
       });
     });
 
@@ -680,7 +690,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
     chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       if (data.apiKey || data.access_token) {
         const headers = getHeaders(data.apiKey, data.access_token);
-        fetch('https://api.mem0.ai/api/v1/orgs/organizations/', {
+        fetch(API_ORGANIZATIONS, {
           method: 'GET',
           headers: headers,
         })
@@ -740,7 +750,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
     chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       if (data.apiKey || data.access_token) {
         const headers = getHeaders(data.apiKey, data.access_token);
-        fetch(`https://api.mem0.ai/api/v1/orgs/organizations/${orgId}/projects/`, {
+        fetch(API_PROJECTS(orgId), {
           method: 'GET',
           headers: headers,
         })
@@ -809,7 +819,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
             params.append('project_id', data.selected_project);
           }
 
-          fetch(`https://api.mem0.ai/v1/memories/?${params.toString()}`, {
+          fetch(`${API_MEMORIES}?${params.toString()}`, {
             method: 'GET',
             headers: headers,
           })
@@ -1558,7 +1568,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
   function logout() {
     chrome.storage.sync.get([StorageKey.API_KEY, StorageKey.ACCESS_TOKEN], function (data) {
       const headers = getHeaders(data.apiKey, data.access_token);
-      fetch('https://api.mem0.ai/v1/extension/', {
+      fetch(API_EXTENSION, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify({
@@ -1583,7 +1593,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
     chrome.storage.sync.get([StorageKey.USER_ID], function () {
       chrome.runtime.sendMessage({
         action: SidebarAction.OPEN_DASHBOARD,
-        url: `https://app.mem0.ai/dashboard/requests`,
+        url: APP_DASHBOARD_REQUESTS,
       });
     });
   }
@@ -1677,7 +1687,7 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
             const userId = data.user_id || 'chrome-extension-user';
             chrome.runtime.sendMessage({
               action: SidebarAction.OPEN_DASHBOARD,
-              url: `https://app.mem0.ai/dashboard/user/${userId}?memoryId=${memoryId}`,
+              url: APP_DASHBOARD_USER_MEMORY(userId, memoryId),
             });
           });
         }

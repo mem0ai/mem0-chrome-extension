@@ -22,6 +22,11 @@ Browser-specific type definitions:
 - `JsonObject` - JSON object structure
 - `HistoryStateData` - Browser history state data
 - `HistoryUrl` - Browser history URL type
+- `BrowserType` - Browser type enum ('Edge' | 'Opera' | 'Chrome' | 'Firefox' | 'Safari' | 'Unknown')
+
+### `types/chrome.ts`
+Chrome Extension API type extensions:
+- Global namespace extensions for `chrome.runtime.LastError` and `chrome.runtime.lastError`
 
 ### `types/dom.ts`
 DOM-related type extensions and global declarations:
@@ -55,6 +60,13 @@ Message passing between extension components:
 - `SendResponse` - Response callback type
 - Various sidebar action message types
 
+### `types/memButton.ts`
+Memory button component types:
+- `Elements` - DOM elements structure for the memory button (spinner, text, checkmark, shortcut, notificationDot)
+- `MemButtonState` - Button state enum ('loading' | 'added' | 'success' | 'error')
+- `CreateMemButtonOptions` - Configuration options for creating a memory button
+- `MemButtonController` - Controller interface for managing button state and behavior
+
 ### `types/organizations.ts`
 Organization and project management:
 - `Organization` - Organization structure with org_id and name
@@ -76,3 +88,11 @@ Chrome storage key definitions:
 - `StorageKey` - Enum for all storage keys used in the extension
 - `StorageItems` - Type mapping for storage values (required fields)
 - `StorageData` - Type mapping for storage values (optional fields)
+
+### `types/background_search.ts`
+Background search and orchestrator types:
+- `SearchStorage` - Partial storage data for search operations
+- `FetchFn<T>` - Generic fetch function type with abort signal support
+- `OrchestratorOptions` - Configuration options for the search orchestrator
+- `OrchestratorState` - Current state of the search orchestrator
+- `Orchestrator` - Interface for the search orchestrator with methods for text handling and caching

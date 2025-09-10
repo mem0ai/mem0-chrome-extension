@@ -1,11 +1,12 @@
-import { type ApiMemoryRequest, DEFAULT_USER_ID, MessageRole, SOURCE } from './types/api';
+import { API_MEMORIES } from './consts/api';
+import { SOURCE, DEFAULT_USER_ID, MessageRole, type ApiMemoryRequest } from './types/api';
 import {
   MessageType,
-  type SelectionContextResponse,
-  type ToastMessage,
   ToastVariant,
+  type ToastMessage,
+  type SelectionContextResponse,
 } from './types/messages';
-import { Category, Provider } from './types/providers';
+import { Provider, Category } from './types/providers';
 import type { Settings } from './types/settings';
 import { StorageKey } from './types/storage';
 
@@ -195,7 +196,7 @@ async function addMemory(content: string, settings: Settings): Promise<boolean> 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch('https://api.mem0.ai/v1/memories/', {
+    const res = await fetch(API_MEMORIES, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),

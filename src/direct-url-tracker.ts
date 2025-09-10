@@ -1,6 +1,7 @@
-import { type ApiMemoryRequest, DEFAULT_USER_ID, MessageRole, SOURCE } from './types/api';
+import { API_MEMORIES } from './consts/api';
+import { SOURCE, DEFAULT_USER_ID, MessageRole, type ApiMemoryRequest } from './types/api';
 import type { OnCommittedDetails } from './types/browser';
-import { Category, Provider } from './types/providers';
+import { Provider, Category } from './types/providers';
 import type { Settings } from './types/settings';
 import { StorageKey } from './types/storage';
 
@@ -60,7 +61,7 @@ async function addMemory(content: string, settings: Settings, pageUrl: string): 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const res = await fetch('https://api.mem0.ai/v1/memories/', {
+    const res = await fetch(API_MEMORIES, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -110,7 +111,7 @@ export function initDirectUrlTracking(): void {
         if (!settings.hasCreds || settings.memoryEnabled === false) {
           return;
         }
-        // Gate by track_searches toggle (default OFF  if undefined). We treat typed URL as part of tracking searches/history.
+        // Gate by track_searches toggle (default OFF if undefined). We treat typed URL as part of tracking searches/history.
         const allow = await new Promise<boolean>(resolve => {
           try {
             chrome.storage.sync.get([StorageKey.TRACK_SEARCHES], d => {

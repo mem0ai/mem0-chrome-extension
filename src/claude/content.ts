@@ -137,7 +137,7 @@ const claudeSearch = createOrchestrator({
   },
 
   minLength: 3,
-  debounceMs: 150,
+  debounceMs: 75,
   cacheTTL: 60000,
 });
 
@@ -2300,6 +2300,8 @@ async function handleMem0Modal(
         const val = (el.textContent || el.value || '').trim();
         return val || message;
       })();
+      console.log("Claude modal search for:", rawInput);
+      console.log("Cache state:", claudeSearch.getState()); 
       claudeSearch.runImmediate(rawInput);
     } catch (_) {
       claudeSearch.runImmediate(message);
@@ -2388,27 +2390,40 @@ function getInputValue(): string | null {
   return inputElement.textContent || (inputElement as HTMLTextAreaElement)?.value || null;
 }
 
-// let claudeBackgroundSearchHandler: (() => void) | null = null;
+let claudeBackgroundSearchHandler: (() => void) | null = null;
 
-// function hookClaudeBackgroundSearchTyping() {
-//   const inputElement =
-//     document.querySelector('div[contenteditable="true"]') ||
-//     document.querySelector('textarea') ||
-//     document.querySelector('p[data-placeholder="How can I help you today?"]') ||
-//     document.querySelector('p[data-placeholder="Reply to Claude..."]');
-//   if (!inputElement) {
-//     return;
-//   }
+function hookClaudeBackgroundSearchTyping() {
+  
+  const inputElement =
+    document.querySelector('div[contenteditable="true"]') ||
+    document.querySelector('textarea') ||
+    document.querySelector('p[data-placeholder="How can I help you today?"]') ||
+    document.querySelector('p[data-placeholder="Reply to Claude..."]');
+  
+  if (!inputElement) {
+    return;
+  }
+  
+  if (inputElement.dataset.claudeBackgroundHooked) {
+    return; 
+  }
 
-//   if (!claudeBackgroundSearchHandler) {
-//     claudeBackgroundSearchHandler = function () {
-//       let text = getInputValue() || '';
-//       claudeSearch.setText(text);
-//     };
-//   }
-//   inputElement.addEventListener('input', claudeBackgroundSearchHandler);
-//   inputElement.addEventListener('keyup', claudeBackgroundSearchHandler);
-// }
+  inputElement.dataset.claudeBackgroundHooked = 'true'; 
+
+  if (!claudeBackgroundSearchHandler) {
+    claudeBackgroundSearchHandler = function () {
+      let text = getInputValue() || '';
+      try {
+        const MEM0_PLAIN = OPENMEMORY_PROMPTS.memory_header_plain_regex;
+        text = text.replace(MEM0_PLAIN, '').trim();
+      } catch {}
+      console.log("Claude background search triggered:", text); 
+      claudeSearch.setText(text);
+    };
+  }
+  inputElement.addEventListener('input', claudeBackgroundSearchHandler);
+  inputElement.addEventListener('keyup', claudeBackgroundSearchHandler);
+}
 
 // Auto-inject support: simple debounce and config
 async function updateMemoryEnabled() {
@@ -2426,6 +2441,7 @@ async function updateMemoryEnabled() {
 function initializeMem0Integration(): void {
   console.log('🚀 initializeMem0Integration started');
   updateMemoryEnabled();
+  hookClaudeBackgroundSearchTyping(); 
   if (!(OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus)) {
     // addMem0Button(); // Removed: OPENMEMORY_UI handles icon mounting
   }
@@ -3441,6 +3457,8 @@ function detectNavigation() {
     setTimeout(() => {
       // Re-initialize conversation history from new DOM
       initializeConversationHistoryFromDOM();
+
+      hookClaudeBackgroundSearchTyping(); 
 
       // Re-add buttons and listeners
       if (!(OPENMEMORY_UI && OPENMEMORY_UI.mountOnEditorFocus)) {

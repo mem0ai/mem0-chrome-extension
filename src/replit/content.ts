@@ -137,7 +137,7 @@ try {
     },
 
     minLength: 3,
-    debounceMs: 150,
+    debounceMs: 75,
     cacheTTL: 60000,
   });
 
@@ -147,6 +147,12 @@ try {
     if (!textarea) {
       return;
     }
+
+    if (textarea.dataset.replitBackgroundHooked) {
+      return;
+    }
+    textarea.dataset.replitBackgroundHooked = 'true';  
+
     if (!replitBackgroundSearchHandler) {
       replitBackgroundSearchHandler = function () {
         const text = (textarea.textContent || textarea.innerText || '').trim();

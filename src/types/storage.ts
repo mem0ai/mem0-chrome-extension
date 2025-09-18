@@ -12,6 +12,7 @@ export enum StorageKey {
   SIMILARITY_THRESHOLD = 'similarity_threshold',
   TOP_K = 'top_k',
   TRACK_SEARCHES = 'track_searches',
+  RUN_ID = 'run_id',
 }
 
 /** Type mapping for storage values (required fields) */

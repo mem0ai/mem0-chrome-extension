@@ -12,6 +12,23 @@ import { OPENMEMORY_UI } from '../utils/util_positioning';
 
 export {};
 
+// Extract and store runId (from ChatGPT conversation id)
+function extractAndStoreRunIdFromConversation(chatgptCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = chatgptCurrentUrl || window.location.href;
+  // ChatGPT conversation id is used as runId for Mem0 API
+  if (url.includes('chatgpt.com/c/')) {
+    const extracted = url.split('/c/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID]: runId }, () => {
+      console.log('Saved runId (conversation id):', runId);
+    });
+  }
+}
+extractAndStoreRunIdFromConversation();
+
 let isProcessingMem0: boolean = false;
 
 // Initialize the MutationObserver variable
@@ -47,6 +64,7 @@ const chatgptSearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID,
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -1301,6 +1319,7 @@ function captureAndStoreMemory(): void {
       StorageKey.SELECTED_ORG,
       StorageKey.SELECTED_PROJECT,
       StorageKey.USER_ID,
+      StorageKey.RUN_ID,
     ],
     function (items) {
       // Skip if memory is disabled or no credentials
@@ -1331,9 +1350,11 @@ function captureAndStoreMemory(): void {
       }
 
       // Send memory to mem0 API asynchronously without waiting for response
+      const runId = items[StorageKey.RUN_ID];
       const storagePayload = {
         messages: messages,
         user_id: userId,
+        run_id: runId,
         infer: true,
         metadata: {
           provider: 'ChatGPT',
@@ -1451,6 +1472,7 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID,
         ],
         function (items) {
           resolve(items);
@@ -2110,6 +2132,7 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
         StorageKey.SELECTED_ORG,
         StorageKey.SELECTED_PROJECT,
         StorageKey.USER_ID,
+  StorageKey.RUN_ID,
       ],
       function (items) {
         if (items[StorageKey.API_KEY] || items[StorageKey.ACCESS_TOKEN]) {
@@ -2126,6 +2149,7 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
           if (items[StorageKey.SELECTED_PROJECT]) {
             optionalParams.project_id = items[StorageKey.SELECTED_PROJECT];
           }
+          const runId = items[StorageKey.RUN_ID];
 
           fetch('https://api.mem0.ai/v1/memories/', {
             method: 'POST',
@@ -2136,6 +2160,7 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
             body: JSON.stringify({
               messages: memories,
               user_id: userId,
+              run_id: runId,
               infer: true,
               metadata: {
                 provider: 'ChatGPT',
@@ -2230,6 +2255,7 @@ function sendMemoryToMem0(
         StorageKey.SELECTED_ORG,
         StorageKey.SELECTED_PROJECT,
         StorageKey.USER_ID,
+  StorageKey.RUN_ID,
       ],
       function (items) {
         if (items[StorageKey.API_KEY] || items[StorageKey.ACCESS_TOKEN]) {
@@ -2246,7 +2272,7 @@ function sendMemoryToMem0(
           if (items[StorageKey.SELECTED_PROJECT]) {
             optionalParams.project_id = items[StorageKey.SELECTED_PROJECT];
           }
-
+          const runId = items[StorageKey.RUN_ID];
           fetch('https://api.mem0.ai/v1/memories/', {
             method: 'POST',
             headers: {
@@ -2256,6 +2282,7 @@ function sendMemoryToMem0(
             body: JSON.stringify({
               messages: [{ content: memory.content, role: MessageRole.User }],
               user_id: userId,
+              run_id: runId,
               infer: infer,
               metadata: {
                 provider: 'ChatGPT',
@@ -2523,6 +2550,7 @@ function chatgptCheckExtensionContext() {
 }
 
 function chatgptDetectNavigation() {
+  extractAndStoreRunIdFromConversation(chatgptCurrentUrl);
   const newUrl = window.location.href;
   if (newUrl !== chatgptCurrentUrl) {
     chatgptCurrentUrl = newUrl;

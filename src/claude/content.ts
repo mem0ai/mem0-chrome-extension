@@ -1,3 +1,24 @@
+// Extract and store runId (from Claude conversation id)
+function extractAndStoreRunIdFromConversation(claudeCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = claudeCurrentUrl || window.location.href;
+  if (url.includes('claude.ai/chat/')) {
+    const extracted = url.split('/chat/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_CLAUDE]: runId }, () => {
+      console.log('Saved runId (Claude conversation id):', runId);
+    });
+  }
+  else {
+    // Not in a valid Claude chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_CLAUDE]: null }, () => {
+      console.log('Cleared runId (not in Claude chat/thread)');
+    });
+  }
+}
+extractAndStoreRunIdFromConversation();
 import { MessageRole } from '../types/api';
 import type { HistoryStateData } from '../types/browser';
 import type { ExtendedDocument, ExtendedElement } from '../types/dom';
@@ -9,6 +30,16 @@ import { OPENMEMORY_PROMPTS } from '../utils/llm_prompts';
 import { SITE_CONFIG } from '../utils/site_config';
 import { getBrowser, sendExtensionEvent } from '../utils/util_functions';
 import { OPENMEMORY_UI, type Placement } from '../utils/util_positioning';
+
+// Robust SPA navigation detection for Claude
+let lastClaudeUrl = window.location.href;
+const claudeUrlObserver = new MutationObserver(() => {
+  if (window.location.href !== lastClaudeUrl) {
+    lastClaudeUrl = window.location.href;
+    extractAndStoreRunIdFromConversation();
+  }
+});
+claudeUrlObserver.observe(document.body, { childList: true, subtree: true });
 
 // Chrome runtime types
 interface ChromeRuntimeLastError {
@@ -51,6 +82,13 @@ const claudeSearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GPT,
+          StorageKey.RUN_ID_GEMINI,
+          StorageKey.RUN_ID_CLAUDE,
+          StorageKey.RUN_ID_DEEPSEEK,
+          StorageKey.RUN_ID_GROK,
+          StorageKey.RUN_ID_PERPLEXITY,
+          StorageKey.RUN_ID_REPLIT,
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -2177,7 +2215,7 @@ async function handleMem0Modal(
     console.log('❌ Memory disabled, not showing modal');
     return; // Don't show modal or login popup if memory is disabled
   }
-
+  extractAndStoreRunIdFromConversation();
   isProcessingMem0 = true;
 
   // Set loading state for button
@@ -2201,6 +2239,7 @@ async function handleMem0Modal(
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_CLAUDE, // Add RUN_ID_CLAUDE to the keys
         ],
         function (items) {
           resolve(items);
@@ -2306,7 +2345,7 @@ async function handleMem0Modal(
     } catch (_) {
       claudeSearch.runImmediate(message);
     }
-
+    const runId = data[StorageKey.RUN_ID_CLAUDE];
     // New add memory API call (non-blocking)
     fetch('https://api.mem0.ai/v1/memories/', {
       method: 'POST',
@@ -2314,9 +2353,11 @@ async function handleMem0Modal(
         'Content-Type': 'application/json',
         Authorization: authHeader,
       },
+      
       body: JSON.stringify({
         messages: messages,
         user_id: userId,
+        run_id: runId,
         infer: true,
         metadata: {
           provider: 'Claude',
@@ -3023,7 +3064,8 @@ async function captureAndStoreMemory(snapshot: string) {
   if (!chrome || !chrome.storage) {
     return;
   }
-
+  // Ensure we have a run ID for this session
+  extractAndStoreRunIdFromConversation();
   try {
     // Check if memory is enabled
     const memoryEnabled = await getMemoryEnabledState();
@@ -3097,6 +3139,7 @@ async function captureAndStoreMemory(snapshot: string) {
         StorageKey.SELECTED_ORG,
         StorageKey.SELECTED_PROJECT,
         StorageKey.USER_ID,
+        StorageKey.RUN_ID_CLAUDE,
       ],
       function (items) {
         // Check for chrome.runtime.lastError which indicates extension context issues
@@ -3131,7 +3174,7 @@ async function captureAndStoreMemory(snapshot: string) {
         if (items.selected_project) {
           optionalParams.project_id = items.selected_project;
         }
-
+        const runId = items[StorageKey.RUN_ID_CLAUDE];
         // Send memory to mem0 API asynchronously without waiting for response
         fetch('https://api.mem0.ai/v1/memories/', {
           method: 'POST',
@@ -3139,9 +3182,11 @@ async function captureAndStoreMemory(snapshot: string) {
             'Content-Type': 'application/json',
             Authorization: authHeader,
           },
+          
           body: JSON.stringify({
             messages: contextMessages,
             user_id: userId,
+            run_id: runId,
             infer: true,
             metadata: {
               provider: 'Claude',

@@ -1,3 +1,26 @@
+// Extract and store runId (from Replit conversation id)
+function extractAndStoreRunIdFromConversation(replitCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = replitCurrentUrl || window.location.href;
+  // Example: https://replit.com/@ayushg71/HelloFriend
+  if (url.includes('replit.com/@')) {
+    // Extract everything after 'replit.com/@'
+    const extracted = url.split('replit.com/@')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_REPLIT]: runId }, () => {
+      console.log('Saved runId (Replit project id):', runId);
+    });
+  }
+  else {
+    // Not in a valid Replit chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_REPLIT]: null }, () => {
+      console.log('Cleared runId (not in Replit chat/thread)');
+    });
+  }
+}
+extractAndStoreRunIdFromConversation();
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable no-inner-declarations */
 import { MessageRole } from '../types/api';
@@ -10,6 +33,16 @@ import { OPENMEMORY_PROMPTS } from '../utils/llm_prompts';
 import { SITE_CONFIG } from '../utils/site_config';
 import { getBrowser, sendExtensionEvent } from '../utils/util_functions';
 import { OPENMEMORY_UI, type Placement } from '../utils/util_positioning';
+
+// Robust SPA navigation detection for Replit
+let lastReplitUrl = window.location.href;
+const replitUrlObserver = new MutationObserver(() => {
+  if (window.location.href !== lastReplitUrl) {
+    lastReplitUrl = window.location.href;
+    extractAndStoreRunIdFromConversation();
+  }
+});
+replitUrlObserver.observe(document.body, { childList: true, subtree: true });
 
 // Local types for this file
 type MutableMutationObserver = MutationObserver & {
@@ -58,6 +91,13 @@ try {
             StorageKey.USER_ID,
             StorageKey.SIMILARITY_THRESHOLD,
             StorageKey.TOP_K,
+            StorageKey.RUN_ID_GPT,
+            StorageKey.RUN_ID_GEMINI,
+            StorageKey.RUN_ID_CLAUDE,
+            StorageKey.RUN_ID_DEEPSEEK,
+            StorageKey.RUN_ID_GROK,
+            StorageKey.RUN_ID_PERPLEXITY,
+            StorageKey.RUN_ID_REPLIT,
           ],
           function (items) {
             resolve(items as SearchStorage);
@@ -370,7 +410,8 @@ try {
       if (!textarea) {
         return;
       }
-
+      // Update runId just before sending memory
+      extractAndStoreRunIdFromConversation();
       // Get message from textarea first, then fall back to lastInputValue if textarea is empty
       let message = (
         textarea.textContent ||
@@ -414,6 +455,7 @@ try {
           StorageKey.SELECTED_ORG,
           StorageKey.SELECTED_PROJECT,
           StorageKey.USER_ID,
+          StorageKey.RUN_ID_REPLIT,
         ],
         function (items) {
           // Skip if memory is disabled or no credentials
@@ -436,22 +478,25 @@ try {
           }
 
           // Send memory to mem0 API asynchronously without waiting for response
+          const runId = items[StorageKey.RUN_ID_REPLIT];
+          const payload = {
+            messages: [{ role: MessageRole.User, content: cleanMessage }],
+            user_id: userId,
+            run_id: runId,
+            infer: true,
+            metadata: {
+              provider: 'Replit',
+            },
+            source: 'OPENMEMORY_CHROME_EXTENSION',
+            ...optionalParams,
+          };
           fetch('https://api.mem0.ai/v1/memories/', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: authHeader,
             },
-            body: JSON.stringify({
-              messages: [{ role: MessageRole.User, content: cleanMessage }],
-              user_id: userId,
-              infer: true,
-              metadata: {
-                provider: 'Replit',
-              },
-              source: 'OPENMEMORY_CHROME_EXTENSION',
-              ...optionalParams,
-            }),
+            body: JSON.stringify(payload),
           })
             .then(response => {
               return response.json();
@@ -608,6 +653,7 @@ try {
             StorageKey.USER_ID,
             StorageKey.SIMILARITY_THRESHOLD,
             StorageKey.TOP_K,
+            StorageKey.RUN_ID_REPLIT,
           ],
           function (items) {
             resolve(items as StorageItems);
@@ -644,26 +690,28 @@ try {
       const authHeader = accessToken ? `Bearer ${accessToken}` : `Token ${apiKey}`;
 
       const messages = [{ role: MessageRole.User, content: message }];
-
+      const runId = data[StorageKey.RUN_ID_REPLIT];
       // Use orchestrator immediate run
       replitSearch.runImmediate(message);
       // Proceed with adding memory asynchronously without awaiting
+      const payload = {
+        messages: messages,
+        user_id: userId,
+        run_id: runId,
+        infer: true,
+        metadata: {
+          provider: 'Replit',
+        },
+        source: 'OPENMEMORY_CHROME_EXTENSION',
+        ...optionalParams,
+      };
       fetch('https://api.mem0.ai/v1/memories/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: authHeader,
         },
-        body: JSON.stringify({
-          messages: messages,
-          user_id: userId,
-          infer: true,
-          metadata: {
-            provider: 'Replit',
-          },
-          source: 'OPENMEMORY_CHROME_EXTENSION',
-          ...optionalParams,
-        }),
+        body: JSON.stringify(payload),
       }).catch(error => {
         console.error('Error adding memory:', error);
       });

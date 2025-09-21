@@ -1,3 +1,24 @@
+// Extract and store runId (from DeepSeek conversation id)
+function extractAndStoreRunIdFromConversation(deepseekCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = deepseekCurrentUrl || window.location.href;
+  if (url.includes('chat.deepseek.com/a/chat/s/')) {
+    const extracted = url.split('/s/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_DEEPSEEK]: runId }, () => {
+      console.log('Saved runId (DeepSeek conversation id):', runId);
+    });
+  }
+  else {
+    // Not in a valid DeepSeek chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_DEEPSEEK]: null }, () => {
+      console.log('Cleared runId (not in DeepSeek chat/thread)');
+    });
+  }
+}
+extractAndStoreRunIdFromConversation();
 import { MessageRole } from '../types/api';
 import type { ExtendedHTMLElement } from '../types/dom';
 import type { MemoryItem, MemorySearchItem, OptionalApiParams } from '../types/memory';
@@ -629,6 +650,13 @@ const deepseekSearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GPT,
+          StorageKey.RUN_ID_GEMINI,
+          StorageKey.RUN_ID_CLAUDE,
+          StorageKey.RUN_ID_DEEPSEEK,
+          StorageKey.RUN_ID_GROK,
+          StorageKey.RUN_ID_PERPLEXITY,
+          StorageKey.RUN_ID_REPLIT,
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -817,6 +845,9 @@ function addMemory(memoryText: string) {
   return new Promise((resolve, reject) => {
     (async () => {
       try {
+        // Update runId just before sending memory
+        extractAndStoreRunIdFromConversation();
+
         const items = await chrome.storage.sync.get([
           StorageKey.API_KEY,
           StorageKey.USER_ID_CAMEL,
@@ -824,6 +855,7 @@ function addMemory(memoryText: string) {
           StorageKey.SELECTED_ORG,
           StorageKey.SELECTED_PROJECT,
           StorageKey.USER_ID,
+          StorageKey.RUN_ID_DEEPSEEK,
         ]);
         const userId = items.userId || items.user_id || 'chrome-extension-user';
 
@@ -848,7 +880,7 @@ function addMemory(memoryText: string) {
         } else {
           headers['Authorization'] = `Api-Key ${items.apiKey}`;
         }
-
+        const runId = items[StorageKey.RUN_ID_DEEPSEEK] || null;
         const url = `${MEM0_API_BASE_URL}/v1/memories/`;
         const body = JSON.stringify({
           messages: [
@@ -858,6 +890,7 @@ function addMemory(memoryText: string) {
             },
           ],
           user_id: userId,
+          run_id: runId,
           source: 'OPENMEMORY_CHROME_EXTENSION',
           ...optionalParams,
         });
@@ -2325,6 +2358,16 @@ function showLoginModal(): void {
   // Add to body
   document.body.appendChild(popupOverlay);
 }
+
+// Robust SPA navigation detection for DeepSeek
+let lastDeepSeekUrl = window.location.href;
+const deepSeekUrlObserver = new MutationObserver(() => {
+  if (window.location.href !== lastDeepSeekUrl) {
+    lastDeepSeekUrl = window.location.href;
+    extractAndStoreRunIdFromConversation();
+  }
+});
+deepSeekUrlObserver.observe(document.body, { childList: true, subtree: true });
 
 // Function to add the Mem0 icon button - enhanced with error handling and return status
 function addMem0IconButton() {

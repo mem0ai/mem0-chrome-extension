@@ -1,3 +1,24 @@
+// Extract and store runId (from Perplexity conversation id)
+function extractAndStoreRunIdFromConversation(perplexityCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = perplexityCurrentUrl || window.location.href;
+  if (url.includes('perplexity.ai/search/')) {
+    const extracted = url.split('/search/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_PERPLEXITY]: runId }, () => {
+      console.log('Saved runId (Perplexity conversation id):', runId);
+    });
+  }
+  else {
+    // Not in a valid Perplexity chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_PERPLEXITY]: null }, () => {
+      console.log('Cleared runId (not in Perplexity chat/thread)');
+    });
+  }
+}
+extractAndStoreRunIdFromConversation();
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { MessageRole } from '../types/api';
 import type { MemoryItem, MemorySearchItem, OptionalApiParams } from '../types/memory';
@@ -10,7 +31,15 @@ import { getBrowser, sendExtensionEvent } from '../utils/util_functions';
 import { OPENMEMORY_UI, type Placement } from '../utils/util_positioning';
 
 export {};
-
+// Robust SPA navigation detection for Perplexity
+let lastPerplexityUrl = window.location.href;
+const perplexityUrlObserver = new MutationObserver(() => {
+  if (window.location.href !== lastPerplexityUrl) {
+    lastPerplexityUrl = window.location.href;
+    extractAndStoreRunIdFromConversation();
+  }
+});
+perplexityUrlObserver.observe(document.body, { childList: true, subtree: true });
 // Add global variables for memory modal
 let memoryModalShown: boolean = false;
 let allMemories: string[] = [];
@@ -39,6 +68,13 @@ const perplexitySearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GPT,
+          StorageKey.RUN_ID_GEMINI,
+          StorageKey.RUN_ID_CLAUDE,
+          StorageKey.RUN_ID_DEEPSEEK,
+          StorageKey.RUN_ID_GROK,
+          StorageKey.RUN_ID_PERPLEXITY,
+          StorageKey.RUN_ID_REPLIT, 
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -2095,7 +2131,8 @@ function captureAndStoreMemory() {
   if (!message || message.trim() === '') {
     return;
   }
-
+  
+  extractAndStoreRunIdFromConversation();
   // Skip if message contains the memory wrapper
   if ((message || '').includes('Here is some of my memories to help')) {
     // Extract only the user's original message
@@ -2118,6 +2155,7 @@ function captureAndStoreMemory() {
       StorageKey.SELECTED_ORG,
       StorageKey.SELECTED_PROJECT,
       StorageKey.USER_ID,
+      StorageKey.RUN_ID_PERPLEXITY,
     ],
     function (items) {
       // Skip if memory is disabled or no credentials
@@ -2138,7 +2176,7 @@ function captureAndStoreMemory() {
       if (items.selected_project) {
         optionalParams.project_id = items.selected_project;
       }
-
+      const runId = items[StorageKey.RUN_ID_PERPLEXITY];
       // Send memory to mem0 API asynchronously without waiting for response
       fetch('https://api.mem0.ai/v1/memories/', {
         method: 'POST',
@@ -2146,9 +2184,11 @@ function captureAndStoreMemory() {
           'Content-Type': 'application/json',
           Authorization: authHeader,
         },
+        
         body: JSON.stringify({
           messages: [{ role: MessageRole.User, content: message }],
           user_id: userId,
+          run_id: runId,
           infer: true,
           metadata: {
             provider: 'Perplexity',
@@ -2289,7 +2329,7 @@ async function handleMem0Processing(
     console.error('No input message found');
     return;
   }
-
+  extractAndStoreRunIdFromConversation();
   // If already processing, don't start another operation
   if (isProcessingMem0) {
     return;
@@ -2310,6 +2350,7 @@ async function handleMem0Processing(
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_PERPLEXITY,
         ],
         function (items) {
           resolve(items as StorageItems);
@@ -2376,6 +2417,7 @@ async function handleMem0Processing(
     setInputValue(textarea, originalMessage);
 
     // New add memory API call (non-blocking)
+    const runId = data[StorageKey.RUN_ID_PERPLEXITY];
     fetch('https://api.mem0.ai/v1/memories/', {
       method: 'POST',
       headers: {
@@ -2385,6 +2427,7 @@ async function handleMem0Processing(
       body: JSON.stringify({
         messages: messages,
         user_id: userId,
+        run_id: runId,
         infer: true,
         source: 'OPENMEMORY_CHROME_EXTENSION',
         metadata: {

@@ -1,3 +1,24 @@
+// Extract and store runId (from Grok conversation id)
+function extractAndStoreRunIdFromConversation(grokCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = grokCurrentUrl || window.location.href;
+  if (url.includes('grok.com/c/')) {
+    const extracted = url.split('/c/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_GROK]: runId }, () => {
+      console.log('Saved runId (Grok conversation id):', runId);
+    });
+  }
+  else {
+    // Not in a valid Grok chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_GROK]: null }, () => {
+      console.log('Cleared runId (not in Grok chat/thread)');
+    });
+  }
+}
+extractAndStoreRunIdFromConversation();
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { MessageRole } from '../types/api';
 import type { MemoryItem, MemorySearchItem, OptionalApiParams } from '../types/memory';
@@ -10,7 +31,15 @@ import { getBrowser, sendExtensionEvent } from '../utils/util_functions';
 import { OPENMEMORY_UI, type Placement } from '../utils/util_positioning';
 
 export {};
-
+// Robust SPA navigation detection for Grok
+let lastGrokUrl = window.location.href;
+const grokUrlObserver = new MutationObserver(() => {
+  if (window.location.href !== lastGrokUrl) {
+    lastGrokUrl = window.location.href;
+    extractAndStoreRunIdFromConversation();
+  }
+});
+grokUrlObserver.observe(document.body, { childList: true, subtree: true });
 let isProcessingMem0 = false;
 
 let memoryModalShown: boolean = false;
@@ -40,6 +69,13 @@ const grokSearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GPT,
+          StorageKey.RUN_ID_GEMINI,
+          StorageKey.RUN_ID_CLAUDE,
+          StorageKey.RUN_ID_DEEPSEEK,
+          StorageKey.RUN_ID_GROK,
+          StorageKey.RUN_ID_PERPLEXITY,
+          StorageKey.RUN_ID_REPLIT,
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -1816,6 +1852,7 @@ async function handleMem0Modal() {
     return;
   }
 
+  extractAndStoreRunIdFromConversation();
   // Check if user is logged in
   const loginData = await new Promise<StorageItems>(resolve => {
     chrome.storage.sync.get(
@@ -1871,6 +1908,7 @@ async function handleMem0Modal() {
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GROK,
         ],
         function (items) {
           resolve(items as StorageItems);
@@ -1915,6 +1953,7 @@ async function handleMem0Modal() {
     }
 
     // Proceed with adding memory asynchronously without awaiting
+    const runId = data[StorageKey.RUN_ID_GROK];
     fetch('https://api.mem0.ai/v1/memories/', {
       method: 'POST',
       headers: {
@@ -1924,6 +1963,7 @@ async function handleMem0Modal() {
       body: JSON.stringify({
         messages: messages,
         user_id: userId,
+        run_id: runId,
         infer: true,
         metadata: {
           provider: 'Grok',

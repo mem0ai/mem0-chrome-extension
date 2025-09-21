@@ -1,3 +1,31 @@
+// Extract and store runId (from Gemini conversation id), then run callback
+function extractAndStoreRunIdFromConversation(geminiCurrentUrl?: string, callback?: () => void): void {
+  let runId: string | null = null;
+  const url = geminiCurrentUrl || window.location.href;
+  if (url.includes('gemini.google.com/app/')) {
+    const extracted = url.split('/app/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_GEMINI]: runId }, () => {
+      console.log('Saved runId (Gemini conversation id):', runId);
+      if (callback) callback();
+    });
+  } else {
+    // Not in a valid Gemini chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_GEMINI]: null }, () => {
+      console.log('Cleared runId (not in Gemini chat/thread)');
+      if (callback) callback();
+    });
+  }
+}
+
+// Run on initial load
+console.log('ayush1');
+extractAndStoreRunIdFromConversation()
+
+
+
 import { MessageRole } from '../types/api';
 import type { ExtendedElement, MutableMutationObserver } from '../types/dom';
 import type { MemorySearchItem, OptionalApiParams } from '../types/memory';
@@ -52,6 +80,14 @@ const geminiSearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GPT,
+          StorageKey.RUN_ID_GEMINI,
+          StorageKey.RUN_ID_CLAUDE,
+          StorageKey.RUN_ID_DEEPSEEK,
+          StorageKey.RUN_ID_GROK,
+          StorageKey.RUN_ID_PERPLEXITY,
+          StorageKey.RUN_ID_REPLIT,
+          
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -365,7 +401,24 @@ function addSendButtonListener(): void {
   if (sendListenerAdded) {
     return;
   }
-
+  // Robust SPA navigation detection for Gemini
+  let lastGeminiUrl = window.location.href;
+  let pendingMemoryCapture = false;
+  const geminiUrlObserver = new MutationObserver(() => {
+    if (window.location.href !== lastGeminiUrl) {
+      lastGeminiUrl = window.location.href;
+      console.log('ayush2');
+      extractAndStoreRunIdFromConversation();
+      // If pending memory capture, run after runId is set
+      if (pendingMemoryCapture) {
+        setTimeout(() => {
+          captureAndStoreMemory();
+          pendingMemoryCapture = false;
+        }, 100); // Wait for runId to be stored
+      }
+    }
+  });
+  geminiUrlObserver.observe(document.body, { childList: true, subtree: true });
   // Handle capturing and storing the current message
   function captureAndStoreMemory(): void {
     const textarea = getTextarea();
@@ -385,74 +438,80 @@ function addSendButtonListener(): void {
     if (memoryCaptured && lastCapturedMessage === cleanMessage) {
       return;
     }
+    // Update runId just before sending memory
+    console.log('ayush3');
+    extractAndStoreRunIdFromConversation(undefined, () => {
+      memoryCaptured = true;
+      lastCapturedMessage = cleanMessage;
 
-    memoryCaptured = true;
-    lastCapturedMessage = cleanMessage;
+      // Reset the capture flag after a short delay
+      setTimeout(() => {
+        memoryCaptured = false;
+        lastCapturedMessage = '';
+      }, 1000);
 
-    // Reset the capture flag after a short delay
-    setTimeout(() => {
-      memoryCaptured = false;
-      lastCapturedMessage = '';
-    }, 1000);
+      // Asynchronously store the memory
+      chrome.storage.sync.get(
+        [
+          StorageKey.API_KEY,
+          StorageKey.USER_ID_CAMEL,
+          StorageKey.ACCESS_TOKEN,
+          StorageKey.MEMORY_ENABLED,
+          StorageKey.SELECTED_ORG,
+          StorageKey.SELECTED_PROJECT,
+          StorageKey.USER_ID,
+          StorageKey.RUN_ID_GEMINI,
+        ],
+        function (items) {
+          // Skip if memory is disabled or no credentials
+          if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
+            return;
+          }
 
-    // Asynchronously store the memory
-    chrome.storage.sync.get(
-      [
-        StorageKey.API_KEY,
-        StorageKey.USER_ID_CAMEL,
-        StorageKey.ACCESS_TOKEN,
-        StorageKey.MEMORY_ENABLED,
-        StorageKey.SELECTED_ORG,
-        StorageKey.SELECTED_PROJECT,
-        StorageKey.USER_ID,
-      ],
-      function (items) {
-        // Skip if memory is disabled or no credentials
-        if (items.memory_enabled === false || (!items.apiKey && !items.access_token)) {
-          return;
-        }
+          const authHeader = items.access_token
+            ? `Bearer ${items.access_token}`
+            : `Token ${items.apiKey}`;
 
-        const authHeader = items.access_token
-          ? `Bearer ${items.access_token}`
-          : `Token ${items.apiKey}`;
+          const userId = items.userId || items.user_id || 'chrome-extension-user';
 
-        const userId = items.userId || items.user_id || 'chrome-extension-user';
-
-        const optionalParams: OptionalApiParams = {};
-        if (items.selected_org) {
-          optionalParams.org_id = items.selected_org;
-        }
-        if (items.selected_project) {
-          optionalParams.project_id = items.selected_project;
-        }
-        // Send memory to mem0 API asynchronously without waiting for response
-        fetch('https://api.mem0.ai/v1/memories/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: authHeader,
-          },
-          body: JSON.stringify({
-            messages: [{ role: MessageRole.User, content: cleanMessage }],
-            user_id: userId,
-            infer: true,
-            metadata: {
-              provider: 'Gemini',
+          const optionalParams: OptionalApiParams = {};
+          if (items.selected_org) {
+            optionalParams.org_id = items.selected_org;
+          }
+          if (items.selected_project) {
+            optionalParams.project_id = items.selected_project;
+          }
+          // Send memory to mem0 API asynchronously without waiting for response
+          const runId = items[StorageKey.RUN_ID_GEMINI];
+          fetch('https://api.mem0.ai/v1/memories/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: authHeader,
             },
-            source: 'OPENMEMORY_CHROME_EXTENSION',
-            ...optionalParams,
-          }),
-        }).catch(() => {
-          // Ignore errors
-        });
-      }
-    );
+            body: JSON.stringify({
+              messages: [{ role: MessageRole.User, content: cleanMessage }],
+              user_id: userId,
+              run_id: runId,
+              infer: true,
+              metadata: {
+                provider: 'Gemini',
+              },
+              source: 'OPENMEMORY_CHROME_EXTENSION',
+              ...optionalParams,
+            }),
+          }).catch(() => {
+            // Ignore errors
+          });
+        }
+      );
 
-    // Clear all memories after sending
-    setTimeout(() => {
-      allMemories = [];
-      allMemoriesById.clear();
-    }, 100);
+      // Clear all memories after sending
+      setTimeout(() => {
+        allMemories = [];
+        allMemoriesById.clear();
+      }, 100);
+    });
   }
 
   // **TIMING FIX: Use the new getSendButton function**
@@ -474,8 +533,16 @@ function addSendButtonListener(): void {
       textarea.addEventListener('keydown', function (event) {
         // Check if Enter was pressed without Shift (standard send behavior)
         if (event.key === 'Enter' && !event.shiftKey) {
-          // Don't capture here if send button will also trigger
-          // The send button click will handle the capture
+          // Instead of capturing immediately, set pending flag
+          pendingMemoryCapture = true;
+          // The MutationObserver will handle actual capture after runId is set
+          // If URL hasn't changed, trigger manually
+          setTimeout(() => {
+            if (pendingMemoryCapture) {
+              captureAndStoreMemory();
+              pendingMemoryCapture = false;
+            }
+          }, 150);
           return;
         }
       });
@@ -968,6 +1035,8 @@ function showButtonPopup(button: HTMLElement, message: string): void {
     white-space: nowrap;
     z-index: 10001;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: none;
+    transition: opacity 0.2s;
     font-family: 'Google Sans', Roboto, sans-serif;
   `;
 
@@ -2040,7 +2109,8 @@ async function handleMem0Modal(): Promise<void> {
       }
     );
   });
-
+  console.log('ayush4');
+  extractAndStoreRunIdFromConversation();
   // If no API key and no access token, show login popup
   if (!loginData.apiKey && !loginData.access_token) {
     showLoginPopup();
@@ -2092,6 +2162,7 @@ async function handleMem0Modal(): Promise<void> {
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
+          StorageKey.RUN_ID_GEMINI,
         ],
         function (items) {
           resolve(items);
@@ -2132,6 +2203,7 @@ async function handleMem0Modal(): Promise<void> {
     (geminiSearch as { runImmediate: (message: string) => void }).runImmediate(message);
 
     // Proceed with adding memory asynchronously without awaiting
+    const runId = data[StorageKey.RUN_ID_GEMINI];
     fetch('https://api.mem0.ai/v1/memories/', {
       method: 'POST',
       headers: {
@@ -2141,6 +2213,7 @@ async function handleMem0Modal(): Promise<void> {
       body: JSON.stringify({
         messages: messages,
         user_id: userId,
+        run_id: runId,
         infer: true,
         metadata: {
           provider: 'Gemini',

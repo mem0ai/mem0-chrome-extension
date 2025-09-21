@@ -1279,7 +1279,7 @@ function addSendButtonListener(): void {
     sendButton.addEventListener('click', function () {
       // Capture and save memory asynchronously
       //captureAndStoreMemory();
-      console.log('ayush3');
+      
       extractAndStoreRunIdFromConversation();
       setTimeout(() => {
         captureAndStoreMemory();
@@ -1321,7 +1321,7 @@ function addSendButtonListener(): void {
 
 // Function to capture and store memory asynchronously
 function captureAndStoreMemory(): void {
-  console.log('ayush5');
+
   extractAndStoreRunIdFromConversation();
   // Get the message content
   // id is prompt-textarea
@@ -2169,7 +2169,7 @@ function handleSyncClick(): void {
 // New function to send memories in batch
 function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    console.log('ayush6');
+
    extractAndStoreRunIdFromConversation(); 
     chrome.storage.sync.get(
       [
@@ -2294,7 +2294,7 @@ function sendMemoryToMem0(
   infer: boolean = true
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    console.log('ayush7');
+
     extractAndStoreRunIdFromConversation();
     chrome.storage.sync.get(
       [

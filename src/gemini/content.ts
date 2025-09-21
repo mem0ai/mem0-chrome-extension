@@ -21,7 +21,7 @@ function extractAndStoreRunIdFromConversation(geminiCurrentUrl?: string, callbac
 }
 
 // Run on initial load
-console.log('ayush1');
+
 extractAndStoreRunIdFromConversation()
 
 
@@ -407,7 +407,7 @@ function addSendButtonListener(): void {
   const geminiUrlObserver = new MutationObserver(() => {
     if (window.location.href !== lastGeminiUrl) {
       lastGeminiUrl = window.location.href;
-      console.log('ayush2');
+
       extractAndStoreRunIdFromConversation();
       // If pending memory capture, run after runId is set
       if (pendingMemoryCapture) {
@@ -439,7 +439,7 @@ function addSendButtonListener(): void {
       return;
     }
     // Update runId just before sending memory
-    console.log('ayush3');
+
     extractAndStoreRunIdFromConversation(undefined, () => {
       memoryCaptured = true;
       lastCapturedMessage = cleanMessage;
@@ -2109,7 +2109,7 @@ async function handleMem0Modal(): Promise<void> {
       }
     );
   });
-  console.log('ayush4');
+
   extractAndStoreRunIdFromConversation();
   // If no API key and no access token, show login popup
   if (!loginData.apiKey && !loginData.access_token) {

@@ -1,5 +1,5 @@
-// Extract and store runId (from ChatGPT conversation id)
-function extractAndStoreRunIdFromConversation(chatgptCurrentUrl?: string): void {
+// Extract and store runId (from ChatGPT conversation id), then run callback
+function extractAndStoreRunIdFromConversation(chatgptCurrentUrl?: string, callback?: () => void): void {
   let runId: string | null = null;
   const url = chatgptCurrentUrl || window.location.href;
   if (url.includes('chatgpt.com/c/') || url.includes('chatgpt.com/g/')) {
@@ -10,16 +10,18 @@ function extractAndStoreRunIdFromConversation(chatgptCurrentUrl?: string): void 
   if (runId) {
     chrome.storage.sync.set({ [StorageKey.RUN_ID_GPT]: runId }, () => {
       console.log('Saved runId (conversation id):', runId);
+      if (callback) callback();
     });
   }
   else {
     // Not in a valid ChatGPT chat/thread, clear runId
     chrome.storage.sync.set({ [StorageKey.RUN_ID_GPT]: null }, () => {
       console.log('Cleared runId (not in ChatGPT chat/thread)');
+      if (callback) callback();
     });
   }
 }
-
+console.log('ayush1');
 extractAndStoreRunIdFromConversation();
 
 // Robust SPA navigation detection for chatGPT
@@ -1277,19 +1279,15 @@ function addSendButtonListener(): void {
   if (sendButton && !sendButton.dataset.mem0Listener) {
     sendButton.dataset.mem0Listener = 'true';
     sendButton.addEventListener('click', function () {
-      // Capture and save memory asynchronously
-      //captureAndStoreMemory();
-      
-      extractAndStoreRunIdFromConversation();
-      setTimeout(() => {
+      // Always update run_id, then capture memory
+      extractAndStoreRunIdFromConversation(undefined, () => {
         captureAndStoreMemory();
-      }, 50);
-
-      // Clear all memories after sending
-      setTimeout(() => {
-        allMemories = [];
-        allMemoriesById.clear();
-      }, 100);
+        // Clear all memories after sending
+        setTimeout(() => {
+          allMemories = [];
+          allMemoriesById.clear();
+        }, 100);
+      });
     });
 
     // Also handle Enter key press
@@ -1301,18 +1299,21 @@ function addSendButtonListener(): void {
     if (inputElement && !inputElement.dataset.mem0KeyListener) {
       inputElement.dataset.mem0KeyListener = 'true';
       (inputElement as HTMLElement).addEventListener('keydown', function (event: KeyboardEvent) {
-        // Check if Enter was pressed without Shift (standard send behavior)
-
         inputValueCopy =
           (inputElement as HTMLTextAreaElement)?.value ||
           inputElement.textContent ||
           inputValueCopy;
 
         if (event.key === 'Enter' && !event.shiftKey) {
-          // Instead of capturing immediately, set pending flag and message
-          pendingMemoryCapture = true;
-          pendingMessage = inputValueCopy;
-          // The MutationObserver will handle actual capture after runId is set
+          // Always update run_id, then capture memory
+          extractAndStoreRunIdFromConversation(undefined, () => {
+            captureAndStoreMemory();
+            // Clear all memories after sending
+            setTimeout(() => {
+              allMemories = [];
+              allMemoriesById.clear();
+            }, 100);
+          });
         }
       });
     }
@@ -1321,7 +1322,7 @@ function addSendButtonListener(): void {
 
 // Function to capture and store memory asynchronously
 function captureAndStoreMemory(): void {
-
+  console.log('ayush5');
   extractAndStoreRunIdFromConversation();
   // Get the message content
   // id is prompt-textarea
@@ -2169,7 +2170,7 @@ function handleSyncClick(): void {
 // New function to send memories in batch
 function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-
+    console.log('ayush6');
    extractAndStoreRunIdFromConversation(); 
     chrome.storage.sync.get(
       [
@@ -2294,7 +2295,7 @@ function sendMemoryToMem0(
   infer: boolean = true
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-
+    console.log('ayush7');
     extractAndStoreRunIdFromConversation();
     chrome.storage.sync.get(
       [

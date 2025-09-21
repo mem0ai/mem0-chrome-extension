@@ -10,6 +10,13 @@ export type SearchStorage = Partial<{
   [StorageKey.USER_ID]: string;
   [StorageKey.SIMILARITY_THRESHOLD]: number;
   [StorageKey.TOP_K]: number;
+  [StorageKey.RUN_ID_CLAUDE]: any;
+  [StorageKey.RUN_ID_GEMINI]: any;
+  [StorageKey.RUN_ID_GPT]: any;
+  [StorageKey.RUN_ID_DEEPSEEK]: any;
+  [StorageKey.RUN_ID_GROK]: any;
+  [StorageKey.RUN_ID_PERPLEXITY]: any;
+  [StorageKey.RUN_ID_REPLIT]: any;
 }>;
 
 export type FetchFn<T> = (query: string, opts: { signal?: AbortSignal }) => Promise<T> | T;

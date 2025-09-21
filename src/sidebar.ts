@@ -60,7 +60,8 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
       if (sidebarVisible) {
         document.addEventListener('click', handleOutsideClick);
         document.addEventListener('keydown', handleEscapeKey);
-        fetchMemoriesAndCount();
+        //fetchMemoriesAndCount();
+        fetchMemoriesV2AndCount();
       } else {
         document.removeEventListener('click', handleOutsideClick);
         document.removeEventListener('keydown', handleEscapeKey);
@@ -436,10 +437,12 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
 
     // Add styles
     addStyles();
+  console.log('[Mem0] Styles injected');
 
     // Fetch organizations and memories
     fetchOrganizations();
-    fetchMemoriesAndCount();
+    //fetchMemoriesAndCount();
+    fetchMemoriesV2AndCount();
   }
 
   function saveSettings(
@@ -831,6 +834,99 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
       }
     );
   }
+
+  // Fetch memories using Mem0 v2 API with advanced filters
+function fetchMemoriesV2AndCount(): void {
+  console.log('[Mem0] fetchMemoriesV2AndCount called');
+  console.log('[Mem0] chrome.storage.sync.get for v2 memories called');
+  console.log('[Mem0] API key or access token found (v2)');
+  chrome.storage.sync.get(
+    [
+      StorageKey.API_KEY,
+      StorageKey.ACCESS_TOKEN,
+      StorageKey.USER_ID,
+      StorageKey.SELECTED_ORG,
+      StorageKey.SELECTED_PROJECT,
+    ],
+    function (data) {
+      if (data.apiKey || data.access_token) {
+        const headers = getHeaders(data.apiKey, data.access_token);
+        const userId = data.user_id || DEFAULT_USER_ID;
+        const today = new Date().toISOString().split('T')[0];
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        const lastMonthStr = lastMonth.toISOString().split('T')[0];
+        // Use OR to fetch both with and without run_id
+        const baseAnd: any[] = [{ user_id: userId }];
+              if (data.selected_org) baseAnd.push({ org_id: data.selected_org });
+              if (data.selected_project) baseAnd.push({ project_id: data.selected_project });
+        const filters: any = {
+          OR: [
+            {
+              AND: [
+                ...baseAnd,
+                { run_id: '*' },
+                // { created_at: { gte: lastMonthStr, lte: today } },
+              ]
+            },
+            {
+              AND: [
+                ...baseAnd,
+                // { created_at: { gte: lastMonthStr, lte: today } },
+              ]
+            }
+          ]
+        };
+        const payload = {
+          filters,
+          page: 1,
+          page_size: 100,
+        };
+        console.log('[Mem0 v2] Fetching memories with payload:', payload);
+        fetch('https://api.mem0.ai/v2/memories/', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify(payload),
+        })
+          .then(async response => {
+            console.log('[Mem0] v2 memories fetch response:', response);
+            try {
+              const json = await response.clone().json();
+              console.log('[Mem0 v2] Payload JSON:', JSON.stringify(payload, null, 2));
+              console.log('[Mem0 v2] Response JSON:', JSON.stringify(json, null, 2));
+            } catch (e) {
+              console.error('[Mem0 v2] Error parsing response JSON:', e);
+            }
+            return response.json();
+          })
+          .then((data: MemoriesResponse) => {
+            console.log('[Mem0 v2] Parsed response:', data);
+            // Replicate v1 handling: support both array and object responses
+            let count = 0;
+            let results: any[] = [];
+            if (Array.isArray(data)) {
+              count = data.length;
+              results = data;
+            } else if (typeof data === 'object' && data !== null) {
+              count = data.count || (Array.isArray(data.results) ? data.results.length : 0);
+              results = data.results || [];
+            }
+            updateMemoryCount(count);
+            displayMemories(results);
+          })
+          .catch(error => {
+            console.error('[Mem0 v2] Error fetching v2 memories:', error);
+            updateMemoryCount('Error');
+            displayErrorMessage();
+          });
+      } else {
+        console.warn('[Mem0 v2] No API key or access token found.');
+        updateMemoryCount('Login required');
+        displayErrorMessage('Login required to view memories');
+      }
+    }
+  );
+}
 
   function updateMemoryCount(count: number | string): void {
     const countDisplay = document.querySelector('.memory-count') as HTMLElement;
@@ -1551,6 +1647,68 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
           -webkit-appearance: none;
           margin: 0;
         }
+
+        /* Group memory card stacks children vertically */
+        .group-memory-card {
+          background-color: var(--bg-card);
+          border-radius: 8px;
+          padding: 12px;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+          width: 100%;
+        }
+        /* Each child row: memory and actions side-by-side, categories below */
+        .group-memory-row {
+          display: flex;
+          flex-direction: row;
+          align-items: flex-start;
+          justify-content: space-between;
+          position: relative;
+          padding: 8px 0 16px 0;
+          width: 100%;
+        }
+        .group-memory-row .memory-content {
+          flex: 1 1 auto;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+        }
+        .group-memory-row .memory-actions {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 8px;
+          justify-content: flex-end;
+          min-width: 80px;
+          flex: 0 0 auto;
+        }
+
+        .group-actions {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          margin-bottom: 8px;
+        }
+        .group-actions .session-id-label {
+          font-weight: 600;
+          font-size: 15px;
+          color: var(--text-white);
+          display: flex;
+          align-items: center;
+          flex: 1 1 auto;
+        }
+        .group-actions .memory-actions {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 8px;
+          justify-content: flex-end;
+          min-width: 80px;
+          flex: 0 0 auto;
+        }
     `;
     document.head.appendChild(style);
   }
@@ -1604,40 +1762,109 @@ import { getBrowser, sendExtensionEvent } from './utils/util_functions';
       return;
     }
 
-    // Add memory cards
-    memories.forEach(memory => {
-      // Extract memory content from the new format
-      const memoryContent = memory.memory || '';
+    // Group memories by session_id
+    const grouped = memories.reduce((acc, memory) => {
+      const sessionId = memory.session_id || 'No Session ID';
+      if (!acc[sessionId]) acc[sessionId] = [];
+      acc[sessionId].push(memory);
+      return acc;
+    }, {} as Record<string, Memory[]>);
 
-      // Truncate long text
-      const truncatedContent =
-        memoryContent.length > 120 ? memoryContent.substring(0, 120) + '...' : memoryContent;
+    Object.entries(grouped).forEach(([sessionId, mems]) => {
+      // Create a section for each session_id
+      const sessionSection = document.createElement('div');
+      sessionSection.className = 'session-section';
 
-      // Get categories if available
-      const categories = memory.categories || [];
-      const categoryTags =
-        categories.length > 0
-          ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join('')}</div>`
-          : '';
-
-      const memoryCard = document.createElement('div');
-      memoryCard.className = 'memory-card';
-      memoryCard.innerHTML = `
-        <div class="memory-content">
-          <p class="memory-text">${truncatedContent}</p>
-          ${categoryTags}
+      // Group-level actions
+      const groupActions = document.createElement('div');
+      groupActions.className = 'group-actions';
+      // Get provider and updated_at from first memory in group
+      let provider = '';
+      let updatedAt = '';
+      if (mems.length > 0) {
+        provider = (mems[0] && mems[0].metadata && typeof mems[0].metadata === 'object' ? mems[0].metadata.provider : '') || '';
+        if (mems[0] && typeof mems[0].updated_at === 'string') {
+          const dateObj = new Date(mems[0].updated_at);
+          updatedAt = `${(dateObj.getMonth()+1).toString().padStart(2,'0')}/${dateObj.getDate().toString().padStart(2,'0')}/${dateObj.getFullYear().toString().slice(-2)}`;
+        }
+      }
+      groupActions.innerHTML = `
+        <div class="session-id-label">
+          <strong>${provider ? provider : ''}</strong>
+          <span style="margin-left:8px;color:#a1a1aa;">${updatedAt ? updatedAt : ''}</span>
         </div>
         <div class="memory-actions">
-          <button class="memory-action-button copy-button" title="Copy Memory" data-content="${encodeURIComponent(memoryContent)}">
+          <button class="memory-action-button group-copy-button" title="Copy All Memories in Group" data-sessionid="${sessionId}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
           </button>
-          <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ''}">
+          <button class="memory-action-button group-view-button" title="View All Memories in Group" data-sessionid="${sessionId}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
         </div>
       `;
+      sessionSection.appendChild(groupActions);
 
-      memoryCardsContainer.appendChild(memoryCard);
+      // Create a single card for all memories in the group
+      const groupCard = document.createElement('div');
+      groupCard.className = 'memory-card group-memory-card';
+
+      mems.forEach(memory => {
+        const memoryContent = memory.memory || '';
+        const truncatedContent =
+          memoryContent.length > 120 ? memoryContent.substring(0, 120) + '...' : memoryContent;
+        const categories = memory.categories || [];
+        const categoryTags =
+          categories.length > 0
+            ? `<div class="memory-categories">${categories.map(cat => `<span class="memory-category">${cat}</span>`).join('')}</div>`
+            : '';
+        // Render each child as a row inside the group card
+        const childRow = document.createElement('div');
+        childRow.className = 'group-memory-row';
+        childRow.innerHTML = `
+          <div class="memory-content">
+            <p class="memory-text">${truncatedContent}</p>
+            ${categoryTags}
+          </div>
+          <div class="memory-actions">
+            <button class="memory-action-button copy-button" title="Copy Memory" data-content="${encodeURIComponent(memoryContent)}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            </button>
+            <button class="memory-action-button view-button" title="View Memory" data-id="${memory.id || ''}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        `;
+        groupCard.appendChild(childRow);
+      });
+      sessionSection.appendChild(groupCard);
+      memoryCardsContainer.appendChild(sessionSection);
+    });
+
+    // Add event listeners for group-level actions
+    document.querySelectorAll<HTMLButtonElement>('.group-copy-button').forEach(button => {
+      button.addEventListener('click', function (this: HTMLButtonElement, e) {
+        e.stopPropagation();
+        const sessionId = this.getAttribute('data-sessionid') || '';
+        const groupMemories = grouped[sessionId] || [];
+        const allText = groupMemories.map(m => m.memory || '').join('\n\n');
+        navigator.clipboard.writeText(allText).then(() => {
+          this.setAttribute('title', 'Copied Group!');
+          this.classList.add('copied');
+          setTimeout(() => {
+            this.setAttribute('title', 'Copy All Memories in Group');
+            this.classList.remove('copied');
+          }, 2000);
+        });
+      });
+    });
+    document.querySelectorAll<HTMLButtonElement>('.group-view-button').forEach(button => {
+      button.addEventListener('click', function (this: HTMLButtonElement, e) {
+        e.stopPropagation();
+        const sessionId = this.getAttribute('data-sessionid') || '';
+        const groupMemories = grouped[sessionId] || [];
+        const allText = groupMemories.map(m => m.memory || '').join('\n\n');
+        alert(`Memories for Session ID ${sessionId}:\n\n${allText}`);
+      });
     });
 
     // Add event listener for the copy button

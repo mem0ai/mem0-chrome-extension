@@ -1,3 +1,47 @@
+// Extract and store runId (from ChatGPT conversation id)
+function extractAndStoreRunIdFromConversation(chatgptCurrentUrl?: string): void {
+  let runId: string | null = null;
+  const url = chatgptCurrentUrl || window.location.href;
+  if (url.includes('chatgpt.com/c/') || url.includes('chatgpt.com/g/')) {
+    const extracted = url.split('/c/')[1]?.split('?')[0];
+    runId = extracted ? extracted : null;
+  }
+
+  if (runId) {
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_GPT]: runId }, () => {
+      console.log('Saved runId (conversation id):', runId);
+    });
+  }
+  else {
+    // Not in a valid ChatGPT chat/thread, clear runId
+    chrome.storage.sync.set({ [StorageKey.RUN_ID_GPT]: null }, () => {
+      console.log('Cleared runId (not in ChatGPT chat/thread)');
+    });
+  }
+}
+
+extractAndStoreRunIdFromConversation();
+
+// Robust SPA navigation detection for chatGPT
+let lastChatGptUrl = window.location.href;
+let pendingMemoryCapture = false;
+let pendingMessage = '';
+const chatGptUrlObserver = new MutationObserver(() => {
+  if (window.location.href !== lastChatGptUrl) {
+    lastChatGptUrl = window.location.href;
+    extractAndStoreRunIdFromConversation();
+    // If pending memory capture, run after runId is set
+    if (pendingMemoryCapture) {
+      setTimeout(() => {
+        captureAndStoreMemory();
+        pendingMemoryCapture = false;
+        pendingMessage = '';
+      }, 100); // Wait for runId to be stored
+    }
+  }
+});
+chatGptUrlObserver.observe(document.body, { childList: true, subtree: true });
+
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { DEFAULT_USER_ID, type LoginData, MessageRole } from '../types/api';
 import type { HistoryStateData } from '../types/browser';
@@ -12,22 +56,6 @@ import { OPENMEMORY_UI } from '../utils/util_positioning';
 
 export {};
 
-// Extract and store runId (from ChatGPT conversation id)
-function extractAndStoreRunIdFromConversation(chatgptCurrentUrl?: string): void {
-  let runId: string | null = null;
-  const url = chatgptCurrentUrl || window.location.href;
-  // ChatGPT conversation id is used as runId for Mem0 API
-  if (url.includes('chatgpt.com/c/')) {
-    const extracted = url.split('/c/')[1]?.split('?')[0];
-    runId = extracted ? extracted : null;
-  }
-  if (runId) {
-    chrome.storage.sync.set({ [StorageKey.RUN_ID]: runId }, () => {
-      console.log('Saved runId (conversation id):', runId);
-    });
-  }
-}
-extractAndStoreRunIdFromConversation();
 
 let isProcessingMem0: boolean = false;
 
@@ -64,7 +92,13 @@ const chatgptSearch = createOrchestrator({
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
-          StorageKey.RUN_ID,
+          StorageKey.RUN_ID_GPT,
+          StorageKey.RUN_ID_GEMINI,
+          StorageKey.RUN_ID_CLAUDE,
+          StorageKey.RUN_ID_DEEPSEEK,
+          StorageKey.RUN_ID_GROK,
+          StorageKey.RUN_ID_PERPLEXITY,
+          StorageKey.RUN_ID_REPLIT,
         ],
         function (items) {
           resolve(items as SearchStorage);
@@ -94,10 +128,18 @@ const chatgptSearch = createOrchestrator({
     if (data[StorageKey.SELECTED_PROJECT]) {
       optionalParams.project_id = data[StorageKey.SELECTED_PROJECT];
     }
+    // Try to find any runId value in the storage data
 
     const payload = {
       query,
-      filters: { user_id: userId },
+      //filters: { user_id: userId, },
+      filters: {
+        "AND": [
+          { user_id: userId },
+          { run_id: '*' },
+          { session_id: '*' }
+        ]
+      },
       rerank: true,
       threshold: threshold,
       top_k: topK,
@@ -1236,7 +1278,12 @@ function addSendButtonListener(): void {
     sendButton.dataset.mem0Listener = 'true';
     sendButton.addEventListener('click', function () {
       // Capture and save memory asynchronously
-      captureAndStoreMemory();
+      //captureAndStoreMemory();
+      console.log('ayush3');
+      extractAndStoreRunIdFromConversation();
+      setTimeout(() => {
+        captureAndStoreMemory();
+      }, 50);
 
       // Clear all memories after sending
       setTimeout(() => {
@@ -1262,14 +1309,10 @@ function addSendButtonListener(): void {
           inputValueCopy;
 
         if (event.key === 'Enter' && !event.shiftKey) {
-          // Capture and save memory asynchronously
-          captureAndStoreMemory();
-
-          // Clear all memories after sending
-          setTimeout(() => {
-            allMemories = [];
-            allMemoriesById.clear();
-          }, 100);
+          // Instead of capturing immediately, set pending flag and message
+          pendingMemoryCapture = true;
+          pendingMessage = inputValueCopy;
+          // The MutationObserver will handle actual capture after runId is set
         }
       });
     }
@@ -1278,6 +1321,8 @@ function addSendButtonListener(): void {
 
 // Function to capture and store memory asynchronously
 function captureAndStoreMemory(): void {
+  console.log('ayush5');
+  extractAndStoreRunIdFromConversation();
   // Get the message content
   // id is prompt-textarea
   const inputElement =
@@ -1308,7 +1353,7 @@ function captureAndStoreMemory(): void {
   if (!message || message.trim() === '') {
     return;
   }
-
+  
   // Asynchronously store the memory
   chrome.storage.sync.get(
     [
@@ -1319,7 +1364,7 @@ function captureAndStoreMemory(): void {
       StorageKey.SELECTED_ORG,
       StorageKey.SELECTED_PROJECT,
       StorageKey.USER_ID,
-      StorageKey.RUN_ID,
+      StorageKey.RUN_ID_GPT,
     ],
     function (items) {
       // Skip if memory is disabled or no credentials
@@ -1350,7 +1395,7 @@ function captureAndStoreMemory(): void {
       }
 
       // Send memory to mem0 API asynchronously without waiting for response
-      const runId = items[StorageKey.RUN_ID];
+      const runId = items[StorageKey.RUN_ID_GPT];
       const storagePayload = {
         messages: messages,
         user_id: userId,
@@ -1472,7 +1517,7 @@ async function handleMem0Modal(sourceButtonId: string | null = null): Promise<vo
           StorageKey.USER_ID,
           StorageKey.SIMILARITY_THRESHOLD,
           StorageKey.TOP_K,
-          StorageKey.RUN_ID,
+          StorageKey.RUN_ID_GPT,
         ],
         function (items) {
           resolve(items);
@@ -2124,6 +2169,8 @@ function handleSyncClick(): void {
 // New function to send memories in batch
 function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    console.log('ayush6');
+   extractAndStoreRunIdFromConversation(); 
     chrome.storage.sync.get(
       [
         StorageKey.API_KEY,
@@ -2132,7 +2179,7 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
         StorageKey.SELECTED_ORG,
         StorageKey.SELECTED_PROJECT,
         StorageKey.USER_ID,
-  StorageKey.RUN_ID,
+        StorageKey.RUN_ID_GPT,
       ],
       function (items) {
         if (items[StorageKey.API_KEY] || items[StorageKey.ACCESS_TOKEN]) {
@@ -2149,7 +2196,7 @@ function sendMemoriesToMem0(memories: Array<{ role: string; content: string }>):
           if (items[StorageKey.SELECTED_PROJECT]) {
             optionalParams.project_id = items[StorageKey.SELECTED_PROJECT];
           }
-          const runId = items[StorageKey.RUN_ID];
+          const runId = items[StorageKey.RUN_ID_GPT];
 
           fetch('https://api.mem0.ai/v1/memories/', {
             method: 'POST',
@@ -2247,6 +2294,8 @@ function sendMemoryToMem0(
   infer: boolean = true
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    console.log('ayush7');
+    extractAndStoreRunIdFromConversation();
     chrome.storage.sync.get(
       [
         StorageKey.API_KEY,
@@ -2255,7 +2304,7 @@ function sendMemoryToMem0(
         StorageKey.SELECTED_ORG,
         StorageKey.SELECTED_PROJECT,
         StorageKey.USER_ID,
-  StorageKey.RUN_ID,
+        StorageKey.RUN_ID_GPT,
       ],
       function (items) {
         if (items[StorageKey.API_KEY] || items[StorageKey.ACCESS_TOKEN]) {
@@ -2272,7 +2321,7 @@ function sendMemoryToMem0(
           if (items[StorageKey.SELECTED_PROJECT]) {
             optionalParams.project_id = items[StorageKey.SELECTED_PROJECT];
           }
-          const runId = items[StorageKey.RUN_ID];
+          const runId = items[StorageKey.RUN_ID_GPT];
           fetch('https://api.mem0.ai/v1/memories/', {
             method: 'POST',
             headers: {
@@ -2550,7 +2599,6 @@ function chatgptCheckExtensionContext() {
 }
 
 function chatgptDetectNavigation() {
-  extractAndStoreRunIdFromConversation(chatgptCurrentUrl);
   const newUrl = window.location.href;
   if (newUrl !== chatgptCurrentUrl) {
     chatgptCurrentUrl = newUrl;

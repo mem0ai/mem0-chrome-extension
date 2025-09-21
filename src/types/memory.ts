@@ -14,6 +14,12 @@ export type Memory = Partial<{
   id: string;
   memory: string;
   categories: string[];
+  session_id?: string;
+  metadata?: {
+    provider?: string;
+    [key: string]: any;
+  };
+  updated_at?: string;
 }>;
 
 /** Search result item from API */

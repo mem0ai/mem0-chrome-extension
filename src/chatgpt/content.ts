@@ -126,7 +126,7 @@ const chatgptSearch = createOrchestrator({
   },
 
   minLength: 3,
-  debounceMs: 75,
+  debounceMs: 350,
   cacheTTL: 60000,
 });
 
@@ -1915,6 +1915,7 @@ function getInputValue(): string {
 }
 
 let chatgptBackgroundSearchHandler: ((this: Element, ev: Event) => void) | null = null;
+let lastBackgroundSearchText = '';
 
 function hookBackgroundSearchTyping() {
   const inputElement =
@@ -1926,24 +1927,23 @@ function hookBackgroundSearchTyping() {
   }
 
   if (inputElement.dataset.mem0BackgroundHooked) {
-    return; 
+    return;
   }
 
-  inputElement.dataset.mem0BackgroundHooked = 'true'; 
+  inputElement.dataset.mem0BackgroundHooked = 'true';
 
   if (!chatgptBackgroundSearchHandler) {
     chatgptBackgroundSearchHandler = function () {
       const text = getInputValue() || '';
-      console.log("Background search for:", text); 
+      if (text === lastBackgroundSearchText) {
+        return;
+      }
+      lastBackgroundSearchText = text;
       chatgptSearch.setText(text);
     };
   }
   inputElement.addEventListener(
     'input',
-    chatgptBackgroundSearchHandler as (this: Element, ev: Event) => void
-  );
-  inputElement.addEventListener(
-    'keyup',
     chatgptBackgroundSearchHandler as (this: Element, ev: Event) => void
   );
 }

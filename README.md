@@ -1,3 +1,14 @@
+> [!CAUTION]
+> ## This project has been archived
+>
+> **mem0-chrome-extension** is no longer actively maintained and this repository is now a public archive.
+>
+> Thank you to the 600+ stargazers, 97 forkers, and every contributor who helped shape this project. Your support and feedback meant the world to us.
+>
+> **Looking for memory across your AI assistants?** Check out [Mem0](https://www.mem0.ai) for the latest.
+>
+> You're welcome to fork this repo and build on it — the MIT license still applies.
+
 # Mem0 Chrome Extension — Cross-LLM Memory
 
 Mem0 brings ChatGPT-style memory to all your favorite AI assistants. Share context seamlessly across ChatGPT, Claude, Perplexity, and more, making your AI interactions more personalized and efficient.
